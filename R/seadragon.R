@@ -13,8 +13,9 @@ native_gate <- function(c,establish=FALSE) {
   d<-fread(f,colClasses="character",na.strings=NULL)
   require_columns(d,c("component","path","version","sha256"))
   assert_unique(d,"component")
-  need<-c("ornaments","personalizer","samtools","bcftools","python","python_dependencies","source_revision","site","r_image")
-  if(!all(need %in% d$component)||any(!nzchar(d$path))||
+  # source_revision, when present, is informational rather than build attestation.
+  need<-c("ornaments","personalizer","samtools","bcftools","python","python_dependencies","site","r_image")
+  if(!all(need %in% d$component)||any(!nzchar(d[component!="source_revision"]$path))||
      any(!grepl("^[a-f0-9]{64}$",d[component!="source_revision"]$sha256)))
     stop("Incomplete host inventory")
   val<-function(k,field)d[[field]][match(k,d$component)]
@@ -26,20 +27,9 @@ native_gate <- function(c,establish=FALSE) {
   if(!identical(val("r_image","path"),c$execution$image))
     stop("Executed R image differs from the configured image")
   if(!identical(val("ornaments","sha256"),c$ornaments$binary_sha256))
-    stop("Installed Ornaments binary SHA256 is not the configured reviewed build")
-  revision<-val("source_revision","version")
-  if(revision!=c$ornaments$commit) {
-    p<-c$ornaments$installation_provenance
-    if(is.null(p)||!file.exists(p)||
-       !identical(sha256(p),c$ornaments$installation_provenance_sha256))
-      stop("Ornaments source revision unresolved/mismatched; supply reviewed installation provenance, never rebuild automatically")
-    e<-yaml::read_yaml(p,eval.expr=FALSE)
-    if(!isTRUE(e$reviewed)||!identical(e$commit,c$ornaments$commit)||
-       !identical(e$binary_sha256,val("ornaments","sha256"))||
-       !identical(e$personalizer_sha256,val("personalizer","sha256"))||
-       is.null(e$evidence)||!nzchar(e$evidence))
-      stop("Installation provenance does not bind source, binary and personalizer")
-  }
+    stop("Installed Ornaments binary SHA256 differs from the configured installed-file identity")
+  if(!identical(val("personalizer","sha256"),c$ornaments$personalizer_sha256))
+    stop("Installed personalizer SHA256 differs from the configured installed-file identity")
   if(!establish) {
     if(!file.exists(c$paths$native_inventory)||
        !identical(sha256(f),sha256(c$paths$native_inventory)))

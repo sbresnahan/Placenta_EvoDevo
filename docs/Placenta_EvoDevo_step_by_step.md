@@ -4,7 +4,7 @@
 
 Complete **Part 1 once**, then use the complete recipe for the cohort you want to run. The five recipes do not depend on one another. You do not need to open another Markdown document.
 
-This guide describes the existing package; it does not change its code, scientific methods, configuration examples, manifests, or ZIP. The commands are instructions for a future run on Seadragon. They have not been run against the cohorts as part of writing this guide.
+This guide describes the revised package, including installed-file checksum checks without source-build attestation. The commands are instructions for a future run on Seadragon. They have not been run against the cohorts as part of writing this guide. Scientific methods and cohort selections are unchanged.
 
 **Do not paste the entire document into a terminal.** Run one numbered step at a time. A submission command only puts jobs in the queue: wait for completion and inspect the results before proceeding. Wherever the guide says **STOP**, the next stage is not justified until the stated evidence or file exists.
 
@@ -78,6 +78,8 @@ ls -l poe.R run_pipeline.R bin/submit_pipeline.sh bin/Rscript_sif
 
 Repeat these environment-setting commands whenever you open a new terminal. Later recipe commands assume this working directory. Setting `DATA_ROOT` does **not** rewrite paths inside a YAML file.
 
+**The ZIP above is the original deployment archive, not the updated repository.** This guide requires repository revision `8be693f0012e959c88aa4e14c78834052e134bad` with `Placenta_EvoDevo_workflow_revision.patch` applied, or a later revision containing those changes. That baseline already includes the R-library and no-nounset corrections. The original ZIP alone does not implement the revised runtime checks. Update deployed scripts through your normal version-control process before continuing; do not replace an existing deployment or apply changes while its jobs are active.
+
 ## 2. Make the working directories and editable copies
 
 Run once. This makes separate data directories and copies the supplied tables and YAML examples only when an editable copy is absent.
@@ -138,14 +140,14 @@ Press `q` to leave `less`. The existing settings should point to:
 - R container: `/risapps/singularity/repo/RStudio/4.3.1/rstudio_4.3.1.sif`.
 - R library: `/rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1`.
 
-Do not assume the Ornaments installation is a Conda environment: its configured activation is separate. Do not install or rebuild anything to bypass a failed check.
+Ornaments is already installed in the Conda environment `/rsrch5/home/epi/bhattacharya_lab/software/ornaments`. Keep this canonical path; do not insert the `stbresnahan/` alias. The wrappers source its configured `bin/activate`; samtools/bcftools use the module initialization and Miniforge Conda hook above. Do not install or rebuild anything to bypass a failed check. Host wrappers use `set -eo pipefail`, without `set -u`, because the site activation scripts can reference unset optional variables.
 
-R runs inside Singularity through `bin/Rscript_sif`; native samtools, bcftools, Python/personalizer, Ornaments, and `bsub` run on the host. Both sides need access to `/rsrch5`, `/rsrch9`, and `/tmp`.
+R runs inside Singularity through `bin/Rscript_sif`; native samtools, bcftools, Python/personalizer, Ornaments, and `bsub` run on the host. The configured R binds are `/rsrch5`, `/rsrch9`, and `/tmp`. The bridge and production R entry points explicitly initialize `.libPaths()` inside R before loading YAML or other packages; setting `R_LIBS_USER` alone is not the startup mechanism.
 
 Check the R side:
 
 ```bash
-bin/Rscript_sif -e 'p <- c("data.table","digest","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"); ok <- vapply(p, requireNamespace, logical(1), quietly=TRUE); print(data.frame(package=p, available=ok)); stopifnot(getRversion() >= "4.3.1", all(ok))'
+bin/Rscript_sif -e 'print(.libPaths()); p <- c("data.table","digest","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"); ok <- vapply(p, requireNamespace, logical(1), quietly=TRUE); print(data.frame(package=p, available=ok)); stopifnot(getRversion() >= "4.3.1", all(ok))'
 ```
 
 **Success:** every package prints `TRUE`, R is at least 4.3.1, and the command exits without an error. **STOP** for a missing image, library, package, or native environment; ask the site maintainer to resolve the existing installation.
@@ -161,60 +163,32 @@ This inventories the actual executables, site file, R image, and Python dependen
 
 The output columns are `component`, `path`, `version`, and `sha256`. Locate the `ornaments` and `personalizer` rows. Their `sha256` values identify the installed executable and console entry point, not just this package's wrappers.
 
-## 4. Obtain actual evidence for the installed Ornaments source
+In each private YAML you intend to use, copy the two actual 64-character lowercase hashes from those inventory rows into:
 
-The package is pinned to source commit:
+- `ornaments.binary_sha256`: the `ornaments` row's `sha256`.
+- `ornaments.personalizer_sha256`: the `personalizer` row's `sha256`.
 
-`2c4b1a2c18616f9de1cb307749688daaf3313d17`
+The second key is new: add it to existing private YAML files as well as filling it in fresh copies. Remove the retired `ornaments.installation_provenance` and `ornaments.installation_provenance_sha256` keys from old private copies; no evidence file is required.
 
-The software directory is not automatically a source checkout. If `source_revision` in the inventory is unresolved, a binary hash alone is insufficient. Ask the person who installed Ornaments for build/install records linking the **actual binary and personalizer** to this exact commit.
+Keep `ornaments.commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17` and `ornaments.semantics: ref_alt` as the audited interface/semantics expectation. They are not proof of the installed build's ancestry. The inventory's optional `source_revision` row is informational; `unresolved`, a dirty checkout, or a different source revision no longer blocks Seadragon execution. Do not seek installer records, fabricate attestation, or rebuild the environment. The checksums record installed-file identity; the personalizer hash covers the console entry point, with the Python dependency digest also recorded, not a bytewise audit of every Python module.
 
-There are two supported evidence routes:
+After updating code or existing private configurations, rerun that cohort's metadata and `--execute` preflight as shown in its recipe. Changed code/configuration/inventory can invalidate old receipts: regenerate affected stages rather than continuing an already accepted run with changed identities.
 
-1. A genuine clean source checkout at the pinned revision, identified through `POE_ORNAMENTS_SOURCE` in the site environment. This requires an actual checkout, not the environment directory. Site-environment changes require review; do not guess a source path.
-2. A reviewed installation-provenance file tying the observed executable hashes to the pinned commit.
+## 4. Use the established Seadragon storage and scheduler conventions
 
-For the second route, open a new local record:
+These defaults follow the existing `Placenta_xQTL_atlas` deployment, not generic LSF assumptions:
 
-```bash
-nano "$DATA_ROOT/shared/installation_provenance.yaml"
-```
+| Setting | Seadragon convention used here |
+|---|---|
+| Memory limit and reservation | Numeric GB values: for an 8-GB request, `-M 8 -R "rusage[mem=8]"` |
+| Public downloads | `transfer` queue; retrieval example: 1 CPU, memory/reservation 4, `'02:00'` |
+| Reference, pilot, models | Existing EvoDevo examples: `short`, 2 CPUs, memory/reservation 8, `'03:00'` |
+| Full quantification/assignment | Existing EvoDevo example: `medium`, 2 CPUs, memory/reservation 8, `'12:00'` |
+| Longer work | `long` is used by the reference project; use only if justified by measured workload and your allocation |
+| Filesystem | Cohort directories on `/rsrch9`; installed tools/library on `/rsrch5`; R binds also include `/tmp` |
+| Logs and dependencies | Create log directories before `bsub`; downstream work waits on `done(JOB_ID)` |
 
-Use this structure, substituting the real inventory values and real evidence. This is a **template to edit**, not an approval to copy blindly:
-
-```yaml
-reviewed: true
-commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
-binary_sha256: INSERT_REVIEWED_ORNAMENTS_SHA256
-personalizer_sha256: INSERT_REVIEWED_PERSONALIZER_SHA256
-evidence: INSERT_ACTUAL_LOCAL_BUILD_OR_INSTALL_EVIDENCE
-```
-
-The evidence should identify retrievable local records explaining how those installed artifacts were linked to that commit. Merely writing “reviewed” is not evidence. **STOP** if the source-to-installation link cannot be established.
-
-After the record is genuinely approved, copy it to each cohort's configured private location without overwriting an existing record:
-
-```bash
-for COHORT in maize_B73_Ki11 maize_B73_W22 mouse_Babr_CAST mouse_FVB_CAST_E12 GUSTO; do
-  DEST="$DATA_ROOT/$COHORT/private/installation_provenance.yaml"
-  if [[ ! -e "$DEST" ]]; then
-    cp -- "$DATA_ROOT/shared/installation_provenance.yaml" "$DEST"
-  fi
-  sha256sum "$DEST"
-done
-```
-
-Existing records must be reviewed against the current inventory too. A record from another installed build is not interchangeable.
-
-In each private YAML, fill:
-
-- `ornaments.binary_sha256`: the actual approved `ornaments` executable checksum.
-- `ornaments.installation_provenance`: keep the cohort's `private/installation_provenance.yaml` path.
-- `ornaments.installation_provenance_sha256`: the checksum printed for that exact record.
-
-Keep `ornaments.commit` pinned. With a verified clean-checkout route, the runtime can establish source identity directly; do not fabricate an installation record when that route is used. In either case, the binary checksum must be reviewed and filled.
-
-## 5. Establish the storage and scheduler facts before changing approval flags
+The xQTL phenotyping driver documents both numeric memory fields in GB and uses matching limit/reservation values. [562] Public SRA retrieval uses the `transfer` queue. [561] These examples establish practical defaults, not current universal queue maxima or Ornaments memory requirements. Keep numeric YAML values, not suffix strings such as `8G`. Do not copy STAR's much larger allocations into this workflow.
 
 Check available space and your scheduler access:
 
@@ -224,21 +198,23 @@ bqueues
 bjobs
 ```
 
-The cohort-specific RNA byte totals below are **compressed RNA only**. They exclude genome/VCF downloads, personalized references, indexes, temporary files, and outputs. B73/Ki11 also has ten large chromosome VCFs. Allow space for all of these, not just FASTQs.
+For each cohort you will run, check that its `work`, `scratch`, `logs`, and `receipts` directories exist and are writable. For example:
 
-Ask the Seadragon administrator or use the approved local scheduler documentation to establish:
+```bash
+for DIR in "$DATA_ROOT/maize_B73_Ki11"/{work,scratch,logs,receipts}; do
+  [[ -d "$DIR" && -w "$DIR" ]] || printf 'STOP: missing or unwritable %s\n' "$DIR"
+done
+```
 
-1. What units `bsub -M` uses at this site.
-2. What units `rusage[mem=...]` uses.
-3. Whether the requested memory is interpreted per job or per CPU slot.
-4. Which compute nodes can access the project, existing tools, and Singularity.
-5. Which queue may access the internet for public downloads.
-6. Which queues, CPU allocations, memory amounts, and wall times are allowed for this project.
-7. Whether work, scratch, logs, and receipts support normal filesystem operations, including atomic rename and exclusive directory locks. Do not point them at an object-storage mount.
+Use the normal shared filesystem, not an object-storage mount. Preflight checks writability and atomic configuration renaming; receipt directories must also support exclusive directory locks. Existing shared-path usage is the site convention, not a guarantee of every directory's current permissions or capacity.
 
-**STOP** if these facts are unknown. The supplied values are starting requests, not measured requirements: most analysis stages request 8-class memory values and two CPUs, and retrieval requests 4-class values and one CPU. The raw numbers are unsafe until the site's units and accounting are confirmed.
+The cohort-specific RNA totals below are **compressed RNA only**. They exclude genome/VCF downloads, personalized references, indexes, temporary files, and outputs. B73/Ki11 also has ten large chromosome VCFs. Allow space for all of these, not just FASTQs.
 
-## 6. Enter the common settings in each private YAML you intend to use
+**One accounting distinction remains:** xQTL's numeric GB convention does not by itself prove LSF's internal per-job versus per-slot accounting for multicore jobs. The existing `lsf.memory_per_job_verified` gate still requires a real accounting check; do not mark it true merely because units are GB. Reuse your site's existing accounting record or inspect an actual comparable multicore job with `bjobs -l JOB_ID` / `bacct -l JOB_ID` where those records expose the interpretation; unresolved output is not confirmation. If accounting is still unknown, resolve that specific point before actual submission. Allow for slot-scaled reservations in budget review when applicable.
+
+No new all-node survey or generic administrator checklist is needed. Use the configured mounts, environments, and queues above; resolve concrete permission, environment, or queue errors if they occur. The default requests are starting limits to review against pilot measurements, available storage, and the project's authorized allocation, not measured Ornaments requirements.
+
+## 5. Enter the common settings in each private YAML you intend to use
 
 Open each intended file individually:
 
@@ -254,22 +230,22 @@ You can prepare only the cohort you intend to run now; do not approve unreviewed
 
 1. Verify that every cohort-owned path points to `data/<that cohort>/`. Keep the documented human source-reference exceptions in the GUSTO recipe.
 2. Keep `execution.site_file: seadragon.sh` consistent with `POE_SITE_FILE`. Keep the configured image and R library consistent with the site settings.
-3. Fill the approved Ornaments identity values from step 4.
-4. Set `execution.posix_work_approved: true` only after the storage check.
-5. Replace `lsf.memory_units`' unresolved description with the actual local units description. Set `lsf.memory_units_verified: true` and `lsf.memory_per_job_verified: true` only after confirming both limit/reservation units and per-job/per-slot behavior.
-6. Set `lsf.execution_environment_verified: true` only after confirming compute-node access to tools, mounts, container, and environment propagation.
-7. Under `lsf.stages`, inspect **each** of `retrieve`, `reference`, `pilot`, `scale`, and `models`. Enter locally permitted `memory_value`, `reservation_value`, `cpus`, `queue`, and `wall_time`. Memory and reservation need not be numerically identical if the site uses different units. Wall time is hours and minutes, for example `'03:00'`.
+3. Fill both installed-file checksum values from step 3, including the new `ornaments.personalizer_sha256` in any existing private YAML.
+4. Set `execution.posix_work_approved: true` after checking your cohort's normal shared-filesystem directories as in step 4; do not redirect them to object storage.
+5. Set `lsf.memory_units: GB` and `lsf.memory_units_verified: true` using the established Seadragon convention. Set `lsf.memory_per_job_verified: true` only when the specific accounting check in step 4 supports it; GB units alone do not establish this.
+6. Use the existing site file, R binds, and native activation paths. Set `lsf.execution_environment_verified: true` when these match your working Seadragon deployment and the software checks in step 3 pass. Do not approve untested path or environment overrides.
+7. Under `lsf.stages`, inspect **each** of `retrieve`, `reference`, `pilot`, `scale`, and `models`. Start with the queue/CPU/memory/time values in step 4 and the examples; use matching numeric GB `memory_value` and `reservation_value` for this deployment. Wall time is hours and minutes, for example `'03:00'`. Keep requests within your allocation.
 8. Keep `ornaments.threads` no greater than the CPU request for pilot and scale. The supplied value is two.
 9. Review `pilot.max_projected_seconds` and `pilot.max_work_bytes` against local limits. These are technical gates, not measured resource needs.
 10. Set `lsf.resource_limits_approved: true` only when the proposed requests, storage allowance, and project budget are locally authorized. This approves the limits, **not** the eventual pilot result. You must still review the pilot and explicitly accept its exact hash before scale.
-11. For public cohorts only, set `retrieval.internet_host_approved: true` after confirming the configured retrieval queue runs on an approved internet-capable host.
+11. For public cohorts only, keep the retrieval queue `transfer`, the public-download queue used by the reference project, and set `retrieval.internet_host_approved: true` when using that established authorized route. Do not enable public retrieval for GUSTO or silently substitute an ordinary compute queue.
 12. Leave `exports.enabled: false` throughout analysis.
 
 Do not change thresholds, parent identities, reference builds, or scientific choices merely to make a check pass. Cohort-specific annotation, marker, strand, independence, and human QC approvals are addressed in the recipes.
 
 **Finish all analysis-setting and manifest edits before reference construction.** The package fingerprints the entire configuration, manifests, software identity, and relevant code. Even a resource or approval edit after the pilot can invalidate earlier receipts. If evidence forces a change, make it, then regenerate the affected prerequisites and pilot; never reuse an old pilot acceptance.
 
-## 7. Understand submission and completion before running any cohort
+## 6. Understand submission and completion before running any cohort
 
 The correct submission interface is:
 
@@ -388,7 +364,7 @@ Then submit:
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Wait for the one retrieval job to finish, using the scheduler and log checks in shared step 7. It retrieves the RNA and all resources marked `required=TRUE`, checks downloaded bytes and MD5, tests gzip inputs and FASTQ integrity, and creates uncompressed outputs where `decompress_to` is specified.
+Wait for the one retrieval job to finish, using the scheduler and log checks in shared step 6. It retrieves the RNA and all resources marked `required=TRUE`, checks downloaded bytes and MD5, tests gzip inputs and FASTQ integrity, and creates uncompressed outputs where `decompress_to` is specified.
 
 Inspect the recorded resources and actual files:
 

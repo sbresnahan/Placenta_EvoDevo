@@ -7,7 +7,8 @@ maternal/paternal expression and fits eligible gene/promoter models.
 
 ## Start here
 
-**Follow [the project walkthrough](docs/WALKTHROUGH.md).** Complete shared
+**Follow [the Placenta_EvoDevo step-by-step workflow](docs/Placenta_EvoDevo_step_by_step.md).**
+This is the primary, self-contained operating guide. Complete shared
 setup, choose one species and one cohort, then follow that section through
 results. Commands run from:
 

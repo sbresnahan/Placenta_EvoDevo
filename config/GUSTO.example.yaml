@@ -104,12 +104,11 @@ tools:
   r_library: /rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1
   time: /usr/bin/time
 ornaments:
-  binary_sha256: REPLACE_AFTER_REVIEWED_BUILD
+  binary_sha256: REPLACE_WITH_INSTALLED_ORNAMENTS_SHA256
+  personalizer_sha256: REPLACE_WITH_INSTALLED_PERSONALIZER_SHA256
   commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
   semantics: ref_alt
   threads: 2
-  installation_provenance: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/GUSTO/private/installation_provenance.yaml
-  installation_provenance_sha256: UNRESOLVED_REQUIRES_SITE_REVIEW
 execution:
   container_enabled: yes
   image: /risapps/singularity/repo/RStudio/4.3.1/rstudio_4.3.1.sif

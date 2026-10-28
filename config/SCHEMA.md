@@ -14,7 +14,7 @@ environment substitution; it must actually be set if used.
 Project data paths point to
 `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>/`.
 Operational tables belong in its `manifests/` directory; copy supplied templates
-there using the [walkthrough](../docs/WALKTHROUGH.md) before preflight.
+there using the [step-by-step workflow](../docs/Placenta_EvoDevo_step_by_step.md) before preflight.
 Human shared input references and installed software are explicit exceptions.
 
 | Section | Required meaning |
@@ -24,7 +24,7 @@ Human shared input references and installed software are explicit exceptions.
 | `templates` | Repeated per-run/library/mode/strand/job paths |
 | `tools` | Repository host wrappers, R bridge, utilities and installed-library/source prefix |
 | `execution` | `backend: seadragon`, image/binds, trusted site file and POSIX approval |
-| `ornaments` | Required source identity, reviewed binary hash, REF/ALT semantics, threads and installation evidence |
+| `ornaments` | Audited interface pin, installed binary and personalizer hashes, REF/ALT semantics and threads |
 | `reference` | Build, exact uncompressed input hashes, annotation approval and explicit contig spelling map |
 | `parents`, `dosage` | Actual focal/alternate identities and reviewed tissue/ploidy dosage |
 | `markers` | `panzea`, `mgp` or `prepared`, exact samples, quality/source and proxy checks |
@@ -46,8 +46,25 @@ The entire resolved configuration, including hints, is fingerprinted.
 Infrastructure defaults live in `seadragon.sh` and `bin/Rscript_sif`.
 `execution.site_file` must match `POE_SITE_FILE`; image overrides must match
 `execution.image`. `tools.ornaments_source` is an installation prefix, not
-necessarily a source checkout. Required source/build checks and the private
-identity-record schema are in [setup](../docs/SETUP.md#installed-tool-identity).
+necessarily a source checkout. In the Seadragon backend, configure
+`ornaments.binary_sha256` and `ornaments.personalizer_sha256` from the actual
+`ornaments` and `personalizer` inventory rows. Both must be 64-character
+lowercase hexadecimal SHA256 values, not hashes of this repository's wrappers.
+The personalizer digest identifies its installed console entry point; the
+inventory also records a Python dependency digest.
+
+`ornaments.commit` remains `2c4b1a2c18616f9de1cb307749688daaf3313d17` with
+`semantics: ref_alt` as the audited compatibility expectation. It is not proof
+of installed-build ancestry. Seadragon no longer requires source-build
+attestation, a clean source checkout, or an installation-provenance file.
+An optional `source_revision` inventory row is informational only.
+
+For existing private configurations, add `ornaments.personalizer_sha256`,
+fill both installed-file hashes, and remove the retired
+`installation_provenance` / `installation_provenance_sha256` keys from
+`ornaments`. Rerun metadata and execute preflight before analysis. Changes
+to code, configuration, or accepted inventory invalidate dependent receipts;
+do not resume old accepted stages with changed identities.
 
 For GUSTO, `reference.genome_source` is read-only. The wrapper copies it to
 `paths.genome` before indexing. `paths.annotation` names the exact shared

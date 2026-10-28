@@ -97,11 +97,7 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
   x$reference$contig_aliases<-list()
   x$markers$mode<-"prepared";x$markers$proxy<-FALSE;x$markers$provenance_approved<-TRUE
   x$ornaments$binary_sha256<-sha256(host$ornaments)
-  x$ornaments$installation_provenance<-file.path(dir,"provenance.yaml")
-  yaml::write_yaml(list(reviewed=TRUE,commit=pin,binary_sha256=sha256(host$ornaments),
-    personalizer_sha256=sha256(host$personalizer),evidence="DETERMINISTIC MOCK INSTALLATION; NOT REAL BUILD VALIDATION"),
-    x$ornaments$installation_provenance)
-  x$ornaments$installation_provenance_sha256<-sha256(x$ornaments$installation_provenance)
+  x$ornaments$personalizer_sha256<-sha256(host$personalizer)
   # Resolve repository tools against the actual checkout, not fixture config location.
   for(k in names(x$tools))if(startsWith(x$tools[[k]],"../bin/"))
     x$tools[[k]]<-file.path(root,sub("^\\.\\./","",x$tools[[k]]))

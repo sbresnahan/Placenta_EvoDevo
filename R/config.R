@@ -29,7 +29,11 @@ read_config_v2 <- function(path) {
   if(!grepl("^[A-Za-z0-9_.-]+$",c$cohort_id))stop("Unsafe cohort ID")
   if(!identical(c$ornaments$commit,pin)||!identical(c$ornaments$semantics,"ref_alt"))
     stop("Only audited REF/ALT Ornaments is supported")
-  scalar_text(c$ornaments$binary_sha256,"ornaments.binary_sha256")
+  for(k in c("binary_sha256","personalizer_sha256")) {
+    scalar_text(c$ornaments[[k]],paste0("ornaments.",k))
+    if(!grepl("^[a-f0-9]{64}$",c$ornaments[[k]]))
+      stop("Required installed-file SHA256 (64 lowercase hex characters): ornaments.",k)
+  }
   required<-list(
     paths=c("work","scratch","logs","receipts","snapshot","sources","libraries","units","resources",
       "genome","annotation","gtf","transcripts","exons","tx_map","event_map","events","pairs",
@@ -62,9 +66,6 @@ read_config_v2 <- function(path) {
     for(k in c("child_receipt","library_pilot_report","library_pilot_receipt","library_metrics"))
       if(is.null(c$templates[[k]]))stop("Missing Seadragon template: ",k)
     c$execution$site_file<-resolve_value(c$execution$site_file,dirname(path),unlist(c$environment_allowlist))
-    if(!is.null(c$ornaments$installation_provenance))
-      c$ornaments$installation_provenance<-resolve_value(c$ornaments$installation_provenance,
-        dirname(path),unlist(c$environment_allowlist))
   }
   c$execution$binds<-lapply(c$execution$binds,function(b) {
     if(!is.list(b)||!b$mode %in% c("ro","rw"))stop("Structured bind required")

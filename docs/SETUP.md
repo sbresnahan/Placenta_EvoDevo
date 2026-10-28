@@ -1,6 +1,6 @@
 # Setup reference
 
-Use [the walkthrough](WALKTHROUGH.md) for the execution order. This page explains
+Use [the step-by-step workflow](Placenta_EvoDevo_step_by_step.md) for the execution order. This page explains
 the settings and checks needed to make those commands runnable.
 
 ## Project directories
@@ -63,7 +63,7 @@ them. See [the schema](../config/SCHEMA.md) for table headers and path rules.
 | `paths.*`, `templates.*` | Correct absolute cohort destinations, no cross-cohort collisions | Before any stage |
 | `execution.site_file`, `execution.image` | Same trusted site file/image used by shell wrappers | Before preflight |
 | `ornaments.binary_sha256` | Reviewed digest of the installed binary, not of its wrapper | Before execution |
-| `ornaments.installation_provenance`, `ornaments.installation_provenance_sha256` | Reviewed identity record and its digest if source identity needs it | Before execution |
+| `ornaments.personalizer_sha256` | Digest of the installed personalizer console entry point, not its wrapper | Before execution |
 | `execution.posix_work_approved` | True only after checking work/scratch/receipt storage | Before submission |
 | `lsf.memory_units_verified`, `lsf.memory_per_job_verified` | Actual site interpretation of limit and reservation | Before submission |
 | `lsf.execution_environment_verified` | Worker access to image, library, native tools and input/output storage | Before submission |
@@ -122,40 +122,33 @@ and checks R dependencies separately. It does not install tools, download
 data or submit jobs. The pending inventory path is printed before acceptance.
 Review that file privately if a gate fails.
 
-The supported Ornaments source identity is:
+The audited Ornaments interface/semantics expectation remains:
 
 ```text
 2c4b1a2c18616f9de1cb307749688daaf3313d17
 ```
 
-The inventory records real executable paths, versions and SHA256 values, source
-identity when available, site/image identity and a Python dependency digest.
-`tools.ornaments_source` is an installation prefix, not proof of source identity.
-Set `POE_ORNAMENTS_SOURCE` only to a real clean source checkout that genuinely
-establishes installation provenance. A matching checkout alone does not prove
-that an arbitrary binary was built from it; review installation evidence.
+The inventory records executable paths, versions and SHA256 values, site/image
+identity and a Python dependency digest. Ornaments is an existing Conda
+environment at `/rsrch5/home/epi/bhattacharya_lab/software/ornaments`;
+`tools.ornaments_source` names that installation prefix, not a required Git
+checkout. Any `source_revision` row is informational in the Seadragon backend.
+No installer attestation or source-build evidence file is required.
 
-If source identity is unavailable, prepare a reviewed private installation
-record at `ornaments.installation_provenance`. Its required YAML structure is:
-
-```yaml
-reviewed: true
-commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
-binary_sha256: REVIEWED_INSTALLED_ORNAMENTS_SHA256
-personalizer_sha256: REVIEWED_INSTALLED_CONSOLE_ENTRYPOINT_SHA256
-evidence: LOCAL_BUILD_OR_INSTALL_EVIDENCE_LINKING_THESE_FILES_TO_THE_SOURCE
-```
-
-Uppercase values above are **placeholders**, not usable digests/evidence.
-Complete them only from actual reviewed files and build/install records.
-Enter the installed Ornaments digest in `ornaments.binary_sha256` and the
-installation-record file's exact digest in
-`ornaments.installation_provenance_sha256`. Re-run preflight.
+Run `bin/host_inventory.sh "$DATA_ROOT/shared/software_inventory.tsv"` after
+shared setup, then copy the `ornaments` and `personalizer` rows' actual hashes
+into `ornaments.binary_sha256` and `ornaments.personalizer_sha256` respectively.
+Both must be 64-character lowercase hexadecimal values. The personalizer hash
+identifies the installed console entry point, not every imported Python module.
+Add the personalizer key to existing private YAML files, remove the retired
+installation-provenance keys, and rerun both preflight commands.
+These identities do not prove ancestry from the interface pin above.
 
 **Success:** an accepted inventory at `paths.native_inventory` and valid metadata.
-**Failure:** unresolved/mismatched identity, missing library/image/package or
-bad manifests must be corrected locally. Never waive the pin or automatically
-rebuild the installed software.
+**Failure:** missing/mismatched installed-file hashes, library/image/package
+problems or bad manifests must be corrected locally. An unresolved source
+revision is not a failure. Do not change the audited interface pin or rebuild
+the installed software to make a gate pass.
 
 Metadata preflight does not certify that all reference/read inputs exist,
 that LSF policy is correct or that models will be eligible. GUSTO's empty

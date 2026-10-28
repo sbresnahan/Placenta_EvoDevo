@@ -46,8 +46,8 @@ manifest copies are checked in a temporary local deployment layout.
 
 ## Verify on Seadragon before full runs
 
-- Actual modules/conda tools, installed source/build correspondence and output
-  schema.
+- Actual modules/conda tools, installed binary/personalizer checksums and output
+  schema. Seadragon does not require source-build attestation.
 - R image execution, library/package compatibility and filesystem binds.
 - Scheduler permissions, queue policy, memory limit/reservation semantics and
   environment propagation.
