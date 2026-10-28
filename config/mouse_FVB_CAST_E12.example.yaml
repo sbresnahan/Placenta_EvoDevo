@@ -1,0 +1,229 @@
+schema_version: 2
+profile: public_cross
+species: mouse
+cohort_id: mouse_FVB_CAST_E12
+environment_allowlist: POE_SITE_ROOT
+paths:
+  genome_fai: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/genome.fa.fai
+  transcripts_fai: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/transcripts.fa.fai
+  tool_versions: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/tool_versions.tsv
+  work: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work
+  scratch: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/scratch
+  logs: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs
+  receipts: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts
+  snapshot: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/resolved.yaml
+  sources: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_sources.tsv
+  libraries: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_libraries.tsv
+  units: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_units.tsv
+  resources: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_resources.tsv
+  genome: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/genome.fa
+  annotation: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/source_annotation.gtf
+  gtf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/normalized.gtf
+  transcripts: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/transcripts.fa
+  exons: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/exons.tsv
+  tx_map: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/tx_map.tsv
+  event_map: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/event_map.tsv
+  events: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/events.tsv
+  pairs: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/pairs.tsv
+  marker_sources: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_marker_sources.tsv
+  markers: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/markers.tsv
+  tx_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/transcript_snps.vcf
+  tx_marker_map: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/tx_marker_map.tsv
+  personal_fasta: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/personal.ornament.fa
+  index: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/reference/personal.index
+  pilot_report: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/pilot_report.tsv
+  pilot_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/pilot_receipt.rds
+  scale_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/scale_receipt.rds
+  model_gene: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/model_gene.tsv
+  model_promoter: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/model_promoter.tsv
+  model_pairs: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/model_pairs.tsv
+  model_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/model_receipt.rds
+  status: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/status.tsv
+  candidate: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/candidate.tsv
+  release: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/approved_exports/promoter_aggregates.tsv
+  trios: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_trios.tsv
+  covariates: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/manifests/mouse_FVB_CAST_E12_covariates.tsv
+  typed_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/typed.vcf.gz
+  personalization_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/personalization.vcf.gz
+  sizes: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/sizes.tsv
+  annotation_audit: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/annotation_audit.tsv
+  resource_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/resource_receipt.tsv
+  reference_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/reference_receipt.rds
+  deferred: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/deferred.tsv
+  metrics: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/metrics.tsv
+  native_inventory: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/native_inventory.tsv
+  catalog_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/catalog.rds
+  marker_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/markers.rds
+  job_registry: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/jobs.tsv
+templates:
+  human_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/{sample}/human.rds
+  fastq: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/raw/{run}_{mate}.fastq.gz
+  partial: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/raw/{run}_{mate}.partial
+  response: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/scratch/{run}_{mate}.response
+  prefix: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/scratch/{sample}/{mode}/{strand}/{run}_{mate}.fastq.gz
+  child_query: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/typed.query.tsv
+  personal_query: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/personal.query.tsv
+  child_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/typed.vcf
+  personal_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/personal.vcf
+  child_tx_vcf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/tx.vcf
+  child_tx_map: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/tx_map.tsv
+  child_fasta: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/personal.fa
+  child_index: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/{sample}/personal.index
+  quant_dir: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/quant
+  allele_counts: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/quant/allele_counts.txt
+  thetas: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/quant/thetas.txt
+  tpms: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/quant/tpms.txt
+  event_counts: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/event_counts.tsv
+  gene_counts: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/gene_counts.tsv
+  assignment_qc: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/work/{sample}/{mode}/{strand}/assignment_qc.tsv
+  quant_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/{sample}/{mode}/{strand}/quant.rds
+  assign_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/{sample}/{mode}/{strand}/assign.rds
+  quant_log: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs/{sample}/{mode}/{strand}/quant.log
+  resource_log: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs/{sample}/{mode}/{strand}/resource.log
+  job_script: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs/jobs/{stage}_{job}.sh
+  job_stdout: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs/jobs/{stage}_{job}.out
+  job_stderr: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/logs/jobs/{stage}_{job}.err
+  child_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/{sample}/child.rds
+  library_pilot_report: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/pilot/{sample}.tsv
+  library_pilot_receipt: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/receipts/{sample}/pilot.rds
+  library_metrics: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/metrics/{sample}.tsv
+tools:
+  Rscript: ../bin/Rscript_sif
+  bash: /bin/bash
+  bsub: ../bin/bsub_site
+  git: /usr/bin/git
+  samtools: ../bin/native/samtools
+  bcftools: ../bin/native/bcftools
+  gzip: /usr/bin/gzip
+  curl: /usr/bin/curl
+  ornaments: ../bin/native/ornaments
+  python: ../bin/native/python
+  personalizer: ../bin/native/personalizer
+  ornaments_source: /rsrch5/home/epi/bhattacharya_lab/software/ornaments
+  singularity: ../bin/singularity_site
+  r_library: /rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1
+  time: /usr/bin/time
+ornaments:
+  binary_sha256: REPLACE_AFTER_REVIEWED_BUILD
+  commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
+  semantics: ref_alt
+  threads: 2
+  installation_provenance: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/mouse_FVB_CAST_E12/private/installation_provenance.yaml
+  installation_provenance_sha256: UNRESOLVED_REQUIRES_SITE_REVIEW
+execution:
+  container_enabled: yes
+  image: /risapps/singularity/repo/RStudio/4.3.1/rstudio_4.3.1.sif
+  binds:
+  - host: /rsrch5
+    container: /rsrch5
+    mode: rw
+  - host: /rsrch9
+    container: /rsrch9
+    mode: rw
+  - host: /tmp
+    container: /tmp
+    mode: rw
+  posix_work_approved: no
+  backend: seadragon
+  site_file: seadragon.sh
+parents:
+  focal: FVB_NJ
+  alternate: CAST_EiJ
+dosage:
+  maternal: 1.0
+  paternal: 1.0
+  reviewed: yes
+  rationale: diploid_tissue
+reference:
+  build: GRCm38
+  annotation_approved: no
+  genome_sha256: REPLACE_AFTER_VERIFICATION
+  annotation_sha256: REPLACE_AFTER_VERIFICATION
+  contig_aliases: []
+markers:
+  mode: mgp
+  provenance_approved: no
+  source_type: external_lines_not_original_experimental_parents
+  focal_sample: FVB_NJ
+  alternate_sample: CAST_EiJ
+  duplicate_samples: []
+  min_depth: 5.0
+  min_allele_fraction: 0.9
+  min_ref_fraction: 0.99
+  chunk_rows: 10000
+  proxy: no
+  proxy_approved: no
+  proxy_reason: ''
+pilot:
+  fragments: 1000000
+  strand_fragments: 100000
+  min_pseudoalignment_fraction: 0.2
+  strand_tolerance: 0.05
+  max_projected_seconds: 43200.0
+  max_work_bytes: 2.5e+11
+fragments:
+  fragment_mean_nt: 250
+  fragment_sd_nt: 50
+  fragment_parameter_origin: assumed_user_defined
+retrieval:
+  internet_host_approved: no
+  attempts: 3
+  timeout_seconds: 1800
+  connect_timeout_seconds: 30
+  retry_seconds: 5
+lsf:
+  queue: short
+  memory_units_verified: no
+  memory_per_job_verified: no
+  memory_units: GB_site_attestation_required
+  execution_environment_verified: no
+  resource_limits_approved: no
+  stages:
+    reference:
+      memory_value: 8.0
+      cpus: 2
+      wall_time: '03:00'
+      reservation_value: 8.0
+      queue: short
+    pilot:
+      memory_value: 8.0
+      cpus: 2
+      wall_time: '03:00'
+      reservation_value: 8.0
+      queue: short
+    scale:
+      memory_value: 8.0
+      cpus: 2
+      wall_time: '12:00'
+      reservation_value: 8.0
+      queue: medium
+    models:
+      memory_value: 8.0
+      cpus: 2
+      wall_time: '03:00'
+      reservation_value: 8.0
+      queue: short
+    retrieve:
+      memory_value: 4.0
+      reservation_value: 4.0
+      cpus: 1.0
+      wall_time: '2:00'
+      queue: transfer
+models:
+  min_depth: 20.0
+  min_families: 10
+  min_orientation: 3
+  bootstrap: 2000
+  seed: 1147
+  covariates: []
+human:
+  genotype_qc_approved: no
+  covariates_approved: no
+exports:
+  enabled: no
+  policy_approved: no
+  complementary_suppression_reviewed: no
+  review_token: ~
+  min_cell: ~
+  approved_candidate_sha256: ~
+provenance_hints: []

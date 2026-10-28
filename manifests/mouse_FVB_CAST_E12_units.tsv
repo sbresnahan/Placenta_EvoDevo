@@ -1,0 +1,5 @@
+unit_id	cluster_id	independence_verified	maternal_parent	paternal_parent	stage	tissue
+"Pl_E12_5_CF_1"	NA	FALSE	"CAST_EiJ"	"FVB_NJ"	"E12.5"	"placenta"
+"Pl_E12_5_CF_2"	NA	FALSE	"CAST_EiJ"	"FVB_NJ"	"E12.5"	"placenta"
+"Pl_E12_5_FC_1"	NA	FALSE	"FVB_NJ"	"CAST_EiJ"	"E12.5"	"placenta"
+"Pl_E12_5_FC_2"	NA	FALSE	"FVB_NJ"	"CAST_EiJ"	"E12.5"	"placenta"

@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR}"
+exec "$ROOT/bin/native_tool.sh" 'ornaments' "$@"

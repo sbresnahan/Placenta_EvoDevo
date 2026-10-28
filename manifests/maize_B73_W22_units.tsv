@@ -1,0 +1,7 @@
+unit_id	cluster_id	independence_verified	maternal_parent	paternal_parent	stage	tissue
+"BW_endo1"	"BW_endo1"	TRUE	"B73"	"W22"	"14DAP"	"endosperm"
+"BW_endo2"	"BW_endo2"	TRUE	"B73"	"W22"	"14DAP"	"endosperm"
+"BW_endo3"	"BW_endo3"	TRUE	"B73"	"W22"	"14DAP"	"endosperm"
+"WB_endo1"	"WB_endo1"	TRUE	"W22"	"B73"	"14DAP"	"endosperm"
+"WB_endo2"	"WB_endo2"	TRUE	"W22"	"B73"	"14DAP"	"endosperm"
+"WB_endo3"	"WB_endo3"	TRUE	"W22"	"B73"	"14DAP"	"endosperm"

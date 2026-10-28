@@ -1,0 +1,16 @@
+#!/bin/bash
+# pilot: existing ornaments activation + R bridge; native commands execute on the host.
+# Set absolute CONFIG and repository-root SCRIPTS_DIR before submitting.
+# Data/reference/output paths come from CONFIG; site defaults: config/seadragon.sh.
+#BSUB -J poe_pilot
+#BSUB -q short
+#BSUB -n 2
+#BSUB -M 8
+#BSUB -R "rusage[mem=8]"
+#BSUB -W 3:00
+#BSUB -o /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/pilot.%J.out
+#BSUB -e /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/pilot.%J.err
+set -euo pipefail
+umask 077
+ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
+exec "$ROOT/bin/run_worker.sh" 'pilot' "$@"

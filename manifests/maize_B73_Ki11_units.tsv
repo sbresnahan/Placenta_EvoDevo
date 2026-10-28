@@ -1,0 +1,5 @@
+unit_id	cluster_id	independence_verified	maternal_parent	paternal_parent	stage	tissue
+"Sample_15"	"Sample_15"	TRUE	"B73"	"Ki11"	"20DAP"	"endosperm"
+"Sample_16"	"Sample_16"	TRUE	"B73"	"Ki11"	"20DAP"	"endosperm"
+"Sample_13"	"Sample_13"	TRUE	"Ki11"	"B73"	"20DAP"	"endosperm"
+"Sample_14"	"Sample_14"	TRUE	"Ki11"	"B73"	"20DAP"	"endosperm"

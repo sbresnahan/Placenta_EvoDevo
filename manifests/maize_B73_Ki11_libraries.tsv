@@ -1,0 +1,5 @@
+sample_id	unit_id	layout	strand_mode	strand_verified
+"Sample_15"	"Sample_15"	"PE"	"fr"	TRUE
+"Sample_16"	"Sample_16"	"PE"	"fr"	TRUE
+"Sample_13"	"Sample_13"	"PE"	"fr"	TRUE
+"Sample_14"	"Sample_14"	"PE"	"fr"	TRUE

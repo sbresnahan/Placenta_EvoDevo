@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+umask 077
+ROOT="${SCRIPTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export SCRIPTS_DIR="$ROOT"
+source "${POE_SITE_FILE:-$ROOT/config/seadragon.sh}"
+[[ -f "$POE_R_SIF" && -d "$POE_R_LIBRARY" ]] || {
+  printf 'Missing R image or R library; inspect config/seadragon.sh\n' >&2; exit 1;
+}
+# Do not inherit native conda/venv linker or Python settings into R.
+exec env -u LD_LIBRARY_PATH -u PYTHONPATH -u PYTHONHOME \
+  "$POE_SINGULARITY" exec --cleanenv --bind /rsrch5 --bind /rsrch9 --bind /tmp \
+  --env "R_LIBS_USER=$POE_R_LIBRARY" --env "POE_NATIVE_RECORD=${POE_NATIVE_RECORD:-}" \
+  "$POE_R_SIF" Rscript "$@"

@@ -1,0 +1,6 @@
+unit_id	cluster_id	independence_verified	maternal_parent	paternal_parent	stage	tissue
+"SRR8360867"	NA	FALSE	"C57BL_6J_Babr"	"CAST_EiJ"	"E7.5"	"extraembryonic_ectoderm"
+"SRR8360868"	NA	FALSE	"C57BL_6J_Babr"	"CAST_EiJ"	"E7.5"	"extraembryonic_ectoderm"
+"SRR8360857"	NA	FALSE	"CAST_EiJ"	"C57BL_6J_Babr"	"E7.5"	"extraembryonic_ectoderm"
+"SRR8360873"	NA	FALSE	"CAST_EiJ"	"C57BL_6J_Babr"	"E7.5"	"extraembryonic_ectoderm"
+"SRR8360872"	NA	FALSE	"CAST_EiJ"	"C57BL_6J_Babr"	"E7.5"	"extraembryonic_ectoderm"

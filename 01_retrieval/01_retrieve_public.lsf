@@ -1,0 +1,16 @@
+#!/bin/bash
+# retrieve: R bridge; host gzip integrity checks; native commands execute on the host.
+# Set absolute CONFIG and repository-root SCRIPTS_DIR before submitting.
+# Data/reference/output paths come from CONFIG; site defaults: config/seadragon.sh.
+#BSUB -J poe_retrieve
+#BSUB -q transfer
+#BSUB -n 1
+#BSUB -M 4
+#BSUB -R "rusage[mem=4]"
+#BSUB -W 2:00
+#BSUB -o /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/retrieve.%J.out
+#BSUB -e /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/retrieve.%J.err
+set -euo pipefail
+umask 077
+ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
+exec "$ROOT/bin/run_worker.sh" 'retrieve' "$@"
