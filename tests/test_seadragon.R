@@ -133,6 +133,24 @@ for(p in profiles) {
   unlink(output)
   check(fails(completed_counts(c,root,load_manifests(c))))
 }
+# Preparation must never perform network I/O inside R. Stage fixture FASTQs
+# directly to exercise the finish/receipt gate without contacting a remote URL.
+p<-profiles[[1]];c<-p$c
+sources<-fread(c$paths$sources)
+sources[,`:=`(url_1="https://example.invalid/left",url_2="https://example.invalid/right")]
+write_tsv(sources,c$paths$sources)
+retrieve_job<-file.path(d,"offline retrieval plan");dir.create(retrieve_job)
+prepare_host_retrieval(c,root,retrieve_job)
+planned<-readLines(file.path(retrieve_job,"pre.sh"))
+check(any(grepl("bin/fetch_verified.sh",planned,fixed=TRUE)))
+check(!any(grepl("curl_fetch_disk",planned,fixed=TRUE)))
+for(i in seq_len(nrow(sources)))for(mate in 1:2) {
+  dest<-cfg_path(c,"fastq",run=sources$run_id[i],mate=mate)
+  ensure_parent(dest)
+  check(file.copy(sources[[paste0("local_",mate)]][i],dest,overwrite=TRUE))
+}
+finish_host_retrieval(c,retrieve_job)
+check(nrow(fread(c$paths$resource_receipt))==4L)
 # Test scheduler success/failure with a dedicated executable mock; NO bsub installed/called.
 p<-profiles[[1]];c<-p$c
 fake<-file.path(d,"fake_bsub")

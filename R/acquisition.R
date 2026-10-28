@@ -27,7 +27,7 @@ fetch_one <- function(url,dest,partial,response,bytes,md5,c,transport=curl::curl
     }
     h<-curl::new_handle(timeout=c$retrieval$timeout_seconds,
       connecttimeout=c$retrieval$connect_timeout_seconds,followlocation=TRUE,
-      maxfilesize=bytes-offset)
+      maxfilesize_large=bytes-offset)
     if(offset>0)curl::handle_setopt(h,range=paste0(format(offset,scientific=FALSE),"-"))
     r<-tryCatch(transport(url,response,h),error=function(e)NULL)
     n<-if(file.exists(response))file.info(response)$size else 0
@@ -118,4 +118,76 @@ retrieve_inputs <- function(c,native=TRUE) {
       path=r$destination[i],bytes=file.info(r$destination[i])$size)
   }
   write_tsv(rbindlist(records),c$paths$resource_receipt)
+}
+
+# Seadragon: describe transfers in R, execute network requests only on the host.
+host_retrieval_items <- function(c) {
+  m<-load_manifests(c)
+  if(c$profile=="human_trio")stop("Private raw files must not be downloaded")
+  rows<-list()
+  for(i in seq_len(nrow(m$sources)))for(mate in seq_len(if(m$sources$layout[i]=="PE")2 else 1)) {
+    s<-m$sources[i];id<-s$run_id
+    rows[[length(rows)+1L]]<-data.table(id=id,mate=mate,
+      url=s[[paste0("url_",mate)]],destination=cfg_path(c,"fastq",run=id,mate=mate),
+      partial=cfg_path(c,"partial",run=id,mate=mate),
+      bytes=as.numeric(s[[paste0("bytes_",mate)]]),md5=s[[paste0("md5_",mate)]],
+      decompress_to=NA_character_)
+  }
+  r<-resolve_manifest_paths(fread(c$paths$resources),
+    c("destination","partial","response"),c)
+  require_columns(r,c("resource_id","url","destination","partial","response","bytes","md5","required","build"))
+  assert_unique(r,"resource_id")
+  for(i in which(r$required)) {
+    unzip<-if("decompress_to" %in% names(r)&&!is.na(r$decompress_to[i])&&nzchar(r$decompress_to[i]))
+      resolve_value(r$decompress_to[i],dirname(attr(c,"file")),unlist(c$environment_allowlist)) else NA_character_
+    rows[[length(rows)+1L]]<-data.table(id=r$resource_id[i],mate=NA_integer_,
+      url=r$url[i],destination=r$destination[i],partial=r$partial[i],
+      bytes=as.numeric(r$bytes[i]),md5=r$md5[i],decompress_to=unzip)
+  }
+  items<-rbindlist(rows)
+  if(anyNA(items[,.(id,url,destination,partial,bytes,md5)])||
+     any(!grepl("^https://",items$url))||
+     any(!is.finite(items$bytes)|items$bytes<=0|items$bytes!=floor(items$bytes)|items$bytes>2^53)||
+     any(!grepl("^[0-9a-f]{32}$",items$md5))||anyDuplicated(items$destination))
+    stop("Unsafe, duplicated or unverified public acquisition entry")
+  items
+}
+prepare_host_retrieval <- function(c,root,job) {
+  items<-host_retrieval_items(c)
+  write_tsv(items,file.path(job,"retrieve_items.tsv"))
+  lines<-character()
+  for(i in seq_len(nrow(items))) {
+    item<-items[i]
+    lines<-c(lines,plan_line(file.path(root,"bin/fetch_verified.sh"),
+      c(c$tools$curl,item$url,item$destination,item$partial,
+        format(item$bytes,scientific=FALSE,trim=TRUE),item$md5,
+        c$retrieval$attempts,c$retrieval$timeout_seconds,
+        c$retrieval$connect_timeout_seconds,c$retrieval$retry_seconds)))
+    if(!is.na(item$mate)||endsWith(item$destination,".gz"))
+      lines<-c(lines,plan_line(c$tools$gzip,c("-t",item$destination)))
+    if(!is.na(item$decompress_to)) {
+      ensure_parent(item$decompress_to)
+      lines<-c(lines,plan_line(c$tools$gzip,c("-dc",item$destination),
+        stdout=item$decompress_to))
+    }
+  }
+  write_plan(lines,job,"pre")
+}
+finish_host_retrieval <- function(c,job) {
+  items<-fread(file.path(job,"retrieve_items.tsv"),colClasses=c(bytes="numeric"))
+  for(i in seq_len(nrow(items))) {
+    item<-items[i]
+    if(!verify_file(item$destination,item$bytes,item$md5))
+      stop("Host retrieval missing/invalid: ",basename(item$destination))
+    if(!is.na(item$decompress_to)&&
+       (!file.exists(item$decompress_to)||file.info(item$decompress_to)$size<=0))
+      stop("Host decompression missing/empty: ",basename(item$decompress_to))
+  }
+  m<-load_manifests(c)
+  for(i in seq_len(nrow(m$sources))) {
+    s<-m$sources[i]
+    validate_fastq(cfg_path(c,"fastq",run=s$run_id,mate=1),
+      if(s$layout=="PE")cfg_path(c,"fastq",run=s$run_id,mate=2) else NULL)
+  }
+  write_tsv(items[,.(id,mate,path=destination,bytes)],c$paths$resource_receipt)
 }

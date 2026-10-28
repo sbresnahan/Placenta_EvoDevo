@@ -6,4 +6,6 @@ for(t in c("test_libpaths.R","test_core.R","test_workflow.R","test_v2.R","test_c
   rc<-system2(file.path(R.home("bin"),"Rscript"),shQuote(file.path(root,"tests",t)))
   if(rc!=0L)stop("Test failed: ",t)
 }
+if(system2("bash",shQuote(file.path(root,"tests/test_fetch_host.sh")))!=0L)
+  stop("Test failed: test_fetch_host.sh")
 cat("ALL LOCAL LOGICAL TEST SUITES PASSED. No cohort execution or live LSF validation.\n")

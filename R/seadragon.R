@@ -299,13 +299,8 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     })),c$paths$metrics)
   } else if(stage=="models")worker_models(c,root)
   else if(stage=="retrieve") {
-    if(phase=="prepare") {
-      cc<-c;cc$paths$resource_receipt<-file.path(job,"resource_receipt.tsv")
-      retrieve_inputs(cc,native=FALSE)
-      d<-fread(cc$paths$resource_receipt)
-      lines<-vapply(d$path[endsWith(d$path,".gz")],function(f)plan_line(c$tools$gzip,c("-t",f)),character(1))
-      write_plan(lines,job,"pre")
-    } else write_tsv(fread(file.path(job,"resource_receipt.tsv")),c$paths$resource_receipt)
+    if(phase=="prepare")prepare_host_retrieval(c,root,job)
+    else finish_host_retrieval(c,job)
   } else stop("Unknown Seadragon stage: ",stage)
   invisible(TRUE)
 }

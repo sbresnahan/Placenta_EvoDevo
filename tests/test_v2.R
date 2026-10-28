@@ -76,6 +76,16 @@ check(file.info(part)$size==3&&!file.exists(dest))
 unlink(part)
 check(fails(fetch_one("https://example.invalid/fixture",dest,part,resp,6,strrep("0",32),
   download_cfg,transport200)))
+# The first maize FASTQ exceeds the 32-bit CURLOPT_MAXFILESIZE limit.
+# Confirm curl handle setup reaches a mock transport for a >4 GiB file.
+large_seen<-FALSE
+large_transport<-function(url,path,handle) {
+  large_seen<<-TRUE
+  stop("Intentional offline transport failure")
+}
+check(fails(fetch_one("https://example.invalid/large",dest,part,resp,4359512380,
+  strrep("0",32),download_cfg,large_transport)))
+check(large_seen)
 # FASTQ synchronization, nonrandom prefix and malformed/empty rejection.
 fq<-function(path,id,seq="AC") {con<-gzfile(path,"wt");writeLines(c(paste0("@",id),seq,"+",
   strrep("!",nchar(seq))),con);close(con)}
