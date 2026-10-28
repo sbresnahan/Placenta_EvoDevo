@@ -1,68 +1,43 @@
-# Placenta_promoter_POE
+# Placenta_EvoDevo
 
-Raw-read parent-of-origin expression analysis for maize endosperm, mouse
-extraembryonic tissues and human GUSTO placenta. The workflow prepares
-references and parental markers, quantifies RNA with Ornaments, assigns
-maternal/paternal expression and fits eligible gene/promoter models.
+Parent-of-origin expression analysis of maize endosperm, mouse extraembryonic
+tissues, and human GUSTO placenta using Ornaments.
 
 ## Start here
 
-**Follow [the Placenta_EvoDevo step-by-step workflow](docs/Placenta_EvoDevo_step_by_step.md).**
-This is the primary, self-contained operating guide. Complete shared
-setup, choose one species and one cohort, then follow that section through
-results. Commands run from:
+Follow the [step-by-step walkthrough](docs/Placenta_EvoDevo_step_by_step.md):
+set project paths, select a cohort, check tools, and submit the first stage.
 
-```text
-/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts
-```
+Scripts: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts`
 
-Cohort inputs, scratch, logs and outputs go under:
+Data: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>`
 
-```text
-/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>
-```
-
-Installed software and the configured shared human reference inputs remain
-at their source locations. The package does not move existing data.
-
-| Species | Profile | Scope |
-|---|---|---|
-| Maize | `maize_B73_Ki11` | 20-DAP endosperm; four biological pools, eight technical runs |
-| Maize | `maize_B73_W22` | 14-DAP endosperm; six ear-pool libraries |
-| Mouse | `mouse_Babr_CAST` | E7.5 extraembryonic ectoderm; five SE libraries; explicit B6J marker proxy |
-| Mouse | `mouse_FVB_CAST_E12` | E12.5 placenta; four PE libraries |
-| Human | `GUSTO` | Private placenta RNA and independently verified typed trios |
-
-Supplied: scripts, example configurations, public run tables and empty human
-schemas. Required locally: reads, references, variants, the human annotation,
-verified input contracts and applicable approvals.
+| Cohort | Samples |
+|---|---|
+| maize_B73_Ki11 | Four PE endosperm pools, 20 DAP |
+| maize_B73_W22 | Six PE endosperm pools, 14 DAP |
+| mouse_Babr_CAST | Five SE extraembryonic ectoderm units, E7.5 |
+| mouse_FVB_CAST_E12 | Four PE female placenta units, E12.5 |
+| GUSTO | Local human placenta RNA and linked trios |
 
 ## Project stages
 
-| Module | Task | Recommended action |
-|---|---|---|
-| [00_setup](00_setup/README.md) | Settings, R packages and tool checks | `preflight.sh` |
-| [01_retrieval](01_retrieval/README.md) | Verified public acquisition | `retrieve` |
-| [02_reference](02_reference/README.md) | Transcript/promoter catalog | `reference` |
-| [03_genotypes](03_genotypes/README.md) | Parental markers or typed child inputs | Included in `reference` |
-| [04_ornaments](04_ornaments/README.md) | Indices, pilots and quantification | `reference`, `pilot`, `scale` |
-| [05_parental_expression](05_parental_expression/README.md) | Parental assignment | Included in `scale` |
-| [06_promoter_models](06_promoter_models/README.md) | Callability and inference | `models` |
-| [07_exports](07_exports/README.md) | Private human aggregate review | Separate explicit actions |
+| Stage | Action |
+|---|---|
+| [Setup](00_setup/README.md) | Check native tools and R packages |
+| [Retrieval](01_retrieval/README.md) | Download public reads/resources |
+| [Reference](02_reference/README.md) | Build transcript and promoter catalogs |
+| [Genotypes](03_genotypes/README.md) | Prepare parental markers or child inputs |
+| [Ornaments](04_ornaments/README.md) | Build indices, run pilots, quantify RNA |
+| [Assignment](05_parental_expression/README.md) | Orient maternal/paternal expression |
+| [Models](06_promoter_models/README.md) | Fit eligible gene/promoter comparisons |
+| [Export](07_exports/README.md) | Write optional human aggregates |
 
-`bin/submit_pipeline.sh` is the host submission interface; `bin/Rscript_sif`
-runs R in Singularity. Native tools and `bsub` run on the host. Commands without
-`--submit` are dry-runs. A completed pilot never starts scale automatically.
-Do not submit individual modules in addition to the same driver graph.
+Stage commands use `bin/submit_pipeline.sh "$CONFIG" STAGE --submit`.
+Omitting `--submit` prints a plan. Results include completion status, QC tables,
+pilot metrics, and model estimates.
 
-## Reference pages
-
-- [Setup checklist](docs/SETUP.md) and [configuration schema](config/SCHEMA.md)
-- [Monitoring, manual submission and troubleshooting](docs/OPERATIONS.md)
-- [Validation and live-site checks](docs/VALIDATION.md)
-- [Code inventory](MANIFEST.md) and [attribution](ATTRIBUTION.md)
-- [Scientific resource review](evidence/review.md)
-
-Local tests do not establish actual Seadragon/cohort performance. Expected
-allocations and promoter coordinates alone do not prove imprinting or an
-intragenomic-conflict mechanism.
+Settings are described in the [schema](config/SCHEMA.md).
+See [operations](docs/OPERATIONS.md) for logs/status,
+[validation](docs/VALIDATION.md) for software-check coverage, and
+[attribution](ATTRIBUTION.md) for software/data credits.

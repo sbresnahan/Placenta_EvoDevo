@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc 3.13" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Setup reference</title>
+  <title>Setup</title>
   <style>
 
 html {
@@ -245,103 +245,40 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Setup reference</h1>
+<h1 class="title">Setup</h1>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#setup-reference" id="toc-setup-reference">Setup
-reference</a>
+<li><a href="#setup" id="toc-setup">Setup</a>
 <ul>
-<li><a href="#project-directories" id="toc-project-directories">Project
-directories</a></li>
-<li><a href="#software-environments" id="toc-software-environments">Software environments</a></li>
-<li><a href="#configuration-checklist" id="toc-configuration-checklist">Configuration checklist</a></li>
-<li><a href="#installed-tool-identity" id="toc-installed-tool-identity">Installed-tool identity</a></li>
-<li><a href="#resource-review" id="toc-resource-review">Resource
-review</a></li>
-<li><a href="#analysis-rules" id="toc-analysis-rules">Analysis
-rules</a></li>
+<li><a href="#tool-check" id="toc-tool-check">Tool check</a></li>
+<li><a href="#settings" id="toc-settings">Settings</a></li>
 </ul></li>
 </ul>
 </nav>
-<h1 id="setup-reference">Setup reference</h1>
-<p>Use <a href="Placenta_EvoDevo_step_by_step.md">the step-by-step
-workflow</a> for the execution order. This page explains the settings
-and checks needed to make those commands runnable.</p>
-<h2 id="project-directories">Project directories</h2>
+<h1 id="setup">Setup</h1>
+<p>Use the <a href="Placenta_EvoDevo_step_by_step.md#part-1-shared-setup">walkthrough</a>
+to create a cohort&#39;s working directories and configuration.</p>
+<h2 id="tool-check">Tool check</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">00_setup/preflight.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span></span></code></pre></div>
+<p>Expected output:
+<code>Required tools and R packages are accessible.</code>
+<code>--execute</code> is a compatible alias.</p>
 <table>
 <thead>
 <tr>
-<th>Purpose</th>
-<th>Location</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Script root</td>
-<td><code>/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts</code></td>
-</tr>
-<tr>
-<td>Data root</td>
-<td><code>/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data</code></td>
-</tr>
-<tr>
-<td>Cohort files</td>
-<td><code>data/&lt;cohort&gt;/</code> with separate manifests, raw,
-reference, private, work, scratch, logs and receipts</td>
-</tr>
-<tr>
-<td>Private settings</td>
-<td><code>scripts/config/&lt;profile&gt;.private.yaml</code></td>
-</tr>
-</tbody>
-</table>
-<p>The operational data paths are explicit in each YAML. Changing
-<code>DATA_ROOT</code> in your shell does not rewrite them. If you edit
-a root, update its related <code>paths</code>, <code>templates</code>
-and resource/marker-source table paths consistently. The shipped
-<code>manifests/</code> folder contains templates, not the operational
-copies. Do not copy templates over edited cohort tables.</p>
-<p>Use a POSIX filesystem for work, temporary files, locks and atomic
-receipts. Verify write permissions and reserve
-raw/reference/index/scratch headroom. Creating directories or accepting
-the example budget does not establish sufficient disk or memory.</p>
-<h2 id="software-environments">Software environments</h2>
-<p>Native host tools are activated by repository wrappers. R is isolated
-in Singularity; native tools and <code>bsub</code> must not be assumed
-to work inside it.</p>
-<table>
-<thead>
-<tr>
+<th>Component</th>
 <th>Setting</th>
-<th>Default</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Module initialization</td>
-<td><code>/etc/profile.d/modules.sh</code></td>
-</tr>
-<tr>
-<td>Conda executable</td>
-<td><code>/risapps/rhel8/miniforge3/24.5.0-0/bin/conda</code></td>
-</tr>
-<tr>
-<td>samtools environment</td>
-<td><code>samtools-1.16.1</code></td>
-</tr>
-<tr>
-<td>bcftools environment</td>
-<td><code>bcftools-1.16</code></td>
-</tr>
-<tr>
-<td>Ornaments activation</td>
+<td>Native environment</td>
 <td><code>/rsrch5/home/epi/bhattacharya_lab/software/ornaments/bin/activate</code></td>
 </tr>
 <tr>
-<td>Installed commands after activation</td>
-<td><code>ornaments</code>,
-<code>create_personalized_transcriptome</code></td>
+<td>samtools / bcftools</td>
+<td><code>samtools-1.16.1</code> / <code>bcftools-1.16</code></td>
 </tr>
 <tr>
 <td>R image</td>
@@ -355,235 +292,21 @@ to work inside it.</p>
 <td>R binds</td>
 <td><code>/rsrch5</code>, <code>/rsrch9</code>, <code>/tmp</code></td>
 </tr>
-</tbody>
-</table>
-<p>Inspect trusted <code>config/seadragon.sh</code>; do not replace it
-with arbitrary participant-supplied shell code.
-<code>POE_SITE_FILE</code> and <code>execution.site_file</code> must
-identify the same file. An R-image override must match
-<code>execution.image</code>. The bridge&#39;s actual binds must cover all
-inputs/outputs.</p>
-<p>Required R packages: <strong>data.table, yaml, curl, GenomicRanges,
-IRanges, S4Vectors, Rsamtools and Biostrings</strong>. R must be at
-least 4.3.1. The preflight checks packages through the R bridge.
-Missing/incompatible packages need a reviewed site fix; the project does
-not modify the shared library automatically. Host utilities include
-Bash, GNU time, gzip, curl and the site scheduler/ Singularity
-executables.</p>
-<h2 id="configuration-checklist">Configuration checklist</h2>
-<p>Copy the selected example beside itself in <code>config/</code>. All
-five examples use the same required schema; retain keys even when their
-branch does not use them. See <a href="../config/SCHEMA.md">the
-schema</a> for table headers and path rules.</p>
-<table>
-<thead>
 <tr>
-<th>Exact key or table field</th>
-<th>What to enter/check</th>
-<th>Timing</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>paths.*</code>, <code>templates.*</code></td>
-<td>Correct absolute cohort destinations, no cross-cohort
-collisions</td>
-<td>Before any stage</td>
-</tr>
-<tr>
-<td><code>execution.site_file</code>, <code>execution.image</code></td>
-<td>Same trusted site file/image used by shell wrappers</td>
-<td>Before preflight</td>
-</tr>
-<tr>
-<td><code>execution.posix_work_approved</code></td>
-<td>True only after checking work/scratch/receipt storage</td>
-<td>Before submission</td>
-</tr>
-<tr>
-<td><code>lsf.memory_units_verified</code>,
-<code>lsf.memory_per_job_verified</code></td>
-<td>Actual site interpretation of limit and reservation</td>
-<td>Before submission</td>
-</tr>
-<tr>
-<td><code>lsf.execution_environment_verified</code></td>
-<td>Worker access to image, library, native tools and input/output
-storage</td>
-<td>Before submission</td>
-</tr>
-<tr>
-<td><code>lsf.stages.*</code></td>
-<td>Queue, <code>cpus</code>, <code>memory_value</code>,
-<code>reservation_value</code>, <code>wall_time</code></td>
-<td>Before reference/pilot; review against measurements</td>
-</tr>
-<tr>
-<td><code>lsf.resource_limits_approved</code></td>
-<td>Reviewed total resource budget, not just one job&#39;s RAM</td>
-<td>Before pilot/scale acceptance</td>
-</tr>
-<tr>
-<td><code>retrieval.internet_host_approved</code></td>
-<td>Approved internet/transfer execution location</td>
-<td>Public retrieval only</td>
-</tr>
-<tr>
-<td>Resource rows</td>
-<td>Correct HTTPS source, expected byte size/MD5, build and
-destinations</td>
-<td>Before acquiring that resource</td>
-</tr>
-<tr>
-<td><code>paths.genome</code>, <code>paths.annotation</code></td>
-<td>Actual compatible genome and annotation files</td>
-<td>Before reference</td>
-</tr>
-<tr>
-<td><code>reference.annotation_approved</code></td>
-<td>Correct tissue/build/annotation and scientific review</td>
-<td>Before reference</td>
-</tr>
-<tr>
-<td>Marker-source rows, <code>markers.provenance_approved</code></td>
-<td>Correct source path/build and actual parent/proxy provenance</td>
-<td>Before public markers</td>
-</tr>
-<tr>
-<td><code>markers.proxy*</code></td>
-<td>Explicit applicable proxy, approval and reason; no silent strain
-substitution</td>
-<td>Before public markers</td>
-</tr>
-<tr>
-<td>Library <code>strand_mode</code>, <code>strand_verified</code></td>
-<td>Actual protocol review, not guessed from labels</td>
-<td>Before pilot</td>
-</tr>
-<tr>
-<td>Unit <code>cluster_id</code>,
-<code>independence_verified</code></td>
-<td>True independent unit/cluster definition</td>
-<td>Before inference; review before pilot</td>
-</tr>
-<tr>
-<td><code>dosage.*</code></td>
-<td>Maize normal endosperm 2:1; mouse/human 1:1</td>
-<td>Before processing</td>
-</tr>
-<tr>
-<td><code>fragments.*</code></td>
-<td>Single explicitly labelled SE assumption; PE does not use it</td>
-<td>Before reference/pilot</td>
-</tr>
-<tr>
-<td><code>human.genotype_qc_approved</code>, library
-<code>identity_verified</code></td>
-<td>Independent real RNA/DNA/pedigree QC and exact trio linkage</td>
-<td>Before human preflight</td>
-</tr>
-<tr>
-<td><code>models.covariates</code>,
-<code>human.covariates_approved</code></td>
-<td>Approved covariate list, exact linked rows and centering</td>
-<td>Before human models; configure before pilot</td>
-</tr>
-<tr>
-<td><code>exports.*</code></td>
-<td>Disabled during analysis; explicit local disclosure review
-separately</td>
-<td>After completed human analysis</td>
+<td>R packages</td>
+<td>data.table, yaml, curl, GenomicRanges, IRanges, S4Vectors,
+Rsamtools, Biostrings</td>
 </tr>
 </tbody>
 </table>
-<p>Approval fields are attestations, not instructions to fabricate
-evidence. Empty/unresolved input contracts must be completed; setting a
-flag does not create a reference, genotype table, independent replicate
-or identity link.</p>
-<p>Completion records do not determine whether earlier results are
-current. The operator decides when changes require rerunning
-prerequisites and downstream stages. Keep the stage order in the unified
-guide.</p>
-<p>Publisher MD5 and expected byte counts remain part of public download
-contracts. They are checked automatically during retrieval, not used for
-stage freshness.</p>
-<h2 id="installed-tool-identity">Installed-tool identity</h2>
-<p>With <code>SCRIPTS_DIR</code>, <code>POE_SITE_FILE</code> and
-absolute <code>CONFIG</code> set:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">00_setup/preflight.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">00_setup/preflight.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> <span class="at">--execute</span></span></code></pre></div>
-<p>The first command checks metadata. The second inventories actual host
-binaries and checks R dependencies separately. It does not install
-tools, download data or submit jobs. The pending inventory path is
-printed before acceptance. Review that file privately if a gate
-fails.</p>
-<p>The inventory lists executable paths and available versions,
-configured site/image paths, and Python package information. Ornaments
-is already installed in the Conda environment
-<code>/rsrch5/home/epi/bhattacharya_lab/software/ornaments</code>. No
-source-build evidence or software checksum entry is required.</p>
-<p><strong>Success:</strong> required commands/environments and R
-packages are available, and the selected metadata pass validation.
-<strong>Failure:</strong> resolve missing commands,
-library/image/package problems, or bad manifests locally; do not
-reinstall software merely to bypass a check.</p>
-<p>Metadata preflight does not certify that all reference/read inputs
-exist, that LSF policy is correct or that models will be eligible.
-GUSTO&#39;s empty schemas cannot pass until real private linkage/QC is
-supplied.</p>
-<h2 id="resource-review">Resource review</h2>
-<p>The YAML&#39;s queue/CPU/RAM/time values are initial templates, not
-measurements. Confirm the site&#39;s memory limit and reservation units; do
-not translate values from another cluster by guesswork. Native thread
-count cannot exceed allocated CPUs. Review public input totals from
-manifests and actual local GUSTO inventory.</p>
-<p>Use the bounded pilot&#39;s measured RSS/time and actual index sizes to
-choose allocations and review total runtime/storage. Projection covers
-quantification, not all downloading, indexing, startup or queue delays.
-Endpoint work size is not a disk high-water mark. Container startup/I/O
-overhead also needs site observation.</p>
-<h2 id="analysis-rules">Analysis rules</h2>
-<p>These are interpretation/eligibility contracts, not optional setup
-shortcuts:</p>
-<ul>
-<li>Promoter groups use a fixed TSS anchor, a primary 50-bp window and
-compatible first donor; no transitive chaining. The 25/100-bp catalogs
-are structural sensitivity views, not evidence of tested
-expression-model robustness.</li>
-<li>Expected allocations are combined at the same event/genomic locus,
-not summed across SNPs as independent molecules. Missing parental
-evidence remains NA.</li>
-<li>One sentinel per entity is selected by coverage across every
-configured primary unit with depth at least 20, not by imbalance.
-Promoter-pair selection is likewise coverage-based.</li>
-<li>Public gene outcomes are <code>log2((M + 0.5)/(P + 0.5))</code>
-minus <code>log2(maternal_dose/paternal_dose)</code>. Promoter contrasts
-are within-unit differences, so this dosage offset cancels.</li>
-<li>Public inference uses an unweighted intercept plus reciprocal-cross
-orientation. Residual degrees of freedom are independent-unit n minus
-model rank. One direction, repeated/unresolved clusters, missing units,
-insufficient coverage or nonpositive residual df blocks POE
-inference.</li>
-<li>BH adjustment is separate by cohort, stage, species and endpoint. Do
-not combine results as extra replicates or silently change the testing
-family.</li>
-<li>Human inference uses the paired natural-log promoter contrast,
-cis-orientation terms and approved centered covariates. Only exact
-equal/opposite cis redundancy is removed; otherwise full rank is
-required.</li>
-<li>Human eligibility requires depth at least 20/event, ten paired
-families, three maternal-REF and three maternal-ALT orientations at both
-sentinels and at least five residual df. HC3 t inference and 2,000
-family bootstraps use seed 1147 and require at least 90% valid bootstrap
-fits.</li>
-<li>Human <code>q &lt;= 0.05</code> and absolute contrast at least
-<code>log(2)</code> flag conditional discordance, not definitive
-imprinting. Uncertainty is conditional on quantification and marker
-assumptions.</li>
-</ul>
-<p>Maternal seed-coat/decidua/blood admixture, cis effects, genotype
-proxies and developmental composition remain alternative explanations.
-Human whole-gene analysis/masking and TE comparisons are outside the
-implemented workflow.</p>
+<p>Site settings are in <code>config/seadragon.sh</code>; cohort
+paths/settings are in <code>config/&lt;cohort&gt;.private.yaml</code>.
+Tool checks work before cohort input tables are populated.</p>
+<h2 id="settings">Settings</h2>
+<p>Select actual file paths, strand modes, biological cluster IDs, and
+model covariates in the cohort&#39;s configuration and tables. Existing
+approval fields and extra legacy sign-off columns are ignored.</p>
+<p>The <a href="../config/SCHEMA.md">schema</a> describes each input
+table. Reference and analysis stages validate the inputs they use.</p>
 </body>
 </html>

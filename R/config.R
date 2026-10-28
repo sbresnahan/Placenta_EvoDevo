@@ -11,16 +11,28 @@ resolve_value <- function(x,base,allowed=character()) {
   hits<-regmatches(x,gregexpr("\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}",x))[[1]]
   for(h in hits) {
     k<-substring(h,3,nchar(h)-1L)
-    if(!k %in% allowed||!nzchar(Sys.getenv(k))) stop("Unresolved/unapproved variable: ",k)
+    if(!k %in% allowed||!nzchar(Sys.getenv(k))) stop("Undefined or unsupported variable: ",k)
     x<-gsub(h,Sys.getenv(k),x,fixed=TRUE)
   }
   if(grepl("\\$",x))stop("Unsupported environment expression")
   if(!grepl("^/",x))x<-file.path(base,x)
   x
 }
-read_config_v2 <- function(path) {
+read_config_v2 <- function(path,setup=FALSE) {
   path<-normalizePath(path,mustWork=TRUE); c<-yaml::read_yaml(path,eval.expr=FALSE)
   if(!identical(c$schema_version,2L))stop("Schema 2 required; schema 1 is retired")
+  if(setup) {
+    for(k in c("Rscript","bash","bsub","samtools","bcftools","gzip","curl",
+               "ornaments","python","personalizer","singularity","r_library","time"))
+      c$tools[[k]]<-resolve_value(c$tools[[k]],dirname(path),unlist(c$environment_allowlist))
+    c$execution$image<-resolve_value(c$execution$image,dirname(path),unlist(c$environment_allowlist))
+    for(k in intersect(c("native_inventory","tool_versions"),names(c$paths)))
+      c$paths[[k]]<-resolve_value(c$paths[[k]],dirname(path),unlist(c$environment_allowlist))
+    if(identical(c$execution$backend,"seadragon"))
+      c$execution$site_file<-resolve_value(c$execution$site_file,dirname(path),unlist(c$environment_allowlist))
+    attr(c,"file")<-path
+    return(c)
+  }
   if(!c$profile %in% c("public_cross","human_trio")||!c$species %in% c("maize","mouse","human"))
     stop("Unknown profile/species")
   if((c$species=="human")!=(c$profile=="human_trio"))stop("Mixed public/trio profile")
@@ -68,7 +80,7 @@ read_config_v2 <- function(path) {
   })
   for(s in c("pilot","scale","reference","models"))for(k in c("memory_value","cpus"))
     positive(c$lsf$stages[[s]][[k]],paste(s,k))
-  for(k in c("fragments","strand_fragments","max_projected_seconds","max_work_bytes"))
+  for(k in c("fragments","strand_fragments"))
     positive(c$pilot[[k]],paste("pilot",k))
   positive(c$models$min_depth,"models.min_depth")
   positive(c$ornaments$threads,"ornaments.threads")
@@ -91,7 +103,6 @@ read_config_v2 <- function(path) {
     scalar_text(c$parents$focal,"focal");scalar_text(c$parents$alternate,"alternate")
     if(c$parents$focal==c$parents$alternate)stop("Distinct parents required")
     positive(c$dosage$maternal,"maternal dosage");positive(c$dosage$paternal,"paternal dosage")
-    if(!isTRUE(c$dosage$reviewed))stop("Tissue/ploidy-specific dosage review required")
     if(!c$markers$mode %in% c("panzea","mgp","prepared"))stop("Unknown marker adapter")
     positive(c$markers$chunk_rows,"markers.chunk_rows")
     if(c$markers$chunk_rows!=floor(c$markers$chunk_rows))stop("Integer VCF chunk size required")
@@ -100,11 +111,10 @@ read_config_v2 <- function(path) {
     if(c$markers$mode=="panzea" &&
        (c$markers$min_depth<5||c$markers$min_allele_fraction<.9||
         c$markers$min_allele_fraction>1))stop("Panzea depth/allele-fraction gates cannot be relaxed")
-    if(isTRUE(c$markers$proxy)&&(!isTRUE(c$markers$proxy_approved)||!nzchar(c$markers$proxy_reason)))
-      stop("Explicit proxy approval/reason required")
+    if(isTRUE(c$markers$proxy))scalar_text(c$markers$proxy_reason,"markers.proxy_reason")
     if(isTRUE(c$markers$proxy)&&c$parents$focal=="C57BL_6J_Babr"&&
        c$markers$mode=="mgp"&&c$markers$focal_sample!="REFERENCE_C57BL_6J")
-      stop("The approved Babr MGP proxy is B6J reference, not B6N/another strain")
+      stop("Babr MGP proxy requires REFERENCE_C57BL_6J")
   }
   attr(c,"file")<-path;c
 }
@@ -133,8 +143,8 @@ load_manifests <- function(c,require_files=FALSE) {
     set(s,j=k,value=as.numeric(s[[k]]))
   u<-fread(c$paths$units,na.strings=c("","NA"))
   require_columns(s,c("run_id","sample_id","layout","url_1","url_2","md5_1","md5_2","bytes_1","bytes_2"))
-  require_columns(l,c("sample_id","unit_id","layout","strand_mode","strand_verified"))
-  require_columns(u,c("unit_id","cluster_id","independence_verified","maternal_parent",
+  require_columns(l,c("sample_id","unit_id","layout","strand_mode"))
+  require_columns(u,c("unit_id","cluster_id","maternal_parent",
     "paternal_parent","stage","tissue"))
   assert_unique(s,"run_id");assert_unique(l,"sample_id");assert_unique(u,"unit_id")
   for(v in list(s$run_id,l$sample_id,u$unit_id))

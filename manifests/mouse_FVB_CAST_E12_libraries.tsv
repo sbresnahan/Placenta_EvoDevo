@@ -1,5 +1,5 @@
-sample_id	unit_id	layout	strand_mode	strand_verified
-"Pl_E12_5_CF_1"	"Pl_E12_5_CF_1"	"PE"	"rf"	FALSE
-"Pl_E12_5_CF_2"	"Pl_E12_5_CF_2"	"PE"	"rf"	FALSE
-"Pl_E12_5_FC_1"	"Pl_E12_5_FC_1"	"PE"	"rf"	FALSE
-"Pl_E12_5_FC_2"	"Pl_E12_5_FC_2"	"PE"	"rf"	FALSE
+sample_id	unit_id	layout	strand_mode
+Pl_E12_5_CF_1	Pl_E12_5_CF_1	PE	rf
+Pl_E12_5_CF_2	Pl_E12_5_CF_2	PE	rf
+Pl_E12_5_FC_1	Pl_E12_5_FC_1	PE	rf
+Pl_E12_5_FC_2	Pl_E12_5_FC_2	PE	rf

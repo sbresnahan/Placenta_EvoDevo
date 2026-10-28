@@ -1,32 +1,13 @@
 # 03 — Genotype preparation
 
-**Purpose:** prepare public parent-discriminating SNPs or private typed-child
-and personalization inputs with consistent reference coordinates.
+Included in the `reference` graph.
 
-**Prerequisites:** reference catalog and approved matching sources. Public
-marker-source paths/build must be complete. Human inputs need exact
-trio linkage and independent RNA/DNA/genotype QC.
-
-**Inputs and outputs:**
-
-| Branch | Inputs | Outputs |
+| Profile | Inputs | Outputs |
 |---|---|---|
-| Public | Panzea, joint MGP or prepared opposite-homozygote source | `paths.markers`, `paths.tx_vcf`, `paths.tx_marker_map`, marker receipt |
-| Human | Typed trio VCF and separate child-personalization VCF | Per-library typed/personal query/VCF files, transcript mapping, child receipt |
+| Public | Panzea, joint MGP, or prepared opposite-homozygote markers | Genomic markers, transcript VCF, coordinate map |
+| Human | Typed trio VCF, child-personalization VCF, linked pedigree | Per-child queries, VCFs, transcript mappings |
 
-These workers are automatically submitted by the reference graph:
+Typed anchors supply maternal/paternal orientation. Missing genotypes remain
+missing. Source/build, genotype, and REF checks run during preparation.
 
-```bash
-bin/submit_pipeline.sh "$CONFIG" reference
-```
-
-This command is a dry-run. Use the [walkthrough](../docs/WALKTHROUGH.md) to
-submit once; do not launch a second graph just to run this module.
-`01_prepare_markers.lsf` handles public markers.
-`02_prepare_child.lsf` uses host bcftools and R transcript/linkage checks.
-
-Typed anchors orient human parents; imputed personalization variants do not
-become typed anchors. Missing genotypes remain missing. A prepared asset must
-actually exist; this stage does not perform WGS variant calling or imputation.
-
-**Next:** the automatically dependent [Ornaments index](../04_ornaments/README.md).
+Next: the dependent [Ornaments index](../04_ornaments/README.md).

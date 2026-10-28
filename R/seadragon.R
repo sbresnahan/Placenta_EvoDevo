@@ -4,12 +4,12 @@ runtime_record <- function(c) {
   x<-Sys.getenv("POE_NATIVE_RECORD")
   if(nzchar(x))x else c$paths$native_inventory
 }
-native_gate <- function(c,establish=FALSE) {
+native_gate <- function(c) {
   for(p in c("data.table","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"))
     if(!requireNamespace(p,quietly=TRUE))stop("Missing R-container package: ",p)
   if(getRversion()<"4.3.1")stop("R >=4.3.1 required")
   f<-runtime_record(c)
-  if(!file.exists(f))stop("Host inventory missing; run 00_setup/preflight.sh CONFIG --execute")
+  if(!file.exists(f))stop("Host inventory missing; run 00_setup/preflight.sh CONFIG")
   d<-fread(f,colClasses="character",na.strings=NULL)
   require_columns(d,c("component","path","version"))
   assert_unique(d,"component")
@@ -152,17 +152,13 @@ collect_pilot <- function(c,root,m) {
     prefix_sampling="nonrandom_prefix_not_whole_file_checksum_identity",
     actual_focal_parent=if(c$profile=="public_cross")c$parents$focal else "typed_trio",
     actual_alternate_parent=if(c$profile=="public_cross")c$parents$alternate else "typed_trio")]
-  if(any(report$projected_quant_seconds>c$pilot$max_projected_seconds)||
-     any(report$work_bytes_endpoint_lower_bound>c$pilot$max_work_bytes))
-    stop("Pilot exceeds configured compute/storage budget")
   write_tsv(report,c$paths$pilot_report)
   stage_finish(c$paths$pilot_receipt,c$paths$pilot_report)
-  cat("Pilot report complete. Review it before explicitly submitting scale.\n")
+  cat("Pilot complete: ",c$paths$pilot_report,"\n",sep="")
 }
 runtime_action <- function(c,root,stage,phase,sample,job) {
   if(phase=="bootstrap") {
     if(!grepl("^[A-Za-z0-9_.-]+$",stage)||!grepl("^[A-Za-z0-9_.-]+$",sample))stop("Unsafe stage/library")
-    if(!isTRUE(c$execution$posix_work_approved))stop("POSIX work/scratch attestation required")
     id<-paste0(stage,"_",sample,"_",Sys.getpid(),"_",format(Sys.time(),"%Y%m%dT%H%M%S"))
     job<-file.path(c$paths$scratch,"jobs",id);dir.create(job,recursive=TRUE,showWarnings=FALSE)
     key<-if(stage %in% c("reference","markers")||(stage=="index"&&c$profile=="public_cross"))"reference" else
@@ -171,15 +167,15 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     cat(job,lock,sep="\t");return(invisible())
   }
   if(phase=="inventory-path") {cat(c$paths$native_inventory);return(invisible())}
-  if(phase=="accept-inventory") {
-    native_gate(c,establish=TRUE);ensure_parent(c$paths$native_inventory)
+  if(phase=="record-inventory") {
+    native_gate(c);ensure_parent(c$paths$native_inventory)
     if(!identical(runtime_record(c),c$paths$native_inventory))
       writeLines(readLines(runtime_record(c)),c$paths$native_inventory)
-    cat("Host inventory recorded; native and R environments checked separately.\n")
+    cat("Required tools and R packages are accessible.\n")
     return(invisible())
   }
-  native_gate(c);snapshot(c);m<-load_manifests(c)
   if(stage=="preflight") {preflight_v2(c,root);return(invisible())}
+  native_gate(c);snapshot(c);m<-load_manifests(c)
   if(stage=="reference") {
     if(phase=="prepare") {
       stage_begin(c$paths$catalog_receipt);stage_begin(c$paths$reference_receipt)
@@ -271,7 +267,7 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
       if(stage=="pilot") {
         l<-m$libraries[sample_id==sample];diag<-report[mode=="strand"]
         chosen<-diag[strand==l$strand_mode]$pseudoalignment_fraction
-        if(!all(l$strand_verified %in% TRUE)||length(chosen)!=1L||
+        if(length(chosen)!=1L||
           chosen<c$pilot$min_pseudoalignment_fraction||
           (l$strand_mode!="unstranded"&&chosen<max(diag[strand!="unstranded"]$pseudoalignment_fraction)-c$pilot$strand_tolerance)||
           report[mode=="pilot",fragments]<c$pilot$fragments)stop("Pilot strand/protocol/chunk gate failed")

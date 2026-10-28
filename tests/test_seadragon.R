@@ -78,7 +78,7 @@ for(p in profiles) {
     Sys.setenv(POE_SAMPLE=s)
     # Manual scale worker cannot bypass the missing report authorization.
     out<-run_shell(file.path(root,lsf_scripts[["quantify"]]),okay=FALSE)
-    check(out$rc!=0L&&any(grepl("Explicit scale authorization missing",out$out,fixed=TRUE)))
+    check(out$rc!=0L&&any(grepl("Scale request missing",out$out,fixed=TRUE)))
     before<-proc.time()[["elapsed"]]
     out<-run_shell(file.path(root,lsf_scripts[["pilot"]]))
     cat(c$cohort_id,s,"mock pilot wall seconds:",round(proc.time()[["elapsed"]]-before,2),"\n")
@@ -90,7 +90,7 @@ for(p in profiles) {
   check(file.exists(c$paths$pilot_report))
   report<-fread(c$paths$pilot_report)
   check(nrow(report)==8L&&all(report$elapsed_seconds==1))
-  authorize_scale(c,root)
+  request_scale(c,root)
   check(!fails(scale_gate(c,root,load_manifests(c))))
   Sys.setenv(POE_SAMPLE=p$samples[1],POE_FIXTURE_FAIL="yes")
   out<-run_shell(file.path(root,lsf_scripts[["quantify"]]),okay=FALSE)
@@ -146,7 +146,6 @@ writeLines(c("#!/bin/bash","set -euo pipefail",
   "printf 'Job <%s> is submitted to queue <fixture>.\\n' \"$n\""),fake);Sys.chmod(fake,"0755")
 c$tools$bsub<-fake
 # Only acquisition needs no completed-reference gate; remains a no-download scheduler mock.
-c$retrieval$internet_host_approved<-TRUE
 text<-capture.output(reg<-submit_graph(c,root,"retrieve",TRUE))
 check(reg$state=="host_planned"&&!file.exists(counter))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))

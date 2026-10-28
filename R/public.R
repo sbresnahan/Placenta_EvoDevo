@@ -16,7 +16,7 @@ public_fit <- function(y,orientation,independence=TRUE) {
   X<-cbind(1,orientation);rank<-qr(X)$rank;df<-length(y)-rank
   z<-data.table(n_units=length(y),rank=rank,residual_df=df,estimate=NA_real_,
     se=NA_real_,ci_low=NA_real_,ci_high=NA_real_,p_value=NA_real_,status="descriptive_only")
-  if(!independence) {z$status<-"independence_not_attested";return(z)}
+  if(!independence) {z$status<-"independence_unresolved";return(z)}
   if(length(unique(orientation))<2L) {z$status<-"single_direction_cis_POE_confounded";return(z)}
   if(rank<2L||df<=0) {z$status<-"nonpositive_df_or_rank_deficient";return(z)}
   fit<-lm.fit(X,y);v<-sum(fit$residuals^2)/df*solve(crossprod(X));se_value<-sqrt(v[1,1])
@@ -39,7 +39,7 @@ freeze_sentinels <- function(counts,id,units,min_depth=20) {
 }
 public_endpoints <- function(gene,event,units,c) {
   # No dependence-based pseudo-replication: unresolved/duplicate clusters remain descriptive.
-  independent<-all(units$independence_verified %in% TRUE)&&!anyNA(units$cluster_id)&&
+  independent<-!anyNA(units$cluster_id)&&all(nzchar(units$cluster_id))&&
     !anyDuplicated(units$cluster_id)
   fit_entities<-function(x,id,promoter=FALSE) {
     if(!nrow(x))return(data.table(entity_id=character(),status=character(),p_value=numeric(),q_value=numeric()))

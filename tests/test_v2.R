@@ -25,7 +25,7 @@ for(id in c("maize_B73_Ki11","maize_B73_W22","mouse_FVB_CAST_E12")) {
   mm<-load_manifests(cc)
   check(all(mm$libraries$layout=="PE"))
   check(all(is.na(mm$libraries$fragment_mean_nt)))
-  check(is.list(preflight_v2(cc,root)))
+  check(is.list(validate_inputs_v2(cc,root)))
 }
 cc<-read_config_v2(file.path(root,"config/GUSTO.example.yaml"))
 check(fails(load_manifests(cc)))
@@ -124,7 +124,7 @@ check(uniqueN(gr$event_id)==2L)
 check(public_fit(c(1,2),c(1,-1))$status=="nonpositive_df_or_rank_deficient")
 check(public_fit(1:4,rep(1,4))$status=="single_direction_cis_POE_confounded")
 check(public_fit(1:6,c(1,1,1,-1,-1,-1))$residual_df==4)
-check(public_fit(1:6,c(1,1,1,-1,-1,-1),FALSE)$status=="independence_not_attested")
+check(public_fit(1:6,c(1,1,1,-1,-1,-1),FALSE)$status=="independence_unresolved")
 # Minimum-total-depth sentinel, never maternal fraction; no missing units.
 q<-data.table(unit_id=rep(c("u1","u2"),2),gene_id="T",locus_id=rep(c("A","B"),each=2),
  maternal_count=c(0,20,15,15),paternal_count=c(20,0,15,15))
@@ -132,14 +132,14 @@ frozen<-freeze_sentinels(q,"gene_id",c("u1","u2"),20)
 check(all(frozen$locus_id=="B"))
 check(nrow(freeze_sentinels(q[unit_id=="u1"],"gene_id",c("u1","u2")))==0)
 check(fails(freeze_sentinels(rbind(q,q[1]),"gene_id",c("u1","u2"))))
-u<-data.table(unit_id=c("u1","u2"),cluster_id=c("u1","u2"),independence_verified=TRUE,
+u<-data.table(unit_id=c("u1","u2"),cluster_id=c("u1","u2"),
   maternal_parent=c("FOCAL","OTHER"))
 e<-rbind(copy(q)[,event_id:="E1"],copy(q)[,event_id:="E2"])
 endpoints<-public_endpoints(q,e,u,c)
 check(nrow(endpoints$paired)==2L)
 check(endpoints$gene$status=="nonpositive_df_or_rank_deficient")
 u[,cluster_id:="same"];endpoints<-public_endpoints(q,e,u,c)
-check(endpoints$promoter$status=="independence_not_attested")
+check(endpoints$promoter$status=="independence_unresolved")
 # Negative-strand REF mapping, checked in existing core truth table; forward command contracts here.
 l<-m$libraries[1];qargs<-quant_args(c,l,"INDEX","VCF","GENOTYPE","READ","OUT")
 check("--single" %in% qargs && qargs[match("-l",qargs)+1]=="250")
@@ -194,7 +194,7 @@ if(nzchar(Sys.which("samtools"))) {
   for(k in keys)rcfg$paths[[k]]<-file.path(temp,paste0("reference_",k))
   rcfg$paths$genome_fai<-paste0(rcfg$paths$genome,".fai")
   rcfg$paths$transcripts_fai<-paste0(rcfg$paths$transcripts,".fai")
-  rcfg$tools$samtools<-Sys.which("samtools");rcfg$reference$annotation_approved<-TRUE
+  rcfg$tools$samtools<-Sys.which("samtools")
   writeLines(c(">chrT",paste(rep("ACGT",20),collapse="")),rcfg$paths$genome)
   records<-list()
   addtx<-function(id,gene,strand,starts,ends) {

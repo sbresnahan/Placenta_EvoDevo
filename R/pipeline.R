@@ -27,32 +27,35 @@ tool_gate <- function(c) {
 }
 snapshot <- function(c) {
   for(k in c("work","scratch","logs","receipts"))dir.create(c$paths[[k]],recursive=TRUE,showWarnings=FALSE)
-  if(!isTRUE(c$execution$posix_work_approved))stop("POSIX work/scratch attestation required")
   for(k in c("work","scratch","logs","receipts"))if(file.access(c$paths[[k]],2)!=0)stop("Unwritable root: ",k)
   ensure_parent(c$paths$snapshot)
   tmp<-tempfile(".snapshot-",tmpdir=dirname(c$paths$snapshot));yaml::write_yaml(c,tmp)
   if(!file.rename(tmp,c$paths$snapshot))stop("Atomic configuration snapshot failed")
 }
 human_linkage <- function(c,m) {
-  if(!isTRUE(c$human$genotype_qc_approved))stop("Genotype/pedigree QC approval required")
   s<-copy(m$libraries)
-  require_columns(s,c("child_id","identity_verified"))
+  require_columns(s,c("child_id"))
   t<-fread(c$paths$trios)
   require_columns(t,c("child_id","mother_id","father_id","family_id"))
   assert_unique(s,"child_id");assert_unique(t,"child_id")
-  if(anyNA(t)||any(!s$child_id %in% t$child_id)||!all(s$identity_verified %in% TRUE)||
+  if(anyNA(t)||any(!s$child_id %in% t$child_id)||
     any(t$child_id==t$mother_id|t$child_id==t$father_id|t$mother_id==t$father_id))
-    stop("Exact trio linkage and independent RNA/DNA identity QC required")
+    stop("Missing or conflicting sample/trio linkage")
   merge(s,t,by="child_id",all.x=TRUE)
 }
 preflight_v2 <- function(c,root,execution=FALSE) {
+  tool_gate(c)
+  cat("Required tools and R packages are accessible.\n")
+  invisible(TRUE)
+}
+validate_inputs_v2 <- function(c,root,execution=FALSE) {
   m<-load_manifests(c)
   r<-fread(c$paths$resources)
   require_columns(r,c("resource_id","url","destination","partial","response","bytes","md5","required","build"))
   assert_unique(r,"resource_id")
   if(c$profile=="human_trio")human_linkage(c,m)
   if(execution) {tool_gate(c);snapshot(c)}
-  cat("Configuration/manifests valid; no acquisition or scheduler submission performed.\n")
+  cat("Configuration/manifests valid.\n")
   invisible(m)
 }
 make_index <- function(c,vcf,sample,fasta,index) {

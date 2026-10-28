@@ -3,7 +3,7 @@
 The evidence catalog contains 26 study/cohort-stage entries: 14 maize and
 12 mouse. These are not 26 independent datasets; rows can represent stages or
 components of a project. The catalog is a bounded review, not an exhaustive
-repository census. The four configured public profiles are the execution
+resource census. The four configured public profiles are the execution
 selections; other catalog entries are not automatically included.
 
 ## Readiness definitions
@@ -16,19 +16,17 @@ and genotype resources support resolved entries. Unresolved candidates remain
 explicit. Accessions, source URLs, caveats and evidence citations are recorded
 in [dataset_evidence.csv](dataset_evidence.csv).
 
-Verified raw reads do not establish marker readiness; marker readiness does
-not establish promoter callability. Reference-strain calls are not DNA from
-the original crossed parents. Assemblies alone are not biallelic marker tables.
-Lanes, technical runs, sibling kernels and placental layers cannot inflate the
-independent-unit denominator.
+Read availability, marker compatibility, and promoter callability are evaluated
+separately. Reference-strain genotypes describe the named reference stock.
+Biological-unit metadata determine the independent-unit denominator.
 
 ## Maize
 
 **B73/Ki11, 20 DAP:** promoter-focused configured profile with four biological
 pools, each containing two technical runs. The deposited long-read-informed
 annotation and B73v4 resources support reference preparation. [9] Structural
-promoter groups must not be counted as callable/imprinted genes without
-raw-read and model eligibility checks.
+promoter groups become callable endpoints after raw-read and model eligibility
+checks.
 
 **B73/W22, 14 DAP, Anderson 2021:** balanced reciprocal option with three
 ear-pool replicates per direction and PE125 RNA. PRJNA623806 contains 18 runs
@@ -67,10 +65,9 @@ genotype measurement. [506]
 **FVB/NJ × CAST/EiJ, E12.5 placenta:** GSE75957 includes four female placentas,
 two per cross direction, with PE100 stranded total RNA. Four E16.5 libraries
 form a separate developmental option. Selected run metadata total 22.014 GB
-at E12.5 and 46.555 GB across both stages. Litter independence needs
-attestation; do not pool stages or include other-strain/mutant controls.
-Maternal decidua/blood can mimic maternal expression; embryo-transfer
-validation is not blanket clearance for every sample. [481]
+at E12.5 and 46.555 GB across both stages. Litter IDs determine independent-unit
+eligibility. The configured cohort contains only E12.5 WT reciprocal samples.
+Maternal decidua/blood can contribute maternal expression. [481]
 
 Joint MGP v5 GRCm38 supports FVB_NJ and CAST_EiJ calls with per-parent `FI=1`.
 Another strain can cause a joint site-filter failure without invalidating two
@@ -116,7 +113,7 @@ conflict mechanism by itself. Maternal admixture, stock mismatch, cis effects,
 developmental composition and quantifier allocation are alternative explanations.
 
 Raw expression, genotype provenance and model eligibility are separate gates.
-Public reciprocal models require reviewed dosage and rank-based df;
+Public reciprocal models use the configured dosage and rank-based df;
 one cross direction cannot separate strain from parent of origin.
 Human inference requires typed anchors and the specified family/cis/HC3/
 bootstrap conditions. Coordinate support is not direct joint-molecule evidence.

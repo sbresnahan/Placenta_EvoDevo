@@ -1,4 +1,4 @@
-# Checked-in workers are the only Seadragon submission interface.
+# LSF workers are the Seadragon submission interface.
 lsf_scripts <- c(retrieve="01_retrieval/01_retrieve_public.lsf",
  reference="02_reference/01_prepare_reference.lsf",markers="03_genotypes/01_prepare_markers.lsf",
  child="03_genotypes/02_prepare_child.lsf",index="04_ornaments/01_build_index.lsf",
@@ -54,12 +54,9 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none") {
   if(!grepl("^(none|[0-9]+)$",dependency))stop("Numeric LSF dependency required")
   g<-graph_spec(c,stage)
   if(submit) {
-    for(k in c("memory_units_verified","memory_per_job_verified","execution_environment_verified"))
-      if(!isTRUE(c$lsf[[k]]))stop("LSF memory/environment attestation required")
-    preflight_v2(c,root,execution=TRUE)
+    validate_inputs_v2(c,root,execution=TRUE)
     if(stage=="pilot")reference_gate(c,root)
     if(stage %in% c("scale","models"))scale_gate(c,root,load_manifests(c))
-    if(stage=="retrieve"&&!isTRUE(c$retrieval$internet_host_approved))stop("Approved internet host required")
   }
   id<-paste0(format(Sys.time(),"%Y%m%dT%H%M%OS6"),"_",Sys.getpid(),"_",basename(tempfile("r")))
   id<-gsub("[^A-Za-z0-9_.-]","_",id)
@@ -84,7 +81,7 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none") {
   for(i in seq_along(g)) {
     node<-g[[i]];r<-stage_resource(c,node$action)
     script<-file.path(root,lsf_scripts[[node$action]])
-    if(!file.exists(script))stop("Missing checked-in worker: ",script)
+    if(!file.exists(script))stop("Missing LSF worker: ",script)
     deps<-unname(jobs[node$deps])
     if(!length(node$deps)&&dependency!="none")deps<-dependency
     jobname<-paste(c$cohort_id,node$action,node$sample,id,sep="_")

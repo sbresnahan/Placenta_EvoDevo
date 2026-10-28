@@ -21,12 +21,12 @@ worker_pilot <- function(c,root) {
     l<-m$libraries[sample_id==sample]
     diag<-rbindlist(lapply(c("fr","rf","unstranded"),function(strand)
       quant_sample(c,root,m,sample,"strand",strand,c$pilot$strand_fragments)))
-    # Stranded choice must agree with the bounded diagnostic and local protocol review.
+    # Compare the configured strand with the bounded diagnostic.
     selected<-diag[strand==l$strand_mode]$pseudoalignment_fraction
-    if(!all(l$strand_verified %in% TRUE)||selected<c$pilot$min_pseudoalignment_fraction ||
+    if(selected<c$pilot$min_pseudoalignment_fraction ||
        (l$strand_mode!="unstranded"&&
         selected<max(diag[strand!="unstranded"]$pseudoalignment_fraction)-c$pilot$strand_tolerance))
-      stop("Strand/protocol/diagnostic approval failed: ",sample)
+      stop("Pilot strand diagnostic failed: ",sample)
     q<-quant_sample(c,root,m,sample,"pilot",limit=c$pilot$fragments)
     if(q$fragments<c$pilot$fragments)stop("Pilot smaller than required throughput chunk")
     assign_sample(c,m,sample,"pilot")
@@ -42,25 +42,22 @@ worker_pilot <- function(c,root) {
     prefix_sampling="nonrandom_prefix_not_whole_file_checksum_identity",
     actual_focal_parent=if(c$profile=="public_cross")c$parents$focal else "typed_trio",
     actual_alternate_parent=if(c$profile=="public_cross")c$parents$alternate else "typed_trio")]
-  if(any(report$projected_quant_seconds>c$pilot$max_projected_seconds)||
-      any(report$work_bytes_endpoint_lower_bound>c$pilot$max_work_bytes))
-    stop("Measured projection exceeds configured local budget; no scale authorization")
   write_tsv(report,c$paths$pilot_report);ensure_parent(c$paths$pilot_receipt)
   stage_finish(c$paths$pilot_receipt,c$paths$pilot_report)
-  cat("Technical pilot complete. Review the report before explicitly submitting scale.\n")
+  cat("Pilot complete: ",c$paths$pilot_report,"\n",sep="")
 }
-authorize_scale <- function(c,root) {
+request_scale <- function(c,root) {
   reference_gate(c,root)
   if(!stage_valid(c$paths$pilot_receipt,c$paths$pilot_report))stop("Completed pilot required")
-  if(!isTRUE(c$lsf$resource_limits_approved))stop("Local projected CPU/storage/budget acceptance required")
   ensure_parent(c$paths$scale_receipt)
-  saveRDS(list(authorized=TRUE,approved_at=format(Sys.time(),tz="UTC",usetz=TRUE),
-    approval="explicit_scale_command_and_local_resource_attestation"),c$paths$scale_receipt)
+  saveRDS(list(requested=TRUE,requested_at=format(Sys.time(),tz="UTC",usetz=TRUE)),
+    c$paths$scale_receipt)
 }
 scale_gate <- function(c,root,m) {
-  if(!file.exists(c$paths$scale_receipt))stop("Explicit scale authorization missing")
+  if(!file.exists(c$paths$scale_receipt))stop("Scale request missing; run scale --submit")
   r<-tryCatch(readRDS(c$paths$scale_receipt),error=function(e)NULL)
-  if(!is.list(r)||!isTRUE(r$authorized))stop("Explicit scale authorization missing or invalid")
+  if(!is.list(r)||(!isTRUE(r$requested)&&!isTRUE(r$authorized)))
+    stop("Scale request missing or invalid; run scale --submit")
   if(!stage_valid(c$paths$pilot_receipt,c$paths$pilot_report))stop("Completed pilot required")
 }
 assignment_outputs <- function(c,sample,mode,l) {
@@ -120,7 +117,6 @@ worker_models <- function(c,root) {
     }
     write_tsv(out$paired,c$paths$model_pairs)
   } else {
-    if(!isTRUE(c$human$covariates_approved))stop("Covariate specification approval required")
     human_linkage(c,m)
     p<-choose_sentinels(x$event,fread(c$paths$pairs),c$models$min_depth)
     cov<-fread(c$paths$covariates);assert_unique(cov,"sample_id")
@@ -149,23 +145,22 @@ status_v2 <- function(c,root) {
         unlist(c$paths[c("model_gene","model_promoter","model_pairs")])))stop("Missing/incomplete model receipt or outputs")
     })
   z<-rbindlist(lapply(names(actions),function(k)tryCatch({
-    actions[[k]]();data.table(stage=k,state=if(k=="scale")"authorized" else "complete",reason="")
+    actions[[k]]();data.table(stage=k,state=if(k=="scale")"requested" else "complete",reason="")
   },error=function(e)data.table(stage=k,state="blocked",reason=conditionMessage(e)))))
   write_tsv(z,c$paths$status);print(z)
 }
 export_v2 <- function(c) {
-  if(c$profile!="human_trio")stop("Public outputs need no human-release bypass")
+  if(c$profile!="human_trio")stop("Human export requires profile: human_trio")
   e<-c$exports
-  if(!isTRUE(e$enabled)||!isTRUE(e$policy_approved)||!isTRUE(e$complementary_suppression_reviewed)||
-      is.null(e$review_token)||!nzchar(e$review_token))stop("Release disabled: exact manual policy review required")
+  if(!isTRUE(e$enabled))stop("Release disabled; set exports.enabled: true to export")
   if(!file.exists(c$paths$candidate)||file.info(c$paths$candidate)$size<=0)
-    stop("Reviewed candidate file missing or empty")
+    stop("Candidate file missing or empty")
   x<-fread(c$paths$candidate);validate_aggregate(x,fread(c$paths$pairs),e$min_cell)
   write_tsv(x,c$paths$release)
 }
 review_v2 <- function(c) {
-  if(c$profile!="human_trio"||!isTRUE(c$exports$policy_approved))stop("Locally approved human suppression policy required")
-  positive(c$exports$min_cell,"approved min_cell")
+  if(c$profile!="human_trio")stop("Candidate preparation requires profile: human_trio")
+  positive(c$exports$min_cell,"exports.min_cell")
   if(c$exports$min_cell!=floor(c$exports$min_cell))stop("Integer cell threshold required")
   x<-fread(c$paths$model_promoter)
   require_columns(x,export_columns)
@@ -173,5 +168,5 @@ review_v2 <- function(c) {
   x<-x[,..export_columns]
   validate_aggregate(x,fread(c$paths$pairs),c$exports$min_cell)
   write_tsv(x,c$paths$candidate)
-  cat("Local review candidate only; inspect it before separately authorizing export. No transfer performed.\n")
+  cat("Candidate written: ",c$paths$candidate,"\n",sep="")
 }

@@ -1,7 +1,7 @@
-sample_id	unit_id	layout	strand_mode	strand_verified
-"BW_endo1"	"BW_endo1"	"PE"	"rf"	FALSE
-"BW_endo2"	"BW_endo2"	"PE"	"rf"	FALSE
-"BW_endo3"	"BW_endo3"	"PE"	"rf"	FALSE
-"WB_endo1"	"WB_endo1"	"PE"	"rf"	FALSE
-"WB_endo2"	"WB_endo2"	"PE"	"rf"	FALSE
-"WB_endo3"	"WB_endo3"	"PE"	"rf"	FALSE
+sample_id	unit_id	layout	strand_mode
+BW_endo1	BW_endo1	PE	rf
+BW_endo2	BW_endo2	PE	rf
+BW_endo3	BW_endo3	PE	rf
+WB_endo1	WB_endo1	PE	rf
+WB_endo2	WB_endo2	PE	rf
+WB_endo3	WB_endo3	PE	rf

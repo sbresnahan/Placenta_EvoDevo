@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc 3.13" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Validation and site checks</title>
+  <title>Software checks</title>
   <style>
 
 html {
@@ -180,73 +180,29 @@ vertical-align: middle;
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Validation and site checks</h1>
+<h1 class="title">Software checks</h1>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#validation-and-site-checks" id="toc-validation-and-site-checks">Validation and site checks</a>
-<ul>
-<li><a href="#local-coverage" id="toc-local-coverage">Local
-coverage</a></li>
-<li><a href="#verify-on-seadragon-before-full-runs" id="toc-verify-on-seadragon-before-full-runs">Verify on Seadragon before
-full runs</a></li>
-</ul></li>
+<li><a href="#software-checks" id="toc-software-checks">Software
+checks</a></li>
 </ul>
 </nav>
-<h1 id="validation-and-site-checks">Validation and site checks</h1>
-<h2 id="local-coverage">Local coverage</h2>
-<p>The supplied software checks cover Mendelian orientation, exon/strand
-mapping, missing evidence, metadata, acquisition, model gates,
-completion records, host/R separation, scheduler interfaces, and privacy
-allowlists. The completion-only update is limited to syntax and static
-consistency checks; no regression suite or cohort analysis was run for
-that update. Earlier assertion counts do not certify the changed
-interfaces.</p>
-<p><strong>Ornaments, bcftools, the Python personalizer, Singularity and
-LSF are mocked in host-integration tests.</strong> Counts and resource
-values are deterministic software fixtures, not biological findings or
-measured site performance. The small human fixture deliberately fails
-the inference family-count floor. Separate algebra tests cover eligible
-and blocked human models.</p>
-<p>Scheduler tests use a fake <code>bsub</code> to check real numeric-ID
-substitution, dependencies, malformed responses, failures and replay
-prevention. R does not call host <code>bsub</code> directly.</p>
-<p>Completion status records successful stages and required nonempty
-outputs. It does not determine whether earlier results are still
-current. The operator must rerun affected stages and their dependents
-after changes.</p>
-<h2 id="verify-on-seadragon-before-full-runs">Verify on Seadragon before
-full runs</h2>
-<ul>
-<li>Actual modules/conda tools, command availability and expected output
-schema.</li>
-<li>R image execution, library/package compatibility and filesystem
-binds.</li>
-<li>Scheduler permissions, queue policy, memory limit/reservation
-semantics and environment propagation.</li>
-<li>New script/data root availability, POSIX behavior, write access and
-total storage capacity.</li>
-<li>Intended shared human genome and annotation availability/builds at
-their configured source locations.</li>
-<li>Approved internet host and actual public reference/marker/read
-contracts.</li>
-<li>Independent protocol, biological units, strain/proxy qualification
-and raw pilot callability.</li>
-<li>Complete private GUSTO inventory/linkage/genotype/covariate
-review.</li>
-<li>Measured index/quantification memory/time and total cohort storage
-budget.</li>
-<li>Local human disclosure/suppression policy and exact aggregate
-review.</li>
-</ul>
-<p>Local testing does not establish a successful real-cohort Ornaments
-run, actual Seadragon compatibility or any biological result. The
-8-GB-class example requests are not measured GUSTO/alternative-index
-requirements. Process RSS and elapsed time do not measure total workflow
-cost; endpoint work size does not measure disk high-water usage.</p>
-<p>Human whole-gene analysis/masking and TE comparisons are outside
-implemented scope. Technical success and structural promoter support are
-distinct from inferential eligibility and evidence for
-imprinting/conflict.</p>
+<h1 id="software-checks">Software checks</h1>
+<p>This update uses R/shell syntax checks, static configuration/schema
+checks, documentation-link checks, and sequential edit applicability
+checks. Regression suites and cohort analyses were not run for this
+update.</p>
+<p>The supplied tests cover parental orientation, coordinate mapping,
+acquisition, completion records, model eligibility, host/R separation,
+scheduler interfaces, and aggregate validation. Host-integration
+fixtures use mocked Ornaments, bcftools, personalizer, Singularity, and
+LSF commands.</p>
+<p>Runtime validation includes actual file access, MD5/byte and FASTQ
+integrity, reference/genotype compatibility, count schemas, pilot strand
+diagnostics, model eligibility, and aggregate-column/cell
+thresholds.</p>
+<p>The <a href="Placenta_EvoDevo_step_by_step.md">walkthrough</a>
+provides the execution order.</p>
 </body>
 </html>

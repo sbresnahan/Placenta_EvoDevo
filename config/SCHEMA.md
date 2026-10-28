@@ -1,95 +1,69 @@
-# Configuration and manifest schema
+# Configuration and table schema
 
-Each invocation requires one explicit YAML using `schema_version: 2`.
-The five example files define the complete structure. Paths are not merged
-from another configuration. Values are never evaluated as shell/R code.
+Each command uses one YAML with `schema_version: 2`.
+The five example configurations provide the paths and settings.
+Relative paths resolve against the YAML's directory.
 
-## Paths and settings
+## Configuration
 
-Relative YAML paths **and path columns in tables** resolve against the YAML's
-directory. Keep private copies in `scripts/config/` when using the supplied
-relative wrappers/site file. Only `${POE_SITE_ROOT}` is allowlisted for optional
-environment substitution; it must actually be set if used.
-
-Project data paths point to
-`/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>/`.
-Operational tables belong in its `manifests/` directory; copy supplied templates
-there using the [step-by-step workflow](../docs/Placenta_EvoDevo_step_by_step.md) before preflight.
-Human shared input references and installed software are explicit exceptions.
-
-| Section | Required meaning |
+| Section | Contents |
 |---|---|
-| `schema_version`, `profile`, `species`, `cohort_id` | Schema 2; `public_cross` maize/mouse or `human_trio` human; safe unique cohort identifier |
-| `paths` | Single-file/root inputs, outputs, operational manifests, receipts and snapshot |
-| `templates` | Repeated per-run/library/mode/strand/job paths |
-| `tools` | Project host wrappers, R bridge, utilities and installed R-library path |
-| `execution` | `backend: seadragon`, image/binds, trusted site file and POSIX approval |
-| `ornaments` | Required REF/ALT output semantics and native thread count |
-| `reference` | Build, compatible genome/annotation files, annotation approval and explicit contig spelling map |
-| `parents`, `dosage` | Actual focal/alternate identities and reviewed tissue/ploidy dosage |
-| `markers` | `panzea`, `mgp` or `prepared`, exact samples, quality/source and proxy checks |
-| `pilot`, `retrieval` | Bounded prefixes/diagnostics, budgets, retry/timeouts and internet-host approval |
-| `lsf` | Verified memory/environment semantics and per-stage queue/CPU/limit/reservation/time |
-| `models`, `human` | Depth/family/orientation/bootstrap floors, covariates and genotype/identity approvals |
-| `fragments` | One YAML mean/SD/origin setting applied to SE libraries only |
-| `exports` | Disabled initially; local policy, cell threshold, review token and suppression review |
+| `profile`, `species`, `cohort_id` | Public-cross or human-trio analysis and cohort identity |
+| `paths`, `templates` | Inputs, outputs, operational tables, repeated library/run paths |
+| `tools` | Host wrappers, R bridge, utility paths, R library |
+| `execution` | Backend, R image, binds, site file |
+| `ornaments` | `semantics: ref_alt`, native threads |
+| `reference` | Build, genome/annotation, contig aliases |
+| `parents`, `dosage` | Focal/alternate parents and maternal/paternal dosage |
+| `markers` | Adapter, source/sample identities, quality filters, proxy description |
+| `pilot` | Strand/throughput fragment counts and diagnostic thresholds |
+| `retrieval` | Retry and connection settings |
+| `lsf` | Queue, numeric GB units, cores, memory/reservation and wall time per stage |
+| `models` | Depth/family/orientation/bootstrap settings and covariate names |
+| `fragments` | SE fragment mean/SD and measured/assumed origin |
+| `exports` | `enabled` and positive integer `min_cell` |
 
-Keep all base path/template/tool keys even for unused branches. Required
-Seadragon keys include `paths.native_inventory`, `catalog_receipt`,
-`marker_receipt`, `job_registry` and templates `child_receipt`,
-`library_pilot_report`, `library_pilot_receipt`, `library_metrics`.
-`provenance_hints` supplies context only; it does not establish linkage.
-Settings are recorded for the operator; they are not compared with earlier settings to decide whether results are current.
+Manual approval fields and pilot runtime/storage caps are retired.
+Old fields in existing private YAMLs are ignored.
 
-## Software and reference identity
+The tool-only setup reader resolves tool, site, image, and inventory paths.
+Stage readers also validate configuration values and relevant cohort tables.
 
-Infrastructure defaults live in `seadragon.sh` and `bin/Rscript_sif`.
-`execution.site_file` must match `POE_SITE_FILE`; image overrides must match
-`execution.image`. The installed commands must be available in the configured native environments. Inventories record command paths, available versions, site/image paths, and Python package information. They are not compared with an earlier installation.
+## Paths
 
-Keep `ornaments.semantics: ref_alt`; the count reader still requires the eight-column REF/ALT output contract.
-
-For GUSTO, `reference.genome_source` is read-only. The wrapper copies it to
-`paths.genome` before indexing. `paths.annotation` names the exact shared
-HPLRv2 GTF; normalized GTF/transcripts/indices stay in the cohort data directory.
-
-`paths.genome_fai` and `paths.transcripts_fai` must be the adjacent `.fai`
-files required by samtools/Rsamtools. Quantifier outputs must declare
-`allele_counts.txt`, `thetas.txt` and `tpms.txt` directly inside `quant_dir`.
-Do not rename those upstream output contracts.
+The data root is
+`/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>/`.
+Working YAMLs belong in `scripts/config/`.
 
 Allowed template tokens are `{sample}`, `{run}`, `{mate}`, `{mode}`, `{strand}`,
-`{stage}` and `{job}`. Substituted values contain only letters, digits, dots,
-underscores and hyphens; unknown/unresolved tokens fail validation.
+`{stage}`, and `{job}`. Run/sample/unit keys use letters, numbers, underscores,
+periods, and hyphens. `${POE_SITE_ROOT}` is the optional environment substitution.
 
-## Manifest schemas
+FASTA indices use adjacent `.fai` paths.
+Ornaments writes `allele_counts.txt`, `thetas.txt`, and `tpms.txt` within
+each configured `quant_dir`.
 
-Supplied `manifests/*.tsv` provide headers and public selections. Edit the
-operational copies, not source templates. All tables must keep exact unique
-keys and linkage; a sample label is not automatically a biological replicate.
+GUSTO uses `reference.genome_source` for the shared FASTA and `paths.annotation`
+for the shared HPLRv2 GTF. Derived references stay in the cohort directory.
 
-- **Sources:** unique `run_id`, `sample_id`, layout, HTTPS URL/MD5/byte columns
-  per mate and `read_count`/`base_count` for projection. One row is one physical
-  run. PE `read_count` is twice fragment count. Human sources retain common
-  headers and add actual `local_1/local_2`; use real read counts.
-- **Libraries:** unique `sample_id` and `unit_id`, one primary library per
-  unit, SE/PE, `fr`/`rf`/`unstranded` and `strand_verified`. SE parameters come
-  solely from YAML. Human libraries require `child_id`, `identity_verified`.
-- **Units:** unique `unit_id`, `cluster_id`, `independence_verified`, actual
-  maternal/paternal identities, tissue and stage. Unresolved independence
-  blocks inference; one public configuration cannot mix stages/tissues.
-- **Resources:** unique `resource_id`, HTTPS URL, destination/partial/response,
-  expected bytes/MD5, required flag, build and optional `decompress_to`.
-  Unresolved required contracts cannot be downloaded.
-- **Marker sources:** unique `source_id`, path, and build. Prepared
-  data have `chrom`, `genomic_pos`, `ref`, `alt`, `focal_index`,
-  `alternate_index`; indices are opposite homozygous 0/1 states.
-- **Trios:** exact unique child, mother, father and family linkage; no conflicting
-  pedigree identities. One offspring per family is selected independently of
-  imbalance for human inference.
-- **Covariates:** unique `sample_id` with the approved model covariates and
-  exact linked rows; no missing covariates in inference.
+## Tables
 
-Empty private schemas contain no participants and intentionally fail until
-populated with real approved inputs. Other cohorts in the evidence catalog are
-not automatically included in the four configured public selections.
+| Table | Required content |
+|---|---|
+| Sources | Unique run ID, linked library ID, layout, mate URL/MD5/byte fields, read count |
+| Libraries | Unique sample/unit IDs, layout and explicit strand mode; human tables add `child_id` |
+| Units | Unique unit ID, biological `cluster_id`, maternal/paternal identities, stage, tissue |
+| Resources | ID, HTTPS URL, destination/partial/response paths, bytes/MD5, required flag, build; optional decompression destination |
+| Marker sources | Unique source ID, path, build |
+| Trios | Child, mother, father, family IDs |
+| Covariates | Sample ID and configured covariate columns |
+
+Human source rows add actual `local_1`/`local_2` FASTQ paths.
+PE read counts include both mates. Multiple runs link to one primary library.
+Missing cluster IDs retain descriptive public results.
+
+Prepared marker tables have `chrom`, `genomic_pos`, `ref`, `alt`,
+`focal_index`, and `alternate_index`: one-based positions, single-base alleles,
+and opposite homozygous indices (0=REF, 1=ALT).
+
+Legacy manual sign-off columns in existing tables are ignored.

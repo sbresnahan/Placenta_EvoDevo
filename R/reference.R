@@ -102,7 +102,6 @@ vcf_markers <- function(path,c) {
   v
 }
 prepare_markers <- function(c) {
-  if(!isTRUE(c$markers$provenance_approved))stop("Parental marker provenance/build review required")
   s<-resolve_manifest_paths(fread(c$paths$marker_sources),"path",c)
   require_columns(s,c("source_id","path","build"));assert_unique(s,"source_id")
   if(!nrow(s)||any(s$build!=c$reference$build))stop("Marker/reference build mismatch")
@@ -142,7 +141,6 @@ tx_variant_map <- function(v,ex,c,output_vcf,output_map,sample) {
   write_tsv(d,output_map);invisible(d)
 }
 build_reference <- function(c,native=TRUE,public=TRUE) {
-  if(!isTRUE(c$reference$annotation_approved))stop("Exact annotation/build approval required")
   for(k in c("genome","annotation"))if(!file.exists(c$paths[[k]]))stop("Missing reference input: ",k)
   if(native)run_checked(c$tools$samtools,c("faidx",c$paths$genome))
   cs<-fread(c$paths$genome_fai,header=FALSE,select=1:2,col.names=c("chrom","length"))

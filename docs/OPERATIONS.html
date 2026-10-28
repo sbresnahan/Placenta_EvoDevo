@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc 3.13" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>Operations and troubleshooting</title>
+  <title>Running and monitoring</title>
   <style>
 
 html {
@@ -245,208 +245,92 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; }
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Operations and troubleshooting</h1>
+<h1 class="title">Running and monitoring</h1>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#operations-and-troubleshooting" id="toc-operations-and-troubleshooting">Operations and
-troubleshooting</a>
+<li><a href="#running-and-monitoring" id="toc-running-and-monitoring">Running and monitoring</a>
 <ul>
-<li><a href="#inspect-jobs-and-completion" id="toc-inspect-jobs-and-completion">Inspect jobs and
-completion</a></li>
-<li><a href="#host-submission-interface" id="toc-host-submission-interface">Host submission interface</a></li>
-<li><a href="#manual-submission" id="toc-manual-submission">Manual
-submission</a></li>
-<li><a href="#restart-and-failure-handling" id="toc-restart-and-failure-handling">Restart and failure
-handling</a></li>
-<li><a href="#keep-human-analysis-and-release-separate" id="toc-keep-human-analysis-and-release-separate">Keep human analysis
-and release separate</a></li>
+<li><a href="#submit-a-stage" id="toc-submit-a-stage">Submit a
+stage</a></li>
+<li><a href="#inspect-jobs-and-results" id="toc-inspect-jobs-and-results">Inspect jobs and results</a></li>
+<li><a href="#rerun-after-an-error" id="toc-rerun-after-an-error">Rerun
+after an error</a></li>
 </ul></li>
 </ul>
 </nav>
-<h1 id="operations-and-troubleshooting">Operations and
-troubleshooting</h1>
-<p>Use <a href="Placenta_EvoDevo_step_by_step.md">the step-by-step
-workflow</a> for the normal run order. All examples assume the script
-root is your current directory and <code>CONFIG</code> names one
-absolute private YAML.</p>
-<h2 id="inspect-jobs-and-completion">Inspect jobs and completion</h2>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bjobs</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">bjobs</span> <span class="at">-a</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/Rscript_sif</span> poe.R <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> status</span></code></pre></div>
-<p>For one scheduler job:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;Numeric LSF job ID: &quot;</span> <span class="va">JOB_ID</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">[[</span> <span class="st">&quot;</span><span class="va">$JOB_ID</span><span class="st">&quot;</span> <span class="ot">=~</span> <span class="pp">^</span><span class="op">[</span><span class="ss">0</span><span class="op">-</span><span class="ss">9</span><span class="op">]</span><span class="pp">+</span><span class="op">$</span> <span class="kw">]]</span> <span class="kw">||</span> <span class="kw">{</span> <span class="bu">printf</span> <span class="st">&#39;Numeric job ID required\n&#39;</span> <span class="op">&gt;&amp;</span><span class="dv">2</span><span class="kw">;</span> <span class="bu">exit</span> 1<span class="kw">;</span> <span class="kw">}</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">bjobs</span> <span class="at">-l</span> <span class="st">&quot;</span><span class="va">$JOB_ID</span><span class="st">&quot;</span></span></code></pre></div>
-<p>Use site accounting/log tools if the job is no longer in recent LSF
-history. Do not infer success from its absence. <code>status</code>
-validates reference, pilot, scale authorization, complete quantification
-and models; it does not query LSF. It writes <code>paths.status</code>
-with complete/authorized/blocked and reason fields. Human reference
-status covers the shared reference; inspect every child/index job and
-its logs as well.</p>
-<p>The driver writes cohort logs under <code>paths.logs/lsf/</code> with
-numeric <code>%J</code> IDs. Tool/resource logs use
-<code>templates.quant_log</code> and
-<code>templates.resource_log</code>. Planning registries derive from
-<code>paths.job_registry</code> with unique suffixes:</p>
-<ul>
-<li><code>.tsv</code>: dry-run/host-planned graph. <code>DRYRUN_</code>
-and <code>HOST_PLANNED_</code> are not jobs.</li>
-<li><code>.host.sh</code>: generated single-use host submission
-plan.</li>
-<li><code>.submitted.tsv</code>: actual accepted numeric IDs recorded as
-submission proceeds.</li>
-<li><code>.host.sh.started</code>: replay guard, not a completion
-receipt.</li>
-</ul>
-<p>Keep these files private for GUSTO. A <code>.started</code> marker
-only says execution began; check scheduler records, submitted IDs and
-output receipts.</p>
-<h2 id="host-submission-interface">Host submission interface</h2>
-<p>Use <code>bin/submit_pipeline.sh</code> for normal stages. R prepares
-quoted job commands; the shell executes host <code>bsub</code>. Calling
-<code>run_pipeline.R</code> or <code>poe.R</code> with
-<code>--submit</code> alone prepares a host plan but does not submit
-it.</p>
-<p>The driver uses ordinary per-library jobs, not arrays.
-Reference/marker/index dependencies and assignment/collection
-dependencies use numeric <code>done(jobID)</code>. No long-running
-monitor or automatic polling loop is required.</p>
-<p>An external numeric dependency is optional:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;Prerequisite numeric LSF job ID: &quot;</span> <span class="va">AFTER_JOB</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">[[</span> <span class="st">&quot;</span><span class="va">$AFTER_JOB</span><span class="st">&quot;</span> <span class="ot">=~</span> <span class="pp">^</span><span class="op">[</span><span class="ss">0</span><span class="op">-</span><span class="ss">9</span><span class="op">]</span><span class="pp">+</span><span class="op">$</span> <span class="kw">]]</span> <span class="kw">||</span> <span class="kw">{</span> <span class="bu">printf</span> <span class="st">&#39;Numeric job ID required\n&#39;</span> <span class="op">&gt;&amp;</span><span class="dv">2</span><span class="kw">;</span> <span class="bu">exit</span> 1<span class="kw">;</span> <span class="kw">}</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> reference <span class="at">--after</span> <span class="st">&quot;</span><span class="va">$AFTER_JOB</span><span class="st">&quot;</span></span></code></pre></div>
-<p>This is a dry-run; <code>--submit</code> is still required for actual
-submission. A dependency does not waive input, receipt or approval
-checks. Do not chain pilot completion to scale; inspect the report, then
-explicitly submit scale.</p>
-<h2 id="manual-submission">Manual submission</h2>
-<p>Prefer the driver so dependencies, resources and logs remain
-consistent. For a deliberately manual single-library pilot, after
-successful reference preparation and site review:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">SCRIPTS_DIR</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$PWD</span><span class="st">&quot;</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">POE_SITE_FILE</span><span class="op">=</span><span class="st">&quot;</span><span class="va">$PWD</span><span class="st">/config/seadragon.sh&quot;</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;Exact primary-library sample_id from the manifest: &quot;</span> <span class="va">POE_SAMPLE</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">POE_SAMPLE</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">[[</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> <span class="ot">==</span> /<span class="pp">*</span> <span class="kw">&amp;&amp;</span> <span class="ot">-f</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> <span class="kw">]]</span> <span class="kw">||</span> <span class="kw">{</span> <span class="bu">printf</span> <span class="st">&#39;Absolute CONFIG required\n&#39;</span> <span class="op">&gt;&amp;</span><span class="dv">2</span><span class="kw">;</span> <span class="bu">exit</span> 1<span class="kw">;</span> <span class="kw">}</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ex">bsub</span> <span class="at">-env</span> <span class="st">&quot;all,CONFIG=</span><span class="dt">\&quot;</span><span class="va">$CONFIG</span><span class="dt">\&quot;</span><span class="st">,SCRIPTS_DIR=</span><span class="dt">\&quot;</span><span class="va">$SCRIPTS_DIR</span><span class="dt">\&quot;</span><span class="st">,POE_SITE_FILE=</span><span class="dt">\&quot;</span><span class="va">$POE_SITE_FILE</span><span class="dt">\&quot;</span><span class="st">,POE_SAMPLE=</span><span class="dt">\&quot;</span><span class="va">$POE_SAMPLE</span><span class="dt">\&quot;</span><span class="st">&quot;</span> <span class="dt">\</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;</span> 04_ornaments/02_run_pilot.lsf</span></code></pre></div>
-<p>This submits a real job. Do not also submit the same work through the
-driver. It does not run the all-library collector or authorize scale.
-Only use exact manifest library IDs. Shared workers do not need a
-library selection.</p>
-<p>Checked-in headers default to the project&#39;s <code>data/logs/</code>
-directory for manual jobs. The driver overrides them with
-cohort-specific logs. Create the header directory first or pass existing
-<code>-o</code>/<code>-e</code> destinations. If needed, override
-<code>-q</code>, <code>-n</code>, <code>-M</code>, <code>-R</code> and
-<code>-W</code> with approved values; headers are templates, not
-automatic interpretations of edited YAML resources.</p>
-<p>Set <code>CONFIG</code>, <code>SCRIPTS_DIR</code> and
-<code>POE_SITE_FILE</code> explicitly for stdin submission; LSF spool
-paths do not locate the project. Driver <code>-env</code> values cannot
-contain commas, quotes or newlines; spaces are supported.</p>
-<p><code>00_run_pipeline.sh</code> is an optional short driver job
-controlled by <code>STAGE</code>, <code>SUBMIT=yes</code>, optional
-<code>AFTER</code>. It exits after graph submission. The ordinary
-interactive shell interface is simpler.</p>
-<h2 id="restart-and-failure-handling">Restart and failure handling</h2>
+<h1 id="running-and-monitoring">Running and monitoring</h1>
+<h2 id="submit-a-stage">Submit a stage</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> retrieve <span class="at">--submit</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> reference <span class="at">--submit</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> pilot <span class="at">--submit</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> scale <span class="at">--submit</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> models <span class="at">--submit</span></span></code></pre></div>
+<p>Run each command when the preceding stage has finished. Human
+analyses begin with <code>reference</code>. Omit <code>--submit</code>
+to print a plan.</p>
+<h2 id="inspect-jobs-and-results">Inspect jobs and results</h2>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bjobs</span> <span class="at">-a</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lt</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/logs/lsf/&quot;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lt</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/private/&quot;</span>jobs_<span class="pp">*</span>.submitted.tsv</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/Rscript_sif</span> poe.R <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> status</span></code></pre></div>
+<p>The terminal prints submitted job IDs. Submission records contain
+graph nodes, dependencies, and scheduler IDs. Logs are named by cohort,
+action, and job ID.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;Job ID: &quot;</span> <span class="va">JOB_ID</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">bjobs</span> <span class="at">-l</span> <span class="st">&quot;</span><span class="va">$JOB_ID</span><span class="st">&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;Log filename: &quot;</span> <span class="va">JOB_LOG</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">less</span> <span class="at">-S</span> <span class="st">&quot;</span><span class="va">$JOB_LOG</span><span class="st">&quot;</span></span></code></pre></div>
 <table>
 <thead>
 <tr>
-<th>Problem</th>
-<th>Action</th>
+<th>Status</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Missing native tool</td>
-<td>Inspect the configured environment and command paths; complete <a href="SETUP.md#installed-tool-identity">setup review</a></td>
+<td><code>PEND</code></td>
+<td>Queued</td>
 </tr>
 <tr>
-<td>Resource missing checksum/size</td>
-<td>Complete the intended asset contract; do not replace it with an
-arbitrary file</td>
+<td><code>RUN</code></td>
+<td>Running</td>
 </tr>
 <tr>
-<td>Missing reference/marker approval</td>
-<td>Verify build, exact bytes and parent/proxy provenance first</td>
+<td><code>DONE</code></td>
+<td>Scheduler success</td>
 </tr>
 <tr>
-<td>Failed download</td>
-<td>Inspect response/error; retry through the supported retrieval stage
-after resolving the cause</td>
+<td><code>EXIT</code></td>
+<td>Job failed; inspect its logs</td>
 </tr>
 <tr>
-<td>Native tool failure or empty allele output</td>
-<td>Inspect private tool/LSF logs; a success receipt must not be
-fabricated</td>
+<td><code>complete</code></td>
+<td>Stage receipt and required outputs are present</td>
 </tr>
 <tr>
-<td>One missing pilot library</td>
-<td>Resolve it and rerun needed work; collector requires all
-libraries</td>
+<td><code>requested</code></td>
+<td>Scale was explicitly requested</td>
 </tr>
 <tr>
-<td>Resource budget too small</td>
-<td>Revise reviewed settings; rerun affected prerequisites/pilot before
-accepting a new report</td>
-</tr>
-<tr>
-<td>Missing/incomplete receipt</td>
-<td>Resolve the failure or missing output, then rerun the stage; never
-fabricate a success record</td>
-</tr>
-<tr>
-<td>Lock collision</td>
-<td>Inspect recorded owner, live jobs and processes; remove only after
-verifying the lock is stale</td>
-</tr>
-<tr>
-<td>Partial scheduler submission</td>
-<td>Reconcile actual IDs in <code>.submitted.tsv</code> and LSF before
-any retry</td>
-</tr>
-<tr>
-<td>Technical success but ineligible model</td>
-<td>Report design/callability limitation; do not lower inference
-gates</td>
+<td><code>blocked</code></td>
+<td>A prerequisite or required output is missing/incomplete</td>
 </tr>
 </tbody>
 </table>
-<p>Submission can fail after earlier jobs have already been accepted.
-Missing or malformed job IDs must be reconciled with LSF, not assumed to
-mean no submission. Do not replay a <code>.host.sh</code> plan or erase
-its guard to force replay. Generate a fresh plan only after accounting
-for outstanding jobs and output ownership.</p>
-<p>Locks protect shared reference and per-library mutations, plus
-collectors/ models. No automatic stale-lock deletion is provided. Do not
-rebuild a reference while downstream jobs are reading it.</p>
-<p>Completion records indicate that work finished and required nonempty
-outputs exist; they do not detect changed inputs, settings, software, or
-output bytes. An explicit stage rerun performs the requested work rather
-than automatically reusing prior quantification. A stage records that a
-rerun has started, so failure cannot leave that stage&#39;s earlier success
-in effect.</p>
-<p>Before a deliberate rerun, reconcile active jobs and move aside
-affected outputs/records if existing-file protections require it. Rerun
-affected downstream stages yourself; do not delete active locks or
-overwrite files another job is reading.</p>
-<p>Download resume accepts only verified matching HTTP range responses;
-an HTTP 200 response is not appended to a partial. Retries/timeouts are
-bounded. The supported transport is ENA HTTPS; no automatic SRA
-conversion or trimming fallback is supplied.</p>
-<h2 id="keep-human-analysis-and-release-separate">Keep human analysis
-and release separate</h2>
-<p>All participant tables, command plans, paths, logs, counts,
-snapshots, receipts and indices stay private; entry points use
-<code>umask 077</code>. Aggregate review and release are explicit local
-actions, with no automatic transfer.</p>
-<p>Use the walkthrough&#39;s separate release configuration after recording
-completed analysis/result integrity. Do not restart analysis with the
-release configuration. Aggregate validation does not replace
-model-receipt validation or local disclosure-policy review.</p>
+<h2 id="rerun-after-an-error">Rerun after an error</h2>
+<p>Read the failed job&#39;s logs, correct the reported input or setting,
+and submit the affected stage again. Check already submitted jobs before
+repeating a partially submitted graph. For deliberate reruns, move aside
+existing outputs when a tool&#39;s existing-file protection requires it,
+after the jobs using them have finished.</p>
+<p>Download retrieval resumes validated partial files. Locks record
+their owner under <code>receipts/locks/</code>; clear an abandoned lock
+after its owning process/job has ended. Input or setting changes require
+rerunning affected stages and their dependents.</p>
+<p>Pilot reports retain resource usage and projections as informative
+outputs. Queue, cores, memory and wall time remain explicit job
+settings.</p>
 </body>
 </html>

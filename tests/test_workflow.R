@@ -20,11 +20,11 @@ stage_finish(r,o);unlink(o);check(!stage_valid(r,o))
 writeLines("read fixture",file.path(d,"fq"))
 s<-data.table(sample_id="logic",child_id="C",layout="SE",strand_mode="unstranded",
  fragment_mean=1,fragment_sd=1,fastq_1=file.path(d,"fq"),
- fastq_2=NA_character_,identity_verified=TRUE)
+ fastq_2=NA_character_)
 t<-data.table(child_id="C",mother_id="M",father_id="F",family_id="family")
 check(nrow(check_linkage(s,t))==1)
 check(fails(check_linkage(rbind(s,s),t)))
-check(fails(check_linkage(copy(s)[,identity_verified:=FALSE],t)))
+check(nrow(check_linkage(copy(s)[,identity_verified:=FALSE],t))==1) # Legacy extra column is ignored.
 check(fails(check_linkage(s,copy(t)[,mother_id:="C"])))
 check(fails(check_linkage(copy(s)[,strand_mode:="unknown"],t)))
 check(fails(check_linkage(copy(s)[,fragment_sd:=NA_real_],t)))

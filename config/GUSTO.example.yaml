@@ -117,7 +117,6 @@ execution:
   - host: /tmp
     container: /tmp
     mode: rw
-  posix_work_approved: no
   backend: seadragon
   site_file: seadragon.sh
 parents:
@@ -126,16 +125,13 @@ parents:
 dosage:
   maternal: 1.0
   paternal: 1.0
-  reviewed: yes
   rationale: diploid_tissue
 reference:
   build: GRCh38
-  annotation_approved: no
   contig_aliases: []
   genome_source: /rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta
 markers:
   mode: prepared
-  provenance_approved: no
   source_type: typed_trio_not_external_lines
   focal_sample: typed_mother
   alternate_sample: typed_father
@@ -145,32 +141,24 @@ markers:
   min_ref_fraction: 0.99
   chunk_rows: 10000
   proxy: no
-  proxy_approved: no
   proxy_reason: ''
 pilot:
   fragments: 1000000
   strand_fragments: 100000
   min_pseudoalignment_fraction: 0.2
   strand_tolerance: 0.05
-  max_projected_seconds: 43200.0
-  max_work_bytes: 2.5e+11
 fragments:
   fragment_mean_nt: 250
   fragment_sd_nt: 50
   fragment_parameter_origin: assumed_user_defined
 retrieval:
-  internet_host_approved: no
   attempts: 3
   timeout_seconds: 1800
   connect_timeout_seconds: 30
   retry_seconds: 5
 lsf:
   queue: short
-  memory_units_verified: no
-  memory_per_job_verified: no
-  memory_units: GB_site_attestation_required
-  execution_environment_verified: no
-  resource_limits_approved: no
+  memory_units: GB
   stages:
     reference:
       memory_value: 8.0
@@ -209,17 +197,11 @@ models:
   bootstrap: 2000
   seed: 1147
   covariates: []
-human:
-  genotype_qc_approved: no
-  covariates_approved: no
 exports:
   enabled: no
-  policy_approved: no
-  complementary_suppression_reviewed: no
-  review_token: ~
   min_cell: ~
 provenance_hints:
   raw_rna: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/GUSTO/raw
   custom_gtf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf
-  linkage: verified_private_source_library_trio_tables_required
+  linkage: private_source_library_trio_tables_required
   reuse: location/provenance hints only; fresh raw-read quantification

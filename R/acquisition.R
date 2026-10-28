@@ -79,7 +79,6 @@ validate_fastq <- function(f1,f2=NULL,limit=Inf,output1=NULL,output2=NULL) {
   n
 }
 retrieve_inputs <- function(c,native=TRUE) {
-  if(!isTRUE(c$retrieval$internet_host_approved))stop("Use an approved internet-enabled retrieval host")
   m<-load_manifests(c)
   if(c$profile=="human_trio")stop("Private raw files are inventoried locally, never fetched by public retrieval")
   records<-list()

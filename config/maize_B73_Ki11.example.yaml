@@ -117,7 +117,6 @@ execution:
   - host: /tmp
     container: /tmp
     mode: rw
-  posix_work_approved: no
   backend: seadragon
   site_file: seadragon.sh
 parents:
@@ -126,11 +125,9 @@ parents:
 dosage:
   maternal: 2.0
   paternal: 1.0
-  reviewed: yes
   rationale: normal_triploid_endosperm_only
 reference:
   build: B73_RefGen_v4
-  annotation_approved: no
   contig_aliases:
     chr1: '1'
     chr2: '2'
@@ -144,7 +141,6 @@ reference:
     chr10: '10'
 markers:
   mode: panzea
-  provenance_approved: no
   source_type: external_lines_not_original_experimental_parents
   focal_sample: B73
   alternate_sample: Ki11
@@ -156,32 +152,24 @@ markers:
   min_ref_fraction: 0.99
   chunk_rows: 10000
   proxy: no
-  proxy_approved: no
   proxy_reason: ''
 pilot:
   fragments: 1000000
   strand_fragments: 100000
   min_pseudoalignment_fraction: 0.2
   strand_tolerance: 0.05
-  max_projected_seconds: 43200.0
-  max_work_bytes: 2.5e+11
 fragments:
   fragment_mean_nt: 250
   fragment_sd_nt: 50
   fragment_parameter_origin: assumed_user_defined
 retrieval:
-  internet_host_approved: no
   attempts: 3
   timeout_seconds: 1800
   connect_timeout_seconds: 30
   retry_seconds: 5
 lsf:
   queue: short
-  memory_units_verified: no
-  memory_per_job_verified: no
-  memory_units: GB_site_attestation_required
-  execution_environment_verified: no
-  resource_limits_approved: no
+  memory_units: GB
   stages:
     reference:
       memory_value: 8.0
@@ -220,13 +208,7 @@ models:
   bootstrap: 2000
   seed: 1147
   covariates: []
-human:
-  genotype_qc_approved: no
-  covariates_approved: no
 exports:
   enabled: no
-  policy_approved: no
-  complementary_suppression_reviewed: no
-  review_token: ~
   min_cell: ~
 provenance_hints: []

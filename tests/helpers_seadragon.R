@@ -42,6 +42,7 @@ make_host_fixture <- function(root,dir) {
     'input=""; dest=""; while [[ $# -gt 0 ]]; do case "$1" in -f) input="$2"; shift 2 ;; -o) dest="$2"; shift 2 ;; *) shift ;; esac; done',
     'cp "$input" "$dest"'))
   python<-put("python",c("#!/bin/bash",'printf "MOCK_PYTHON_NOT_EXECUTED\\n"'))
+  put("bsub",c("#!/bin/bash","exit 99")) # Availability only; submission uses its own mock.
   activate<-put("activate",c(paste0("export PATH=",shQuote(dir),':"$PATH"'),
     "export POE_FIXTURE_ACTIVE=ornaments"))
   # Known fixture resource values, never used as biological performance estimates.
@@ -57,6 +58,7 @@ make_host_fixture <- function(root,dir) {
     paste("exec",shQuote(file.path(R.home("bin"),"Rscript")),'"$@"')))
   sif<-put("fixture.sif","NOT_A_REAL_CONTAINER")
   site<-put("site.sh",c(
+    paste0("export PATH=",shQuote(dir),':"$PATH"'),
     paste0("export POE_MODULE_INIT=",shQuote(module)),
     paste0("export POE_CONDA=",shQuote(conda)),
     "export POE_SAMTOOLS_ENV=samtools-1.16.1","export POE_BCFTOOLS_ENV=bcftools-1.16",
@@ -90,20 +92,16 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
     x$templates[[k]]<-file.path(dir,"per_child/{sample}",k)
   x$templates$prefix<-file.path(dir,"prefix/{sample}/{mode}/{strand}/{run}_{mate}.gz")
   for(k in c("fastq","partial","response"))x$templates[[k]]<-file.path(dir,"raw/{run}_{mate}.gz")
-  x$execution$site_file<-host$site;x$execution$posix_work_approved<-TRUE
+  x$execution$site_file<-host$site
   x$execution$image<-host$sif
-  x$reference$genome_source<-NULL;x$reference$annotation_approved<-TRUE
+  x$reference$genome_source<-NULL
   x$reference$contig_aliases<-list()
-  x$markers$mode<-"prepared";x$markers$proxy<-FALSE;x$markers$provenance_approved<-TRUE
+  x$markers$mode<-"prepared";x$markers$proxy<-FALSE
   # Resolve repository tools against the actual checkout, not fixture config location.
   for(k in names(x$tools))if(startsWith(x$tools[[k]],"../bin/"))
     x$tools[[k]]<-file.path(root,sub("^\\.\\./","",x$tools[[k]]))
   x$tools$r_library<-.libPaths()[1];x$tools$time<-host$time
   x$pilot$fragments<-3;x$pilot$strand_fragments<-3
-  x$pilot$max_projected_seconds<-100;x$pilot$max_work_bytes<-1e8
-  x$human$genotype_qc_approved<-TRUE;x$human$covariates_approved<-TRUE
-  x$lsf$resource_limits_approved<-TRUE
-  for(k in c("memory_units_verified","memory_per_job_verified","execution_environment_verified"))x$lsf[[k]]<-TRUE
   dir.create(dirname(x$paths$work),recursive=TRUE,showWarnings=FALSE)
   genome<-paste(rep("A",200),collapse="")
   writeLines(c(">chrT",genome),x$paths$genome)
@@ -116,9 +114,9 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
   }
   writeLines(gtf,x$paths$annotation)
   samples<-c("fixtureA","fixtureB")
-  libs<-data.table(sample_id=samples,unit_id=samples,layout="PE",strand_mode="fr",strand_verified=TRUE)
-  if(human)libs[,`:=`(child_id=c("childA","childB"),identity_verified=TRUE)]
-  units<-data.table(unit_id=samples,cluster_id=samples,independence_verified=TRUE,
+  libs<-data.table(sample_id=samples,unit_id=samples,layout="PE",strand_mode="fr")
+  if(human)libs[,`:=`(child_id=c("childA","childB"))]
+  units<-data.table(unit_id=samples,cluster_id=samples,
     maternal_parent=if(human)"typed_mother" else c(x$parents$focal,x$parents$alternate),
     paternal_parent=if(human)"typed_father" else c(x$parents$alternate,x$parents$focal),
     stage="FIXTURE",tissue="FIXTURE")

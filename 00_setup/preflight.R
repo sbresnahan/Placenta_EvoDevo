@@ -7,7 +7,7 @@ a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=4L)stop("Usage: stage.R CONFIG PHASE LIBRARY JOB_DIRECTORY; use the checked-in LSF wrapper")
 a<-c(a[1],"preflight",a[-1])
 # runtime.R reads commandArgs; source its loader and invoke the same tested phase dispatcher.
-source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
+source(file.path(root,"R/config.R"));c<-read_config_v2(a[1],setup=TRUE)
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(k in c("common","workflow","parental","models","exports","acquisition","public","reference","pipeline","stages","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
 suppressPackageStartupMessages(library(GenomicRanges));source(file.path(root,"R/annotation.R"))

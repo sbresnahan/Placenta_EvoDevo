@@ -23,6 +23,6 @@ for(k in "--after")if(k %in% extra) {
 }
 if(any(!extra %in% "--submit"))stop("Unknown flag")
 if(!is_seadragon(c))stop("run_pipeline.R requires the Seadragon backend")
-preflight_v2(c,root)
-if(a[2]=="scale"&&"--submit" %in% flags)authorize_scale(c,root)
+validate_inputs_v2(c,root)
+if(a[2]=="scale"&&"--submit" %in% flags)request_scale(c,root)
 submit_graph(c,root,a[2],"--submit" %in% flags,if(is.null(after))"none" else after)

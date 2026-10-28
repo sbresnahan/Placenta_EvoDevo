@@ -1,338 +1,138 @@
-# Placenta_EvoDevo: one step-by-step operating guide
+# Placenta_EvoDevo walkthrough
 
-## What to do with this guide
+Complete the shared setup, then follow the recipe for your cohort.
 
-Complete **Part 1 once**, then use the complete recipe for the cohort you want to run. The five recipes do not depend on one another. You do not need to open another Markdown document.
+# Part 1. Shared setup
 
-This guide describes the analysis package and its step-by-step operating procedure. The commands are instructions for a future run on Seadragon. They have not been run against the cohorts as part of writing this guide. Scientific methods and cohort selections are unchanged.
-
-**Do not paste the entire document into a terminal.** Run one numbered step at a time. A submission command only puts jobs in the queue: wait for completion and inspect the results before proceeding. Wherever the guide says **STOP**, the next stage is not justified until the stated evidence or file exists.
-
-The examples contain real project paths. Text inside a non-executable YAML example that says `INSERT_...` is a description of information you must supply, not a usable value.
-
-### A few terms used below
-
-- **Terminal:** the command line on Seadragon.
-- **Configuration:** a YAML file containing settings. Indentation matters; use spaces, not tabs.
-- **Manifest:** a tab-separated text file listing inputs or samples. Keep actual tabs between columns, not spaces.
-- **Library:** one primary RNA sample to quantify. Several sequencing runs or lanes can belong to the same library.
-- **Biological unit:** the independently sampled organism, family, ear pool, or other justified replicate. Sequencing a unit twice does not make two biological replicates.
-- **Reference:** the genome and transcript annotation used to interpret reads.
-- **Marker:** a genomic SNP whose parental alleles are supported by the specified genotype evidence.
-- **Receipt:** a small record of successful stage completion and its output paths. A file merely existing is not the same as a completed stage.
-- **MD5:** the publisher-supplied download check used automatically with expected byte counts; it does not establish biological suitability.
-- **LSF:** Seadragon's job scheduler. `bsub` submits; `bjobs` inspects jobs.
-- **Pilot:** the small technical run required before full quantification.
-
----
-
-# Part 1. Shared setup — do this once
-
-## 1. Open a Seadragon terminal and set the project location
-
-Use your normal approved login method. Run:
+## 1. Set the project paths
 
 ```bash
 export PROJECT=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo
 export DATA_ROOT="$PROJECT/data"
+export SCRIPTS_DIR="$PROJECT/scripts"
+export POE_SITE_FILE="$SCRIPTS_DIR/config/seadragon.sh"
 umask 077
-ls -ld "$PROJECT" "$PROJECT/scripts"
+cd "$SCRIPTS_DIR"
 ```
 
-The scripts must be in:
+## 2. Prepare a cohort
 
-`/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts`
-
-This guide assumes the analysis scripts are already present there, including `poe.R`, `run_pipeline.R`, `bin/`, and `config/`. **STOP** if they are missing. Do not overwrite an existing scripts directory or unpack an older archive over it.
-
-Now enter the script directory:
+Define this terminal helper to select a cohort and create its working copies:
 
 ```bash
-cd "$PROJECT/scripts"
-export SCRIPTS_DIR="$PWD"
-export POE_SITE_FILE="$PWD/config/seadragon.sh"
-ls -l poe.R run_pipeline.R bin/submit_pipeline.sh bin/Rscript_sif
-```
-
-Repeat these environment-setting commands whenever you open a new terminal. Later recipe commands assume this working directory. Setting `DATA_ROOT` does **not** rewrite paths inside a YAML file.
-
-
-## 2. Make the working directories and editable copies
-
-Run once. This makes separate data directories and copies the supplied tables and YAML examples only when an editable copy is absent.
-
-```bash
-mkdir -p "$DATA_ROOT/shared"
-for COHORT in maize_B73_Ki11 maize_B73_W22 mouse_Babr_CAST mouse_FVB_CAST_E12 GUSTO; do
-  mkdir -p "$DATA_ROOT/$COHORT"/{manifests,raw,reference,private,work,scratch,logs,receipts}
+use_cohort() {
+  export COHORT="${1:?Cohort name required}"
+  export CONFIG="$SCRIPTS_DIR/config/$COHORT.private.yaml"
+  export COHORT_DIR="$DATA_ROOT/$COHORT"
+  mkdir -p "$COHORT_DIR"/{manifests,raw,reference,private,work,scratch,logs,receipts}
   for SOURCE in "$SCRIPTS_DIR/manifests/${COHORT}_"*.tsv; do
-    DEST="$DATA_ROOT/$COHORT/manifests/$(basename "$SOURCE")"
-    if [[ ! -e "$DEST" ]]; then
-      cp -- "$SOURCE" "$DEST"
-    fi
+    DEST="$COHORT_DIR/manifests/$(basename "$SOURCE")"
+    [[ -e "$DEST" ]] || cp -- "$SOURCE" "$DEST"
   done
-  PRIVATE="$SCRIPTS_DIR/config/$COHORT.private.yaml"
-  if [[ ! -e "$PRIVATE" ]]; then
-    cp -- "$SCRIPTS_DIR/config/$COHORT.example.yaml" "$PRIVATE"
-  fi
-done
+  [[ -e "$CONFIG" ]] || cp -- "$SCRIPTS_DIR/config/$COHORT.example.yaml" "$CONFIG"
+}
+use_cohort maize_B73_Ki11
 ```
 
-Inspect the result:
+Edit sample tables in `$COHORT_DIR/manifests/` and settings in `$CONFIG`.
+The helper preserves existing working copies.
+
+## 3. Check the tools
 
 ```bash
-ls "$SCRIPTS_DIR/config/"*.private.yaml
-ls "$DATA_ROOT/maize_B73_Ki11/manifests"
-ls "$DATA_ROOT/GUSTO/manifests"
+00_setup/preflight.sh "$CONFIG"
 ```
 
-Edit **only the operational copies** in `data/<cohort>/manifests/` and the corresponding `.private.yaml` file. Do not edit the supplied manifest templates or `.example.yaml` files. If an editable copy already existed, inspect it rather than assuming it matches a fresh example.
+Expected output: `Required tools and R packages are accessible.`
 
-Keep the private YAML files in `scripts/config/`. Their relative wrapper paths, such as `../bin/native/ornaments`, depend on that location.
+Setup checks the native tools, scheduler command, R image, library, and packages.
+The existing `--execute` option performs the same check.
 
-For GUSTO, verify that institutional access controls restrict the data directory and private settings to authorized users. `umask 077` protects newly created files; it does not fix permissions on files that already existed. Do not make private data world-readable.
-
-To edit a file, use `nano` followed by its path. In nano, **Ctrl+O**, then **Enter** saves; **Ctrl+X** exits. For example:
-
-```bash
-nano "$SCRIPTS_DIR/config/maize_B73_Ki11.private.yaml"
-```
-
-## 3. Check the existing software — do not reinstall it
-
-Display the site settings:
-
-```bash
-less "$SCRIPTS_DIR/config/seadragon.sh"
-```
-
-Press `q` to leave `less`. The existing settings should point to:
-
-- Module initialization: `/etc/profile.d/modules.sh`.
-- Conda executable: `/risapps/rhel8/miniforge3/24.5.0-0/bin/conda`.
-- samtools environment: `samtools-1.16.1`.
-- bcftools environment: `bcftools-1.16`.
-- Ornaments activation script: `/rsrch5/home/epi/bhattacharya_lab/software/ornaments/bin/activate`.
-- Installed native commands: `ornaments` and `create_personalized_transcriptome`.
-- R container: `/risapps/singularity/repo/RStudio/4.3.1/rstudio_4.3.1.sif`.
-- R library: `/rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1`.
-
-Ornaments is already installed in the Conda environment `/rsrch5/home/epi/bhattacharya_lab/software/ornaments`. Keep this canonical path; do not insert the `stbresnahan/` alias. The wrappers source its configured `bin/activate`; samtools/bcftools use the module initialization and Miniforge Conda hook above. Do not install or rebuild anything to bypass a failed check. Host wrappers use `set -eo pipefail`, without `set -u`, because the site activation scripts can reference unset optional variables.
-
-R runs inside Singularity through `bin/Rscript_sif`; native samtools, bcftools, Python/personalizer, Ornaments, and `bsub` run on the host. The configured R binds are `/rsrch5`, `/rsrch9`, and `/tmp`. The bridge and production R entry points explicitly initialize `.libPaths()` inside R before loading YAML or other packages; setting `R_LIBS_USER` alone is not the startup mechanism.
-
-Check the R side:
-
-```bash
-bin/Rscript_sif -e 'print(.libPaths()); p <- c("data.table","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"); ok <- vapply(p, requireNamespace, logical(1), quietly=TRUE); print(data.frame(package=p, available=ok)); stopifnot(getRversion() >= "4.3.1", all(ok))'
-```
-
-**Success:** every package prints `TRUE`, R is at least 4.3.1, and the command exits without an error. **STOP** for a missing image, library, package, or native environment; ask the site maintainer to resolve the existing installation.
-
-Collect the host software identities:
-
-```bash
-bin/host_inventory.sh "$DATA_ROOT/shared/software_inventory.tsv"
-less -S "$DATA_ROOT/shared/software_inventory.tsv"
-```
-
-This lists the actual executable paths, available versions, configured site/image paths, and Python package information. It does not download cohort data or submit jobs. The columns are `component`, `path`, and `version`. Review that the commands resolve in the intended existing environments; no installer evidence or checksum entry is required.
-
-Keep `ornaments.semantics: ref_alt` and the supplied thread count. Preflight checks installed-tool availability and the R environment, not correspondence to an earlier installation.
-
-## 4. Use the established Seadragon storage and scheduler conventions
-
-These defaults follow the existing `Placenta_xQTL_atlas` deployment, not generic LSF assumptions:
-
-| Setting | Seadragon convention used here |
+| Tool setting | Existing location |
 |---|---|
-| Memory limit and reservation | Numeric GB values: for an 8-GB request, `-M 8 -R "rusage[mem=8]"` |
-| Public downloads | `transfer` queue; retrieval example: 1 CPU, memory/reservation 4, `'02:00'` |
-| Reference, pilot, models | Existing EvoDevo examples: `short`, 2 CPUs, memory/reservation 8, `'03:00'` |
-| Full quantification/assignment | Existing EvoDevo example: `medium`, 2 CPUs, memory/reservation 8, `'12:00'` |
-| Longer work | `long` is used by the reference project; use only if justified by measured workload and your allocation |
-| Filesystem | Cohort directories on `/rsrch9`; installed tools/library on `/rsrch5`; R binds also include `/tmp` |
-| Logs and dependencies | Create log directories before `bsub`; downstream work waits on `done(JOB_ID)` |
+| Ornaments environment | `/rsrch5/home/epi/bhattacharya_lab/software/ornaments` |
+| samtools environment | `samtools-1.16.1` |
+| bcftools environment | `bcftools-1.16` |
+| Conda | `/risapps/rhel8/miniforge3/24.5.0-0/bin/conda` |
+| R image | `/risapps/singularity/repo/RStudio/4.3.1/rstudio_4.3.1.sif` |
+| R library | `/rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1` |
 
-The xQTL phenotyping driver documents both numeric memory fields in GB and uses matching limit/reservation values. [562] Public SRA retrieval uses the `transfer` queue. [561] These examples establish practical defaults, not current universal queue maxima or Ornaments memory requirements. Keep numeric YAML values, not suffix strings such as `8G`. Do not copy STAR's much larger allocations into this workflow.
+Native tools run on the host. `bin/Rscript_sif` runs R and initializes its library.
+Site settings are in `config/seadragon.sh`.
 
-Check available space and your scheduler access:
+## 4. Job settings
 
-```bash
-df -h "$DATA_ROOT"
-bqueues
-bjobs
-```
+The configuration stores queue, cores, memory, and wall time under `lsf.stages`.
+Memory values are numeric GB, with matching `memory_value` and
+`reservation_value`. [562] Public retrieval uses `transfer`. [561]
 
-For each cohort you will run, check that its `work`, `scratch`, `logs`, and `receipts` directories exist and are writable. For example:
+| Work | Queue | Typical cores / GB | Wall time |
+|---|---|---|---|
+| Retrieval | transfer | 1 / 4 | `02:00` |
+| Reference, pilot, models | short | 2 / 8 | Set `02:59` |
+| Quantification, assignment | medium | 2 / 8 | `12:00` |
 
-```bash
-for DIR in "$DATA_ROOT/maize_B73_Ki11"/{work,scratch,logs,receipts}; do
-  [[ -d "$DIR" && -w "$DIR" ]] || printf 'STOP: missing or unwritable %s\n' "$DIR"
-done
-```
+For existing private configurations, set reference, pilot, and model
+`wall_time` values to `'02:59'`.
 
-Use the normal shared filesystem, not an object-storage mount. Preflight checks writability and atomic configuration renaming; receipt directories must also support exclusive directory locks. Existing shared-path usage is the site convention, not a guarantee of every directory's current permissions or capacity.
+Your site limits are: short under 3 hours, medium 4–24 hours, long 25–120 hours,
+20 cores and 300 GB RAM per job. LSF enforces job limits. Pilot reports provide
+usage and runtime projections for choosing resources.
 
-The cohort-specific RNA totals below are **compressed RNA only**. They exclude genome/VCF downloads, personalized references, indexes, temporary files, and outputs. B73/Ki11 also has ten large chromosome VCFs. Allow space for all of these, not just FASTQs.
+## 5. Follow submissions
 
-**One accounting distinction remains:** xQTL's numeric GB convention does not by itself prove LSF's internal per-job versus per-slot accounting for multicore jobs. The existing `lsf.memory_per_job_verified` gate still requires a real accounting check; do not mark it true merely because units are GB. Reuse your site's existing accounting record or inspect an actual comparable multicore job with `bjobs -l JOB_ID` / `bacct -l JOB_ID` where those records expose the interpretation; unresolved output is not confirmation. If accounting is still unknown, resolve that specific point before actual submission. Allow for slot-scaled reservations in budget review when applicable.
-
-No new all-node survey or generic administrator checklist is needed. Use the configured mounts, environments, and queues above; resolve concrete permission, environment, or queue errors if they occur. The default requests are starting limits to review against pilot measurements, available storage, and the project's authorized allocation, not measured Ornaments requirements.
-
-## 5. Enter the common settings in each private YAML you intend to use
-
-Open each intended file individually:
+Each recipe lists the submission and the outputs to inspect when its jobs finish.
 
 ```bash
-nano "$SCRIPTS_DIR/config/maize_B73_Ki11.private.yaml"
-nano "$SCRIPTS_DIR/config/maize_B73_W22.private.yaml"
-nano "$SCRIPTS_DIR/config/mouse_Babr_CAST.private.yaml"
-nano "$SCRIPTS_DIR/config/mouse_FVB_CAST_E12.private.yaml"
-nano "$SCRIPTS_DIR/config/GUSTO.private.yaml"
-```
-
-You can prepare only the cohort you intend to run now; do not approve unreviewed cohorts. Make the following concrete edits using the facts just established:
-
-1. Verify that every cohort-owned path points to `data/<that cohort>/`. Keep the documented human source-reference exceptions in the GUSTO recipe.
-2. Keep `execution.site_file: seadragon.sh` consistent with `POE_SITE_FILE`. Keep the configured image and R library consistent with the site settings.
-3. Keep `ornaments.semantics: ref_alt` and confirm the installed commands resolve as shown in step 3.
-4. Set `execution.posix_work_approved: true` after checking your cohort's normal shared-filesystem directories as in step 4; do not redirect them to object storage.
-5. Set `lsf.memory_units: GB` and `lsf.memory_units_verified: true` using the established Seadragon convention. Set `lsf.memory_per_job_verified: true` only when the specific accounting check in step 4 supports it; GB units alone do not establish this.
-6. Use the existing site file, R binds, and native activation paths. Set `lsf.execution_environment_verified: true` when these match your working Seadragon deployment and the software checks in step 3 pass. Do not approve untested path or environment overrides.
-7. Under `lsf.stages`, inspect **each** of `retrieve`, `reference`, `pilot`, `scale`, and `models`. Start with the queue/CPU/memory/time values in step 4 and the examples; use matching numeric GB `memory_value` and `reservation_value` for this deployment. Wall time is hours and minutes, for example `'03:00'`. Keep requests within your allocation.
-8. Keep `ornaments.threads` no greater than the CPU request for pilot and scale. The supplied value is two.
-9. Review `pilot.max_projected_seconds` and `pilot.max_work_bytes` against local limits. These are technical gates, not measured resource needs.
-10. Set `lsf.resource_limits_approved: true` only when the proposed requests, storage allowance, and project budget are locally authorized. This approves the limits, **not** the eventual pilot result. You must still review the pilot before explicitly submitting scale.
-11. For public cohorts only, keep the retrieval queue `transfer`, the public-download queue used by the reference project, and set `retrieval.internet_host_approved: true` when using that established authorized route. Do not enable public retrieval for GUSTO or silently substitute an ordinary compute queue.
-12. Leave `exports.enabled: false` throughout analysis.
-
-Do not change thresholds, parent identities, reference builds, or scientific choices merely to make a check pass. Cohort-specific annotation, marker, strand, independence, and human QC approvals are addressed in the recipes.
-
-**Finish analysis-setting and manifest edits before reference construction.** Completion records say that stages finished and required outputs exist; the pipeline does not decide whether earlier results are still current. You are responsible for rerunning affected prerequisites and downstream stages after changing inputs, settings, software, or outputs. Review a newly run pilot before submitting scale.
-
-## 6. Understand submission and completion before running any cohort
-
-The correct submission interface is:
-
-`bin/submit_pipeline.sh "$CONFIG" STAGE --submit`
-
-Without `--submit`, it is a **dry run**: it can create plans, registry files, and directories, but does not call `bsub`. R-only entry points can prepare a host plan without actually submitting; do not use them as a replacement for the shell submission driver.
-
-Do not separately submit the individual `.lsf` modules as well as the driver's graph. That would duplicate work.
-
-After each actual submission:
-
-1. Read the terminal's `Submitted ... as ...` lines.
-2. List the submission records and logs:
-
-```bash
-ls -lt "$DATA_ROOT/$COHORT/private/"jobs_*.submitted.tsv
-ls -lt "$DATA_ROOT/$COHORT/logs/lsf/"
-bjobs
 bjobs -a
+ls -lt "$COHORT_DIR/logs/lsf/"
+ls -lt "$COHORT_DIR/private/"jobs_*.submitted.tsv
+bin/Rscript_sif poe.R "$CONFIG" status
 ```
 
-3. Open the **actual** record printed by the driver. The following prompts avoid pretending an example job ID or filename is real:
+The terminal prints each submitted job ID and the job-record filename.
+View an individual job or log with:
 
 ```bash
-read -r -p "Full path to the actual .submitted.tsv record just printed: " SUBMITTED
-less -S "$SUBMITTED"
-read -r -p "Actual numeric LSF job ID to inspect: " JOB_ID
+read -r -p "Job ID: " JOB_ID
 bjobs -l "$JOB_ID"
-read -r -p "Full path to that job's actual .out or .err log: " JOB_LOG
+read -r -p "Log filename: " JOB_LOG
 less -S "$JOB_LOG"
 ```
 
-The real job record is under `data/<cohort>/private/jobs_<unique>.tsv.submitted.tsv`. The planning registry is `jobs_<unique>.tsv`. Labels beginning `DRYRUN_` or `HOST_PLANNED_` are **not** scheduler IDs. Logs are under `data/<cohort>/logs/lsf/`; the filename contains the cohort, action, and actual job ID.
-
-Inspect **every node** of the submitted graph, not only the first job. `PEND` means waiting; `RUN` means active; `DONE` indicates scheduler success; `EXIT` indicates failure. Disappearance from the default `bjobs` view is not proof of success. Check the retained scheduler history or site accounting if needed.
-
-Then run:
-
-```bash
-bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$DATA_ROOT/$COHORT/status.tsv"
-```
-
-This checks completion records and the existence of required nonempty outputs. It does **not** query LSF. Before the first stages run, later stages are expected to be `blocked`.
-
-- After reference: expect `reference` to be `complete`.
-- After pilot: expect `pilot` to be `complete`.
-- After accepted scale: `scale` means `authorized`, not that quantification finished.
-- After full quantification and assignment: expect `quantification` to be `complete`.
-- After models: expect `models` to be `complete`.
-
-For human reference jobs, shared `reference: complete` alone does not certify every child's personalized index; inspect all child/index jobs and their receipts.
-
-### If anything fails
-
-**Stop before the next stage.** Read the failed job's `.err` and `.out` logs, its `.submitted.tsv` record, and `status.tsv`.
-
-- If submission stopped partway through, some earlier jobs may already exist. Reconcile the real submitted IDs with LSF **before** rerunning. Do not replay a `.host.sh` plan or delete its `.started` guard.
-- Retrieval can resume valid partial downloads under its checked HTTP-range rules. It does not use an SRA fallback, trim reads, discover missing sources, or call new variants. A checksum/source problem requires resolving the real source, not bypassing validation.
-- A missing/incomplete receipt means a stage did not finish successfully or a required output is absent. Resolve the failure and rerun that stage. For a deliberate rerun, first confirm no jobs are using its files; move aside affected outputs/receipts where an existing-file protection requires it. Do not hand-edit receipts or delete active locks.
-- Locks under `receipts/locks/` are not automatically discarded. Confirm the owning job and live processes are gone before any locally supervised removal.
-- Never rebuild or replace a reference/index while downstream jobs are reading it.
-- If a pilot requires a different strand or resource setting, change the configuration or manifest, rerun affected prerequisites, and repeat the pilot. Do not accept the old report.
-
----
+`status` reports completed stages and their required outputs. After an input or
+setting changes, rerun the affected stages and their dependents. A command
+without `--submit` prints a plan.
 
 # Part 2. Maize B73/Ki11 — 20 DAP endosperm
 
 ## K1. Select the cohort
 
 ```bash
-cd "$PROJECT/scripts"
-export COHORT=maize_B73_Ki11
-export CONFIG="$SCRIPTS_DIR/config/maize_B73_Ki11.private.yaml"
-export COHORT_DIR="$DATA_ROOT/$COHORT"
+use_cohort maize_B73_Ki11
 ```
 
-This recipe uses four biological endosperm pools and eight technical sequencing runs:
+Four paired-end endosperm pools use eight sequencing runs:
 
-- B73 maternal: `Sample_15`, runs ERR2889292/ERR2889293; `Sample_16`, ERR2889297/ERR2889298.
-- Ki11 maternal: `Sample_13`, ERR2889302/ERR2889303; `Sample_14`, ERR2889307/ERR2889308.
+| Maternal parent | Library | Runs |
+|---|---|---|
+| B73 | Sample_15 | ERR2889292, ERR2889293 |
+| B73 | Sample_16 | ERR2889297, ERR2889298 |
+| Ki11 | Sample_13 | ERR2889302, ERR2889303 |
+| Ki11 | Sample_14 | ERR2889307, ERR2889308 |
 
-The compressed RNA total in the supplied source table is **52,116,556,804 bytes**. The ten parental VCF downloads are additional large inputs. Do not count the eight runs as eight replicates.
+The supplied strand is `fr`, dosage is maternal:paternal 2:1, and compressed RNA
+totals 52,116,556,804 bytes. The tables already group runs into the four pools.
 
-## K2. Review the four pools and the protocol
-
-```bash
-less -S "$COHORT_DIR/manifests/maize_B73_Ki11_sources.tsv"
-nano "$COHORT_DIR/manifests/maize_B73_Ki11_libraries.tsv"
-nano "$COHORT_DIR/manifests/maize_B73_Ki11_units.tsv"
-nano "$CONFIG"
-```
-
-Keep the supplied run-to-library grouping. The libraries are paired-end (`PE`). Their supplied `strand_mode` is `fr`, and the template marks it verified. Confirm that designation against the actual library protocol; a prefilled `TRUE` is not a replacement for your review. If unsupported, set `strand_verified` to `FALSE` and stop before pilot until resolved. The pilot also checks the selected orientation.
-
-In the units table, confirm the four pool identities and their independent biological sampling. `cluster_id` identifies the biological sampling cluster, not a sequencing run. Retain `independence_verified: TRUE` only where supported by the study records.
-
-Keep B73 as focal and Ki11 as alternate. Keep the maternal:paternal dosage at **2:1**, with `dosage.reviewed: true`, only for the normal triploid endosperm samples in this recipe.
-
-## K3. Check setup, then retrieve the public inputs
-
-The supplied resources table specifies B73 RefGen_v4/AGPv4, `F1maize.FINAL.gff` from Zenodo record 2611319, and ten raw AGPv4 chromosome VCFs. Inspect it:
-
-```bash
-less -S "$COHORT_DIR/manifests/maize_B73_Ki11_resources.tsv"
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-bin/submit_pipeline.sh "$CONFIG" retrieve
-```
-
-The first preflight validates configuration/manifests. The `--execute` preflight additionally checks host command availability and the R environment; it does not download or submit. It should accept the reviewed installed software. **STOP** if either preflight fails. The dry run should describe one retrieval job with the approved queue and resource requests.
-
-Then submit:
+## K2. Retrieve the inputs
 
 ```bash
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Wait for the one retrieval job to finish, using the scheduler and log checks in shared step 6. It retrieves the RNA and all resources marked `required=TRUE`, checks downloaded bytes and MD5, tests gzip inputs and FASTQ integrity, and creates uncompressed outputs where `decompress_to` is specified.
-
-Inspect the recorded resources and actual files:
+One job downloads RNA, the B73 RefGen_v4/AGPv4 genome, `F1maize.FINAL.gff`
+from Zenodo record 2611319, and ten raw AGPv4 chromosome VCFs.
+When it finishes:
 
 ```bash
 less -S "$COHORT_DIR/resource_receipt.tsv"
@@ -340,108 +140,69 @@ ls -lh "$COHORT_DIR/raw/"
 ls -lh "$COHORT_DIR/reference/"
 ```
 
-**STOP** for a failed download, checksum, gzip, or paired-read check. Do not proceed with partial inputs.
+Retrieval checks source MD5/bytes, gzip integrity, and FASTQ structure/mates.
 
-## K4. Review the reference and marker files
-
-The genome must now be `reference/genome.fa`. The source annotation must be `reference/source_annotation.gtf`. The latter filename does not change the source's GFF content; keep the exact configured annotation rather than substituting a convenient GTF.
-
-Run:
+## K3. Build the reference
 
 ```bash
-ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-ls -lh "$COHORT_DIR/reference/"hmp321_raw_agpv4_chr*.vcf.gz
-nano "$COHORT_DIR/manifests/maize_B73_Ki11_marker_sources.tsv"
-nano "$CONFIG"
-```
-
-In the marker-source table, verify each chromosome VCF's actual path and build. Keep the ten real source rows, for chromosomes 1 through 10, and do not substitute files from another reference build.
-
-In the YAML:
-
-1. Set `reference.annotation_approved: true` only after confirming this annotation is compatible with B73 RefGen_v4 and is the intended annotation.
-2. Keep `markers.mode: panzea`, B73/Ki11 sample names, and the configured duplicate-line checks.
-3. Set `markers.provenance_approved: true` only after reviewing the ten raw, nonimputed AGPv4 sources and accepting that they are external lines, not genotypes measured in the original experimental plants.
-
-The existing marker preparation requires supported opposite homozygous parental SNPs, depth at least five, called-allele fraction at least 0.9, allowed site filters, and at least 99% REF agreement with the actual genome. It excludes NI5 and does not infer missing genotypes.
-
-Finish the common scheduler/software settings now. Keep exports off. Rerun both preflights after these edits:
-
-```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-```
-
-## K5. Build the reference and index
-
-```bash
-bin/submit_pipeline.sh "$CONFIG" reference
 bin/submit_pipeline.sh "$CONFIG" reference --submit
 ```
 
-Expect **three jobs**: catalog/reference, parental markers, and personalized index, with dependencies. Wait for all three to succeed. Then:
+Three jobs build the transcript/promoter catalog, B73/Ki11 markers, and index.
+Marker preparation uses depth ≥5, allele fraction ≥0.9, and REF agreement ≥99%.
+When the jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/annotation_audit.tsv"
-less -S "$COHORT_DIR/events.tsv"
 less -S "$COHORT_DIR/markers.tsv"
 ls -lh "$COHORT_DIR/reference/personal.index"
 ```
 
-**Proceed only if** `reference` is `complete`, all three jobs succeeded, the annotation audit is acceptable, and the index exists. The reference stage checks exon structure, transcript orientation, and coordinate mapping; it builds fixed-anchor 25/50/100 bp catalogs with 50 bp as primary.
+Expected status: `reference complete`.
 
-## K6. Run and inspect the pilot
+## K4. Run the pilot
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" pilot
 bin/submit_pipeline.sh "$CONFIG" pilot --submit
 ```
 
-Expect **five jobs**: four library pilots and one collector. Wait for all five. Then:
+Five jobs run four library pilots and collect their metrics. When they finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/pilot_report.tsv"
 ```
 
-Require `pilot: complete`. The default pilot uses 100,000 fragments per strand diagnostic and a one-million-fragment throughput prefix per library. These are nonrandom prefixes, not representative random samples of the whole experiment.
+Expected status: `pilot complete`. Diagnostics use 100,000 fragments per strand
+and a one-million-fragment throughput prefix per library.
+The report includes pseudoalignment, time, RSS, index size, endpoint work bytes,
+and projected quantification time. Projections are informative.
 
-Check `pseudoalignment_fraction`, strand comparisons, `elapsed_seconds`, `peak_rss_kb`, `index_bytes`, `projected_quant_seconds`, and `work_bytes_endpoint_lower_bound`. The configured pseudoalignment floor is 0.2 and strand tolerance is 0.05. The collector rejects configured compute/storage-limit violations. The work-byte measurement is an endpoint lower bound, **not** peak temporary disk usage; projected quantification time is not total pipeline wall time.
-
-**STOP** if the protocol or resources are unresolved. If anything must change, make the change and rerun affected prerequisites and pilot before accepting.
-
-## K7. Accept the exact pilot and quantify all four libraries
-
-Only after reviewing the report and confirming the authorized resource limits:
+## K5. Quantify all four libraries
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale
 bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-The first scale command only prints a plan. The explicit second command authorizes scale after your manual review and submits it. Expect **nine submitted jobs** from the second command: four quantifications, four dependent parent assignments, and a collector.
-
-Wait for all nine, then:
+Nine jobs perform quantification, parental assignment, and collection.
+When they finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
-ls "$COHORT_DIR/work/Sample_15/complete/fr/"
 less -S "$COHORT_DIR/work/Sample_15/complete/fr/assignment_qc.tsv"
 ```
 
-The example inspection path assumes the reviewed `fr` orientation was retained. If it was changed, use that actual strand directory. Inspect assignment QC for all four libraries, not only Sample_15. Require `quantification: complete`; `scale: authorized` alone is insufficient.
+Expected status: `quantification complete`. Each library has an
+`assignment_qc.tsv` under its configured strand directory.
 
-## K8. Fit the models and inspect the results
+## K6. Fit the models
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" models
 bin/submit_pipeline.sh "$CONFIG" models --submit
 ```
 
-Wait for the **one model job**, then:
+When the model job finishes:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
@@ -450,187 +211,115 @@ less -S "$COHORT_DIR/model_promoter.tsv"
 less -S "$COHORT_DIR/model_pairs.tsv"
 ```
 
-Require `models: complete`. Retain ineligible/deferred statuses rather than treating them as zero effect. Interpret the public contrasts relative to the 2:1 maternal:paternal dosage, not a diploid 1:1 null. The estimated allocations and promoter-coordinate groups are not direct observations of individual jointly parent-and-event-assigned molecules, and they are not by themselves proof of imprinting or conflict.
-
----
+Expected status: `models complete`. Public effects use the 2:1 dosage offset.
 
 # Part 3. Maize B73/W22 — 14 DAP endosperm
 
-## W1. Select the cohort
+## W1. Select the cohort and retrieve RNA/genome
 
 ```bash
-cd "$PROJECT/scripts"
-export COHORT=maize_B73_W22
-export CONFIG="$SCRIPTS_DIR/config/maize_B73_W22.private.yaml"
-export COHORT_DIR="$DATA_ROOT/$COHORT"
+use_cohort maize_B73_W22
+00_setup/preflight.sh "$CONFIG"
+bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-This recipe uses six paired-end ear pools from PRJNA623806:
+This cohort has six paired-end pools from PRJNA623806:
+B73 maternal SRR11509920/SRR11509919/SRR11509910 and W22 maternal
+SRR11509916/SRR11509915/SRR11509914. Compressed RNA totals 18,265,330,625 bytes.
+The supplied strand is `rf` and dosage is 2:1.
 
-- B73 maternal: SRR11509920, SRR11509919, SRR11509910.
-- W22 maternal: SRR11509916, SRR11509915, SRR11509914.
-
-The compressed RNA total is **18,265,330,625 bytes**. Keep the 14 DAP samples separate from the 20 DAP B73/Ki11 cohort.
-
-## W2. Resolve the annotation and parental-marker blockers
-
-**This profile is not reference-ready as supplied.** The B73v4 genome download is specified, but the compatible annotation and prepared parental-marker input are not.
-
-Obtain an approved annotation compatible with `B73_RefGen_v4`, with transcript/exon relationships needed by the existing reference builder. Place the exact approved source at:
-
-`data/maize_B73_W22/reference/source_annotation.gtf`
-
-Do not borrow a differently built annotation or silently switch this cohort to another reference. Its biological suitability requires review, not merely a matching filename.
-
-If the approved source is already available locally, copy it without overwriting an existing project file:
+One retrieval job downloads the configured RNA and B73v4 genome.
+When it finishes:
 
 ```bash
-read -r -p "Full path to the approved B73 RefGen_v4 source annotation: " ANNOTATION_INPUT
+less -S "$COHORT_DIR/resource_receipt.tsv"
+ls -lh "$COHORT_DIR/reference/genome.fa"
+```
+
+## W2. Supply the annotation and markers
+
+Provide a B73 RefGen_v4 annotation with transcript/exon relationships:
+
+```bash
+read -r -p "B73 RefGen_v4 annotation filename: " ANNOTATION_INPUT
 cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
+read -r -p "B73/W22 prepared marker table filename: " MARKER_FILE
+nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
 ```
 
-Verify an existing destination against that approved source; `cp -n` leaves it untouched.
-
-Obtain a real prepared marker table for B73 versus W22 on the same build. Its required columns are:
+The marker table uses one-based positions and columns:
 
 ```text
 chrom	genomic_pos	ref	alt	focal_index	alternate_index
 ```
 
-These are one-based genomic positions, single-base A/C/G/T REF and ALT alleles, and opposite homozygous allele indices: `0` means REF and `1` means ALT. Focal is B73; alternate is W22. Do not create example SNP rows, assume absent variant records mean REF, or substitute imputed genotypes without an approved change of method.
+REF/ALT are single-base A/C/G/T alleles. Focal B73 and alternate W22 have
+opposite homozygous indices, with 0=REF and 1=ALT.
+In `marker_sources.tsv`, enter the source ID, absolute marker-table path,
+and build `B73_RefGen_v4`. The configured adapter is `prepared`.
 
-Put that actual table under this cohort's `reference/` directory. Record its source and derivation locally. Then:
-
-```bash
-read -r -p "Full path to the real approved B73/W22 prepared marker table: " MARKER_FILE
-ls -lh "$MARKER_FILE"
-nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
-nano "$CONFIG"
-```
-
-The marker-source file has the header `source_id`, `path`, `build`. Add a row naming your real source, its actual absolute path, and build **`B73_RefGen_v4`**. Add more rows only if there are real additional sources. Keep `markers.mode: prepared`.
-
-**STOP before reference** if either the approved annotation or the supported marker table is missing. Setting an approval to true does not supply those inputs. You may retrieve the specified public RNA/genome before resolving this blocker, but that does not make reference construction ready.
-
-## W3. Review biological units, protocol, and setup
+Sample settings are in:
 
 ```bash
-less -S "$COHORT_DIR/manifests/maize_B73_W22_sources.tsv"
 nano "$COHORT_DIR/manifests/maize_B73_W22_libraries.tsv"
 nano "$COHORT_DIR/manifests/maize_B73_W22_units.tsv"
-less -S "$COHORT_DIR/manifests/maize_B73_W22_resources.tsv"
-nano "$CONFIG"
 ```
 
-Keep six biological pools and the supplied run-to-library relationships. Confirm independent ear sampling in `cluster_id` and `independence_verified`. The supplied strand is `rf` with `strand_verified=FALSE`. Verify the library protocol; set `strand_verified=TRUE` only with actual protocol evidence. Resolve any orientation disagreement before pilot.
+`cluster_id` records the biological sampling cluster.
 
-Keep B73/W22 parental identities and the normal-endosperm maternal:paternal dosage **2:1**. Confirm the common software availability, storage, scheduler, and public internet approvals. Keep exports off.
-
-## W4. Retrieve the specified RNA and genome
+## W3. Build the reference
 
 ```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-bin/submit_pipeline.sh "$CONFIG" retrieve
-bin/submit_pipeline.sh "$CONFIG" retrieve --submit
-```
-
-Run the submission line only after both preflights and the dry run succeed. Expect **one retrieval job**. Wait for completion and inspect its actual scheduler state and logs.
-
-```bash
-less -S "$COHORT_DIR/resource_receipt.tsv"
-ls -lh "$COHORT_DIR/raw/"
-ls -lh "$COHORT_DIR/reference/"
-```
-
-The supplied resources table downloads the B73v4 genome. It does not obtain an annotation or prepared marker table for you.
-
-## W5. Finish the exact input approvals
-
-When all three real inputs exist:
-
-If this is a new terminal, first set `MARKER_FILE` again to the exact path recorded in the marker-source table.
-
-```bash
-ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-ls -lh "$MARKER_FILE"
-nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
-nano "$CONFIG"
-```
-
-Verify that the configured genome and source annotation are the intended B73 RefGen_v4 files, and that the marker table names the real compatible source. Set `reference.annotation_approved: true` only after annotation/build review and `markers.provenance_approved: true` only after parental-source review. Retain the external-parent limitation where the genotype source is not the original experimental plants.
-
-The marker preparation still validates the actual genome REF and requires at least 99% agreement. It does not repair a mismatched build.
-
-Complete all settings now, then:
-
-```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-```
-
-## W6. Build the reference
-
-```bash
-bin/submit_pipeline.sh "$CONFIG" reference
 bin/submit_pipeline.sh "$CONFIG" reference --submit
 ```
 
-Wait for **three jobs**: reference catalog, markers, and index.
+When the three reference/marker/index jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/annotation_audit.tsv"
-less -S "$COHORT_DIR/markers.tsv"
 ls -lh "$COHORT_DIR/reference/personal.index"
 ```
 
-Require `reference: complete`, successful jobs, and an acceptable annotation audit. Stop on missing assets, genome REF disagreement, or an invalid source table.
+Expected status: `reference complete`.
 
-## W7. Run the pilot and review all six libraries
+## W4. Run the pilot
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" pilot
 bin/submit_pipeline.sh "$CONFIG" pilot --submit
 ```
 
-Wait for **seven jobs**: six pilots and the collector.
+When the seven pilot/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/pilot_report.tsv"
 ```
 
-Require `pilot: complete`. Review every library's strand diagnostics, pseudoalignment fraction, measured elapsed time and peak RSS, index size, projected quantification time, and work-byte lower bound. Defaults are 100,000 fragments for strand diagnostics and a one-million-fragment nonrandom throughput prefix. The selected strand must pass the configured 0.2 pseudoalignment floor and orientation checks, including the 0.05 tolerance where applicable.
+Expected status: `pilot complete`.
 
-Confirm available storage and the authorized budget; endpoint work size is not peak disk demand. If a protocol or resource change is necessary, edit and rerun affected prerequisites/pilot. **Do not accept the previous pilot.**
-
-## W8. Accept and run full quantification
+## W5. Quantify the six libraries
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale
 bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-Expect **13 jobs**: six quantifications, six parent assignments, and a collector. Wait for all to succeed.
+When the 13 quantification/assignment/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/work/BW_endo1/complete/rf/assignment_qc.tsv"
 ```
 
-Use the actual approved strand directory if not `rf`. Inspect assignment QC for all six libraries. Require `quantification: complete`, not only `scale: authorized`.
+Expected status: `quantification complete`.
 
-## W9. Fit and inspect the models
+## W6. Fit the models
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" models
 bin/submit_pipeline.sh "$CONFIG" models --submit
 ```
 
-Wait for **one model job**, then:
+When the model job finishes:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
@@ -639,200 +328,109 @@ less -S "$COHORT_DIR/model_promoter.tsv"
 less -S "$COHORT_DIR/model_pairs.tsv"
 ```
 
-Require `models: complete`. Interpret effects relative to the 2:1 dosage and preserve deferred/ineligible results. This is a separate cohort analysis; do not merge its raw contrast or multiple-testing denominator with B73/Ki11.
-
----
+Expected status: `models complete`.
 
 # Part 4. Mouse Babr/CAST — E7.5 extraembryonic ectoderm
 
-## B1. Select the cohort
+## B1. Select the cohort and retrieve RNA
 
 ```bash
-cd "$PROJECT/scripts"
-export COHORT=mouse_Babr_CAST
-export CONFIG="$SCRIPTS_DIR/config/mouse_Babr_CAST.private.yaml"
-export COHORT_DIR="$DATA_ROOT/$COHORT"
-```
-
-This recipe includes five single-end wild-type extraembryonic ectoderm units:
-
-- Babr maternal: SRR8360867 and SRR8360868.
-- CAST maternal: SRR8360857, SRR8360873, and SRR8360872.
-
-The compressed RNA total is **2,162,452,856 bytes**.
-
-## B2. Resolve the genome, annotation, and MGP source
-
-**The reference inputs are not complete as supplied.** Obtain a mutually compatible, approved GRCm38 genome and annotation. Place the actual uncompressed files at:
-
-- `data/mouse_Babr_CAST/reference/genome.fa`
-- `data/mouse_Babr_CAST/reference/source_annotation.gtf`
-
-Keep `reference.build: GRCm38`. Do not substitute GRCm39 or an annotation on another assembly.
-
-The marker resource is the joint MGP v5 GRCm38 VCF:
-
-`https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`
-
-Its expected project location is:
-
-`data/mouse_Babr_CAST/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`
-
-Open the operational resource file:
-
-```bash
-nano "$COHORT_DIR/manifests/mouse_Babr_CAST_resources.tsv"
-```
-
-The supplied MGP row has `bytes=NA`, `md5=NA`, and `required=FALSE`. **It will not be downloaded in that state.** Choose one of these actual acquisition routes:
-
-1. Obtain its genuine byte count and MD5 from a trusted source record, enter those values, keep the correct URL/destination, and set `required=TRUE` before retrieval; or
-2. Supply an already approved, source-verified copy at the expected local path and leave download disabled for that row.
-
-If using local inputs, use your actual approved paths rather than a guessed location. For example, after obtaining the files, the following prompts copy them into this cohort without overwriting existing files:
-
-```bash
-read -r -p "Full path to the approved uncompressed GRCm38 FASTA: " GENOME_INPUT
-read -r -p "Full path to the approved GRCm38 source annotation: " ANNOTATION_INPUT
-cp -n -- "$GENOME_INPUT" "$COHORT_DIR/reference/genome.fa"
-cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
-```
-
-For the local-VCF route only:
-
-```bash
-read -r -p "Full path to the approved joint MGP v5 GRCm38 VCF.gz: " MGP_INPUT
-cp -n -- "$MGP_INPUT" "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
-```
-
-If a destination already exists, verify it against the approved source; `cp -n` leaves it untouched. Review the actual source records and reference build. **STOP before reference** until all three inputs are real and reviewed.
-
-## B3. Review the Babr proxy, independence, and single-end assumptions
-
-```bash
-less -S "$COHORT_DIR/manifests/mouse_Babr_CAST_sources.tsv"
-nano "$COHORT_DIR/manifests/mouse_Babr_CAST_libraries.tsv"
-nano "$COHORT_DIR/manifests/mouse_Babr_CAST_units.tsv"
-nano "$CONFIG"
-```
-
-The actual focal parent is **`C57BL_6J_Babr`**. The configured marker proxy is **`REFERENCE_C57BL_6J`**, paired with `CAST_EiJ`. It is not a measured Babr genotype and must not be replaced by B6N.
-
-In the YAML, retain `markers.proxy: true` only if you accept this explicit limitation. The example's `proxy_approved` is already true; retain it only after real local approval, and retain an accurate `proxy_reason`. Do not claim the proxy captures Babr-specific variants.
-
-The units table starts with missing `cluster_id` and `independence_verified=FALSE`. Obtain litter/biological sampling information. Fill the actual clusters and set independence true only where justified. Do not assign unique cluster IDs merely to force five independent observations. If independence cannot be established, stop before inferential models; technical processing does not solve the design.
-
-The supplied `unstranded` setting also starts unverified. Review the protocol and set `strand_verified=TRUE` only when supported. Keep layout `SE`.
-
-This recipe uses **one** single-end fragment assumption: `fragment_mean_nt: 250`, `fragment_sd_nt: 50`, and `fragment_parameter_origin: assumed_user_defined`. These are not measurements. Do not describe them as measured or claim robustness across a sensitivity grid; no such grid is run. Keep dosage **1:1** for this diploid tissue.
-
-Confirm all common software, scheduler, storage, resource-limit, and public internet approvals. Keep exports off.
-
-## B4. Retrieve the public RNA and any enabled resource
-
-```bash
+use_cohort mouse_Babr_CAST
 00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-bin/submit_pipeline.sh "$CONFIG" retrieve
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Submit only after both preflights and the dry run succeed. Wait for **one retrieval job** and inspect its actual scheduler state and logs.
+Five single-end wild-type units use Babr maternal SRR8360867/SRR8360868 and
+CAST maternal SRR8360857/SRR8360873/SRR8360872.
+Compressed RNA totals 2,162,452,856 bytes.
+The supplied strand is `unstranded`, dosage is 1:1, and SE fragment
+mean/SD are assumed 250/50 nt.
+
+When the retrieval job finishes:
 
 ```bash
 less -S "$COHORT_DIR/resource_receipt.tsv"
 ls -lh "$COHORT_DIR/raw/"
-ls -lh "$COHORT_DIR/reference/"
 ```
 
-If the MGP row stayed `required=FALSE`, this job did not acquire it. A successful RNA download does not resolve missing genotype or reference assets.
-
-## B5. Record the exact reference and marker identities
+## B2. Supply the GRCm38 reference and joint MGP source
 
 ```bash
-ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-ls -lh "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
+read -r -p "GRCm38 FASTA filename: " GENOME_INPUT
+read -r -p "GRCm38 annotation filename: " ANNOTATION_INPUT
+read -r -p "Joint MGP v5 GRCm38 VCF.gz filename: " MGP_INPUT
+cp -n -- "$GENOME_INPUT" "$COHORT_DIR/reference/genome.fa"
+cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
+cp -n -- "$MGP_INPUT" "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
 nano "$COHORT_DIR/manifests/mouse_Babr_CAST_marker_sources.tsv"
-nano "$CONFIG"
+nano "$COHORT_DIR/manifests/mouse_Babr_CAST_units.tsv"
 ```
 
-Verify the actual joint MGP VCF path in the marker-source table and keep its build `GRCm38`. Review that the genome and annotation are the intended compatible files.
+The joint source is
+`https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`.
+The marker-source row uses the local VCF path and build `GRCm38`.
+Alternatively, enter the publisher's actual bytes/MD5 and `required=TRUE`
+in the resources table to download this source during retrieval.
 
-Set `reference.annotation_approved: true` after the compatibility review, and `markers.provenance_approved: true` after reviewing the joint MGP source and B6J-reference proxy. Retain `markers.mode: mgp`.
+The actual focal parent is `C57BL_6J_Babr`; markers use the
+`REFERENCE_C57BL_6J` proxy and `CAST_EiJ`. This proxy is recorded in the output.
+MGP preparation uses called parental `FI=1` evidence.
+Fill `cluster_id` from the biological/litter sampling records when available.
 
-The existing MGP preparation uses called parental `FI=1` evidence, not a blanket site-PASS rule. Missing records in a variant-only strain file are not inferred as REF; this is why the specified joint source matters.
-
-Finish all settings now and rerun:
-
-```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-```
-
-## B6. Build the reference
+## B3. Build the reference
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" reference
 bin/submit_pipeline.sh "$CONFIG" reference --submit
 ```
 
-Wait for **three jobs**: catalog, markers, and index.
+When the three catalog/marker/index jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/annotation_audit.tsv"
-less -S "$COHORT_DIR/markers.tsv"
 ls -lh "$COHORT_DIR/reference/personal.index"
 ```
 
-Require successful jobs and `reference: complete`. Stop for incompatible annotation, unsupported genotypes, or failed REF agreement.
+Expected status: `reference complete`.
 
-## B7. Run the five-library pilot
+## B4. Run the pilot
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" pilot
 bin/submit_pipeline.sh "$CONFIG" pilot --submit
 ```
 
-Wait for **six jobs**, including the collector.
+When the six pilot/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/pilot_report.tsv"
 ```
 
-Require `pilot: complete`. Review protocol/strand checks, pseudoalignment fraction, elapsed time, peak RSS, index size, projected quantification time, and work-byte lower bound for every library. Confirm the report records the single-end 250/50 assumption and marker-proxy limitation.
+Expected status: `pilot complete`. Reports include the SE fragment parameters
+and marker-proxy metadata.
 
-The one-million-fragment throughput prefixes are nonrandom. Do not treat their performance or callability as a whole-cohort biological result. Endpoint work bytes do not measure peak disk usage. Resolve any protocol/resource failure and rerun affected prerequisites/pilot before accepting.
-
-## B8. Accept the pilot and quantify all five units
+## B5. Quantify the five libraries
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale
 bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-Expect **11 jobs**: five quantifications, five assignments, and a collector. Wait for all.
+When the 11 quantification/assignment/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/work/SRR8360867/complete/unstranded/assignment_qc.tsv"
 ```
 
-Use the actual strand directory if the reviewed protocol changed it. Inspect all five assignment-QC files. Require `quantification: complete`.
+Expected status: `quantification complete`.
 
-## B9. Fit models only with justified biological independence
-
-Recheck that the units table has genuine cluster/independence evidence, not convenience labels. If it is unresolved, stop here. If resolving it changes a manifest after pilot, rerun the affected stages first.
+## B6. Fit the models
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" models
 bin/submit_pipeline.sh "$CONFIG" models --submit
 ```
 
-Wait for **one model job**, then:
+When the model job finishes:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
@@ -841,185 +439,108 @@ less -S "$COHORT_DIR/model_promoter.tsv"
 less -S "$COHORT_DIR/model_pairs.tsv"
 ```
 
-Require `models: complete`, and distinguish eligible results from design/depth failures. Retain the Babr proxy, assumed fragment distribution, small biological sample, and tissue-mixture limitations in any interpretation.
-
----
+Expected status: `models complete`. Missing or shared cluster IDs produce
+`independence_unresolved` descriptive results.
 
 # Part 5. Mouse FVB/CAST — E12.5 placenta
 
-## F1. Select the cohort
+## F1. Select the cohort and retrieve RNA
 
 ```bash
-cd "$PROJECT/scripts"
-export COHORT=mouse_FVB_CAST_E12
-export CONFIG="$SCRIPTS_DIR/config/mouse_FVB_CAST_E12.private.yaml"
-export COHORT_DIR="$DATA_ROOT/$COHORT"
-```
-
-This recipe uses four female paired-end placenta units from GSE75957 / PRJNA305855 / SRP067322:
-
-- CAST maternal: SRR3085950 and SRR3085951, libraries `Pl_E12_5_CF_1` and `Pl_E12_5_CF_2`.
-- FVB maternal: SRR3085952 and SRR3085953, libraries `Pl_E12_5_FC_1` and `Pl_E12_5_FC_2`.
-
-The compressed RNA total is **22,013,620,572 bytes**. E16.5 runs SRR3085954–SRR3085957 are **not** extra E12.5 replicates; do not add them here.
-
-## F2. Resolve the compatible reference and MGP resource
-
-**The profile needs approved GRCm38 genome/annotation inputs and a completed MGP source.** Obtain mutually compatible GRCm38 files and put them at:
-
-- `data/mouse_FVB_CAST_E12/reference/genome.fa`
-- `data/mouse_FVB_CAST_E12/reference/source_annotation.gtf`
-
-For actual local approved sources:
-
-```bash
-read -r -p "Full path to the approved uncompressed GRCm38 FASTA: " GENOME_INPUT
-read -r -p "Full path to the approved GRCm38 source annotation: " ANNOTATION_INPUT
-cp -n -- "$GENOME_INPUT" "$COHORT_DIR/reference/genome.fa"
-cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
-nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_resources.tsv"
-```
-
-Verify any existing destination against its approved source because `cp -n` does not overwrite it.
-
-The resource table names:
-
-`https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`
-
-The row currently has unknown bytes/MD5 and `required=FALSE`. It will be **skipped**, not automatically resolved. Either:
-
-1. Obtain genuine source size and MD5, fill `bytes` and `md5`, and set `required=TRUE`; or
-2. Supply the approved joint VCF locally at the configured destination and leave that download disabled.
-
-For the second route only:
-
-```bash
-read -r -p "Full path to the approved joint MGP v5 GRCm38 VCF.gz: " MGP_INPUT
-cp -n -- "$MGP_INPUT" "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
-```
-
-Do not use separate variant-only files to infer absent parental calls as REF. Keep the joint v5 GRCm38 source. **STOP before reference** if any required real input or source evidence is missing.
-
-## F3. Verify litter independence and the library protocol
-
-```bash
-less -S "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_sources.tsv"
-nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_libraries.tsv"
-nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_units.tsv"
-nano "$CONFIG"
-```
-
-Keep four E12.5 units, two per reciprocal direction. The supplied units have `cluster_id=NA` and `independence_verified=FALSE`. Obtain actual litter/biological sampling records. Fill cluster identities and independence approvals only when supported. Multiple placentas from one litter cannot be made independent by assigning new IDs.
-
-The libraries are `PE`, supplied `rf`, initially unverified. Confirm orientation from protocol evidence, then set `strand_verified=TRUE`. Paired-end quantification does **not** use the YAML's single-end fragment mean/SD.
-
-Keep the configured FVB_NJ and CAST_EiJ MGP sample identities and actual maternal/paternal labels. Keep diploid dosage **1:1**. This is not the Babr proxy analysis.
-
-Confirm common software availability, local filesystem, scheduler, resource-limit, and internet approvals. Leave exports off.
-
-## F4. Retrieve the public RNA and any enabled resources
-
-```bash
+use_cohort mouse_FVB_CAST_E12
 00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-bin/submit_pipeline.sh "$CONFIG" retrieve
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Submit only after both preflights and dry run succeed. Wait for **one retrieval job**, inspect its actual logs and scheduler state, then:
+Four female paired-end placenta units come from GSE75957 / PRJNA305855 / SRP067322:
+CAST maternal SRR3085950/SRR3085951 (`Pl_E12_5_CF_1/2`) and
+FVB maternal SRR3085952/SRR3085953 (`Pl_E12_5_FC_1/2`).
+Compressed RNA totals 22,013,620,572 bytes.
+The supplied strand is `rf` and dosage is 1:1.
+
+When the retrieval job finishes:
 
 ```bash
 less -S "$COHORT_DIR/resource_receipt.tsv"
 ls -lh "$COHORT_DIR/raw/"
-ls -lh "$COHORT_DIR/reference/"
 ```
 
-If the MGP row remained `required=FALSE`, it was not downloaded. Confirm the locally supplied VCF exists before continuing.
-
-## F5. Review and approve the actual sources
+## F2. Supply the GRCm38 reference and joint MGP source
 
 ```bash
-ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-ls -lh "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
+read -r -p "GRCm38 FASTA filename: " GENOME_INPUT
+read -r -p "GRCm38 annotation filename: " ANNOTATION_INPUT
+read -r -p "Joint MGP v5 GRCm38 VCF.gz filename: " MGP_INPUT
+cp -n -- "$GENOME_INPUT" "$COHORT_DIR/reference/genome.fa"
+cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
+cp -n -- "$MGP_INPUT" "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
 nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_marker_sources.tsv"
-nano "$CONFIG"
+nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_units.tsv"
 ```
 
-Verify that the marker-source table names the real approved joint VCF. Keep build `GRCm38` and review the genome/annotation compatibility.
+The joint source is
+`https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`.
+Use build `GRCm38` and the local VCF path in the marker-source table.
+For public acquisition of this VCF, fill its actual publisher bytes/MD5
+and set `required=TRUE` in the resources table.
 
-Set `reference.annotation_approved: true` only after compatibility review. Set `markers.provenance_approved: true` only after reviewing the joint MGP v5 source and FVB_NJ/CAST_EiJ genotype identities. Keep `markers.mode: mgp`. The existing preparation uses called parental `FI=1` evidence and checks genome REF agreement; it does not require every joint site to be blanket PASS.
+The configured MGP samples are `FVB_NJ` and `CAST_EiJ`, using called `FI=1`
+parental evidence. Enter actual litter/biological clusters in `cluster_id`
+when available.
 
-Finish all settings and independence/protocol decisions now. Then:
+## F3. Build the reference
 
 ```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-```
-
-## F6. Build the reference and index
-
-```bash
-bin/submit_pipeline.sh "$CONFIG" reference
 bin/submit_pipeline.sh "$CONFIG" reference --submit
 ```
 
-Wait for **three jobs**: reference catalog, markers, and index.
+When the three reference/marker/index jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/annotation_audit.tsv"
-less -S "$COHORT_DIR/markers.tsv"
 ls -lh "$COHORT_DIR/reference/personal.index"
 ```
 
-Require successful jobs, acceptable annotation audit, and `reference: complete`.
+Expected status: `reference complete`.
 
-## F7. Run and inspect the four-library pilot
+## F4. Run the pilot
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" pilot
 bin/submit_pipeline.sh "$CONFIG" pilot --submit
 ```
 
-Wait for **five jobs**, including the collector.
+When the five pilot/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/pilot_report.tsv"
 ```
 
-Require `pilot: complete`. Review all four libraries' strand checks, pseudoalignment, measured elapsed time/peak RSS, index size, projected quantification time, and work-byte lower bound. Defaults use 100,000-fragment strand diagnostics and a one-million-fragment nonrandom throughput prefix per library.
+Expected status: `pilot complete`.
 
-Confirm the approved resources can accommodate the actual measurements and projected work. Peak temporary storage is not measured by the endpoint work-byte lower bound. After a strand or resource change, rerun affected prerequisites and the pilot before proceeding.
-
-## F8. Accept the exact report and run full quantification
+## F5. Quantify all four libraries
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale
 bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-Expect **nine jobs**: four quantifications, four assignments, and one collector. Wait for all:
+When the nine quantification/assignment/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/work/Pl_E12_5_CF_1/complete/rf/assignment_qc.tsv"
 ```
 
-Use the actual strand directory if different. Inspect assignment QC for every library. Require `quantification: complete`, not only scale authorization.
+Expected status: `quantification complete`.
 
-## F9. Fit and inspect models only after independence is justified
-
-If litter independence remains unresolved, stop before modeling; retain that limitation explicitly. Any late manifest change requires rerunning affected stages.
+## F6. Fit the models
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" models
 bin/submit_pipeline.sh "$CONFIG" models --submit
 ```
 
-Wait for **one model job**, then:
+When the model job finishes:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
@@ -1028,357 +549,176 @@ less -S "$COHORT_DIR/model_promoter.tsv"
 less -S "$COHORT_DIR/model_pairs.tsv"
 ```
 
-Require `models: complete`. Preserve ineligible or deferred rows. These four female E12.5 placenta units do not support claims about E16.5, males, or placenta cell types separately.
-
----
+Expected status: `models complete`. Missing or shared cluster IDs produce
+`independence_unresolved` descriptive results.
 
 # Part 6. Human GUSTO — private trio-linked placenta analysis
 
-## H1. Select the cohort and keep it local
+## H1. Select the cohort and check tools
 
 ```bash
-cd "$PROJECT/scripts"
-export COHORT=GUSTO
-export CONFIG="$SCRIPTS_DIR/config/GUSTO.private.yaml"
-export COHORT_DIR="$DATA_ROOT/$COHORT"
+use_cohort GUSTO
+00_setup/preflight.sh "$CONFIG"
 ```
 
-**All supplied GUSTO tables contain headers only. There is no actual sample count or analysis denominator yet.** Do not infer participants from filenames or use another cohort's links. Do not run public retrieval for human data.
+The supplied human tables contain headers. Populate them with the actual
+local RNA, genotype, sample, trio, and covariate records.
 
-Work only in approved private storage. Do not transfer participant-level tables, identifiers, logs, counts, genotype files, personalized references/indexes, receipts, or review candidates outside the approved environment.
-
-## H2. Assemble the real private inputs and verified identity crosswalk
-
-Using your authorized local records, identify:
-
-1. The exact RNA FASTQ files and lane/run grouping for each library.
-2. The child, mother, father, and family identities.
-3. Independent RNA/DNA identity QC and pedigree/genotype QC.
-4. One independently selected primary RNA library per child and one selected child per family.
-5. The typed trio VCF and the separate personalization VCF.
-6. The prespecified covariates and their verified links to the RNA samples.
-
-Place the actual RNA files under `data/GUSTO/raw/`, the typed VCF at `data/GUSTO/private/typed.vcf.gz`, and personalization VCF at `data/GUSTO/private/personalization.vcf.gz`, or explicitly update the corresponding private configuration paths to approved exact locations. Keep all cohort-owned inputs under the stated project data layout.
-
-If the approved VCFs still need copying into this layout, use their real paths:
-
-```bash
-read -r -p "Full path to the approved typed trio VCF.gz: " TYPED_INPUT
-read -r -p "Full path to the approved personalization VCF.gz: " PERSONAL_INPUT
-cp -n -- "$TYPED_INPUT" "$COHORT_DIR/private/typed.vcf.gz"
-cp -n -- "$PERSONAL_INPUT" "$COHORT_DIR/private/personalization.vcf.gz"
-ls -lh "$COHORT_DIR/private/typed.vcf.gz" "$COHORT_DIR/private/personalization.vcf.gz"
-```
-
-Compare those exact project files with the approved source records. Existing destinations are not replaced by `cp -n`. For RNA, copy only files in the verified crosswalk, keeping mate identities intact; do not use a guessed wildcard over a private directory. If a file needs copying:
-
-```bash
-read -r -p "Full path to one verified RNA FASTQ.gz: " RNA_INPUT
-read -r -p "Approved destination filename within GUSTO/raw, including .fastq.gz: " RNA_NAME
-cp -n -- "$RNA_INPUT" "$COHORT_DIR/raw/$RNA_NAME"
-ls -l "$COHORT_DIR/raw/$RNA_NAME"
-md5sum "$COHORT_DIR/raw/$RNA_NAME"
-```
-
-Repeat for each actual mate/run file and record these exact destinations in `GUSTO_sources.tsv`. Confirm that each copy's size and checksum match its approved source before relying on it.
-
-Do not overwrite files merely because their names resemble an example. The typed VCF supplies mother/father/child anchor evidence. The personalization VCF is a separate input; imputed personalization information must not replace typed parental anchor evidence.
-
-**STOP** if the identity crosswalk, genotype QC, authorized access, or file provenance is missing. This package does not establish those links by guessing filenames.
-
-## H3. Populate the three linked RNA/sample tables
-
-Open the actual operational tables:
+## H2. Populate the input tables
 
 ```bash
 nano "$COHORT_DIR/manifests/GUSTO_sources.tsv"
 nano "$COHORT_DIR/manifests/GUSTO_libraries.tsv"
 nano "$COHORT_DIR/manifests/GUSTO_units.tsv"
-```
-
-### In `GUSTO_sources.tsv`
-
-Keep these columns:
-
-```text
-run_id	sample_id	layout	url_1	url_2	md5_1	md5_2	bytes_1	bytes_2	read_count	local_1	local_2
-```
-
-Add one row per actual sequencing run/lane group:
-
-- `run_id`: unique, stable run identifier.
-- `sample_id`: exact library identifier used in the next table.
-- `layout`: `PE` or `SE`, matching the real data.
-- `local_1` and `local_2`: exact absolute paths to the actual mate files; mate 2 is absent for SE.
-- `bytes_1`/`bytes_2` and `md5_1`/`md5_2`: actual local file sizes and checksums.
-- `read_count`: actual complete-file read count in the source-table convention; PE totals count both mates, and the pilot projection divides that total by two to obtain fragments. SE totals are reads/fragments. Do not enter a prefix count or a guessed ENA-like total.
-- Keep URL fields empty where there is no public source; human data are not fetched through public retrieval.
-
-Obtain read counts and the required download-table fields from verified local sequencing/QC records or an approved full-file check. Several run rows can point to one `sample_id`; they must not become extra independent libraries.
-
-### In `GUSTO_libraries.tsv`
-
-Keep:
-
-```text
-sample_id	unit_id	child_id	identity_verified	layout	strand_mode	strand_verified
-```
-
-Add one row per primary library:
-
-- `sample_id` matches its source rows.
-- `unit_id` links to the biological unit table.
-- `child_id` matches the exact genotype/pedigree identifier.
-- `identity_verified=TRUE` only after independent RNA/DNA identity QC.
-- `layout` matches all runs in that library.
-- `strand_mode` is the protocol-supported `fr`, `rf`, or `unstranded`.
-- `strand_verified=TRUE` only after protocol review.
-
-If any library is SE, the YAML must contain one finite positive fragment mean and SD and an honest `fragment_parameter_origin` (`measured` or `assumed_user_defined`). Do not label assumed 250/50 values as measured. PE libraries receive no SE fragment arguments.
-
-### In `GUSTO_units.tsv`
-
-Keep:
-
-```text
-unit_id	cluster_id	independence_verified	maternal_parent	paternal_parent	stage	tissue
-```
-
-Add one row per selected biological unit. Link `unit_id` exactly to the library table. Use the actual family/independence cluster, not the sequencing run. Record actual stage, tissue, and maternal/paternal identities consistently with the verified trio records. Set `independence_verified=TRUE` only after the one-child-per-family selection and biological independence review.
-
-Identifiers used for run/sample/unit keys must use letters, numbers, underscores, periods, or hyphens. Keep one primary library per unit; do not use extra lanes as new units.
-
-## H4. Populate pedigree and covariate tables
-
-```bash
 nano "$COHORT_DIR/manifests/GUSTO_trios.tsv"
 nano "$COHORT_DIR/manifests/GUSTO_covariates.tsv"
 nano "$CONFIG"
 ```
 
-`GUSTO_trios.tsv` requires:
+| Table | Contents |
+|---|---|
+| Sources | One row per run/lane group; `run_id`, `sample_id`, layout, local FASTQ mate paths, bytes/MD5, and full-file read count |
+| Libraries | `sample_id`, `unit_id`, `child_id`, `layout`, `strand_mode` |
+| Units | `unit_id`, `cluster_id`, maternal/paternal IDs, stage, tissue |
+| Trios | `child_id`, `mother_id`, `father_id`, `family_id` |
+| Covariates | `sample_id` plus the columns named in `models.covariates` |
+
+Use one primary library per child and one selected child per family.
+PE `read_count` counts both mates; the projection converts it to fragments.
+Source URLs can be empty for local human files.
+The strand setting is `fr`, `rf`, or `unstranded`. SE libraries use the
+configured fragment mean/SD and origin.
+
+Set `paths.typed_vcf` to the typed trio VCF and `paths.personalization_vcf`
+to the separate personalization VCF. The default destinations are:
 
 ```text
-child_id	mother_id	father_id	family_id
+data/GUSTO/private/typed.vcf.gz
+data/GUSTO/private/personalization.vcf.gz
 ```
 
-Add the verified trio for each selected child. The child, mother, and father IDs must be distinct and must identify the actual corresponding genotype samples. Keep one selected child per family and no duplicate child rows.
+Typed mother/father/child genotypes supply parental anchors. Center numeric
+covariates for the configured model.
 
-`GUSTO_covariates.tsv` starts with `sample_id`. Add the **approved covariate columns** and one correctly linked row per selected RNA sample. Center numeric covariates as required by the approved model; do not add post hoc covariates because they improve a result.
+## H3. Use the existing human references
 
-In the YAML:
+The configuration already points to these source files:
 
-- Put the exact approved column names in `models.covariates`. An empty list means a deliberately reviewed no-covariate model, not “unknown.”
-- Set `human.covariates_approved: true` only after approving the model list, centered values, complete linked rows, and design.
-- Set `human.genotype_qc_approved: true` only after actual genotype/pedigree QC.
-- Keep dosage **1:1**, with the diploid-tissue review.
-- Leave exports disabled.
-
-Do not fill the public `GUSTO_marker_sources.tsv` with invented shared parental markers. Human anchors are prepared per child from typed trio evidence, not from a public fixed pair of strains. The resource table can remain header-only when no downloads are required.
-
-## H5. Verify the exact existing human references
-
-Keep these two read-only source references:
-
-**Genome FASTA**
-
-`/rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta`
-
-**HPLRv2 annotation**
-
-`/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf`
-
-The configured GTF is on `/rsrch9`, not `/rsrch5`. Do not invent a different GTF path to make both references appear to reside on one filesystem.
-
-Check the actual files:
-
-```bash
-ls -lh \
-  /rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta \
-  /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf
-nano "$CONFIG"
+```text
+/rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta
+/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf
 ```
 
-**STOP** if either file is missing, empty, unreadable, or not the intended reference. Resolve the path/build mismatch before proceeding.
+Build is `GRCh38`. Reference preparation copies the genome into the cohort
+directory and writes derived references there.
 
-Keep `reference.build: GRCh38`, `reference.genome_source` pointing to the shared FASTA, `paths.genome` pointing to this cohort's `reference/genome.fa`, and `paths.annotation` pointing to the exact shared HPLRv2 GTF. The reference job copies the shared genome into the project before indexing; it must not write an index beside the shared source.
-
-If a project `reference/genome.fa` already exists, confirm it is the intended shared genome; the reference job does not blindly replace it. Move aside an incorrect project copy only after confirming no active jobs use it. Set `reference.annotation_approved: true` only after confirming the intended HPLRv2/GRCh38 combination.
-
-## H6. Complete preflight before scheduling
-
-Finish the common software availability, scheduler, storage, resources, and all private table/model decisions before reference. Confirm that no human sample identifiers or paths have been placed in public documents.
+## H4. Build the catalog and child indices
 
 ```bash
-00_setup/preflight.sh "$CONFIG"
-00_setup/preflight.sh "$CONFIG" --execute
-```
-
-Both must succeed. The initially empty GUSTO tables would fail; a successful preflight now means the required metadata and environment checks passed. It is not a replacement for independent RNA/DNA/genotype QC and does not certify every biological input.
-
-**There is no human `retrieve` step.**
-
-## H7. Build the shared catalog and every selected child's index
-
-```bash
-bin/submit_pipeline.sh "$CONFIG" reference
 bin/submit_pipeline.sh "$CONFIG" reference --submit
 ```
 
-For **n selected libraries**, expect **1 + 2n jobs**: one shared reference catalog, one typed/personalization preparation per child/library, and one personalized index per child/library.
-
-Wait for every job and inspect the actual `.submitted.tsv` record and LSF logs, not just the shared reference job.
+For n libraries, this submits 1 + 2n jobs: one catalog and preparation/index
+jobs for each child. When all finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
 less -S "$COHORT_DIR/annotation_audit.tsv"
-read -r -p "Actual sample_id from GUSTO_libraries.tsv to inspect: " SAMPLE_ID
-ls -lh "$COHORT_DIR/private/$SAMPLE_ID/personal.fa" "$COHORT_DIR/private/$SAMPLE_ID/personal.index"
-ls -lh "$COHORT_DIR/receipts/$SAMPLE_ID/child.rds" "$COHORT_DIR/receipts/$SAMPLE_ID/human.rds"
+read -r -p "sample_id to inspect: " SAMPLE_ID
+ls -lh "$COHORT_DIR/private/$SAMPLE_ID/personal.index"
 ```
 
-Repeat the child/index checks for **every selected library**. Shared `reference: complete` does not alone certify the child indexes; their jobs and receipts are required before pilot.
+Expected status: `reference complete`, with completed child/index jobs.
 
-## H8. Run and inspect all human library pilots
+## H5. Run the pilot
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" pilot
 bin/submit_pipeline.sh "$CONFIG" pilot --submit
 ```
 
-Expect **n + 1 jobs**, including the collector. Wait for all.
+When the n + 1 pilot/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/pilot_report.tsv"
 ```
 
-Require `pilot: complete`. Review every selected library's strand evidence, pseudoalignment fraction, elapsed time/peak RSS, child-index size, projected quantification time, and work-byte lower bound. Keep all reports local.
+Expected status: `pilot complete`.
 
-The default diagnostics use 100,000 fragments per strand and a one-million-fragment nonrandom throughput prefix per library. A completed technical pilot is not a human association result or a sample-size guarantee. Endpoint work bytes underestimate peak storage; projected quantification time excludes other pipeline work.
-
-If protocol, covariates, sample links, software, or resources need changing, make the approved correction and rerun affected prerequisites and pilot. Review the new pilot after those reruns.
-
-## H9. Accept the report and run full private quantification
-
-Only after local resource review:
+## H6. Quantify the libraries
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale
 bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-Expect **2n + 1 jobs**: quantification and dependent parent assignment for each library, plus a collector. Wait for all.
+When the 2n + 1 quantification/assignment/collector jobs finish:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
-less -S "$COHORT_DIR/status.tsv"
-read -r -p "Actual sample_id whose assignment QC you will inspect: " SAMPLE_ID
-read -r -p "That library's approved strand (fr, rf, or unstranded): " STRAND_MODE
+read -r -p "sample_id to inspect: " SAMPLE_ID
+read -r -p "Configured strand (fr, rf, unstranded): " STRAND_MODE
 less -S "$COHORT_DIR/work/$SAMPLE_ID/complete/$STRAND_MODE/assignment_qc.tsv"
 ```
 
-Inspect every library's assignment QC and require `quantification: complete`. Scale authorization alone is not completion. Keep private outputs and receipts in the approved environment.
+Expected status: `quantification complete`.
 
-## H10. Fit the human promoter models
+## H7. Fit the promoter models
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" models
 bin/submit_pipeline.sh "$CONFIG" models --submit
 ```
 
-Wait for **one model job**, then:
+When the model job finishes:
 
 ```bash
 bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$COHORT_DIR/model_promoter.tsv"
 less -S "$COHORT_DIR/model_pairs.tsv"
-less -S "$COHORT_DIR/model_gene.tsv"
 ```
 
-Require `models: complete`. A successfully completed model job can still report no eligible promoter comparisons. Do not turn ineligible or absent results into zero effects.
+Expected status: `models complete`. Human gene output records
+`deferred_unimplemented`.
 
-The existing human model requires, per comparison:
+## H8. Optional aggregate export
 
-- At least depth 20 for each event.
-- At least ten paired families.
-- At least three maternal-REF and three maternal-ALT families at each sentinel.
-- A full-rank model with at least five residual degrees of freedom after the approved covariates.
-
-It fits a natural-log paired-promoter contrast with cis orientation and approved centered covariates. Only an exactly equal/opposite redundant cis term is removed. Inference uses HC3 t statistics and 2,000 family bootstraps, seed 1147, with at least 90% valid bootstraps required. The configured q ≤ 0.05 and absolute contrast ≥ log(2) flag is **conditional discordance**, not definitive imprinting.
-
-`model_gene.tsv` is deliberately a `deferred_unimplemented` status for human gene modeling, not a table of human gene findings. Whole-gene/masking and TE comparisons are deferred; this run does not silently provide them.
-
-## H11. Optional: prepare a separately reviewed aggregate release
-
-**Do not do this as part of ordinary analysis.** Keep `GUSTO.private.yaml` fixed. First verify the completed analysis receipts, private result integrity, and eligibility. The release scripts check aggregate schema and policy; they do not independently validate the entire analysis history or compare candidate bytes with a previously reviewed copy.
-
-Obtain the institution's approved disclosure policy, actual integer minimum cell size, complementary-suppression review, and authorization to prepare aggregates. There is no universal default threshold supplied here.
-
-Create a separate release configuration without replacing an existing one:
+Set `exports.min_cell` to the positive integer threshold for aggregate output.
+Prepare the candidate:
 
 ```bash
-export RELEASE_CONFIG="$SCRIPTS_DIR/config/GUSTO.release.private.yaml"
-if [[ ! -e "$RELEASE_CONFIG" ]]; then
-  cp -- "$CONFIG" "$RELEASE_CONFIG"
-fi
-nano "$RELEASE_CONFIG"
-```
-
-Keep the same analysis/result paths. Edit only the release configuration's `exports` section:
-
-1. Set `policy_approved: true` only after the local policy approval.
-2. Set `min_cell` to the actual locally approved positive integer.
-3. Keep `enabled: false` while preparing the review candidate.
-
-Create the local candidate:
-
-```bash
-bin/Rscript_sif 07_exports/prepare_candidate.R "$RELEASE_CONFIG"
+nano "$CONFIG"
+bin/Rscript_sif 07_exports/prepare_candidate.R "$CONFIG"
 less -S "$COHORT_DIR/candidate.tsv"
-ls -lh "$COHORT_DIR/candidate.tsv"
 ```
 
-The candidate remains private. Review its exact contents and possible complementary disclosure against other releasable tables. Do not assume threshold filtering alone proves disclosure safety.
-
-After the actual reviewer approves this exact candidate, edit the release configuration:
+Set `exports.enabled: true`, then write the aggregate file:
 
 ```bash
-nano "$RELEASE_CONFIG"
-```
-
-Enter:
-
-- `review_token`: the real local approval/review identifier.
-- `complementary_suppression_reviewed: true`: only after that review.
-- `enabled: true`: only when local release-file creation is authorized.
-
-Then:
-
-```bash
-bin/Rscript_sif 07_exports/release_aggregates.R "$RELEASE_CONFIG"
+nano "$CONFIG"
+bin/Rscript_sif 07_exports/release_aggregates.R "$CONFIG"
 less -S "$COHORT_DIR/approved_exports/promoter_aggregates.tsv"
 ```
 
-This writes the locally approved aggregate file. It does **not** authorize transfer, publication, or release of the private candidate or underlying participant-level material. Follow the institution's separate transfer/publication process.
+Export validates eligible model status, annotation identities, allowed columns,
+and the cell/family threshold.
 
----
+# Part 7. Results
 
-# Part 7. What to conclude — and what not to conclude
+| File | Contents |
+|---|---|
+| `annotation_audit.tsv` | Reference and transcript checks |
+| `events.tsv`, `pairs.tsv` | Promoter groups and comparisons |
+| `pilot_report.tsv` | Per-library diagnostics, measured usage, runtime projection |
+| `assignment_qc.tsv` | Coordinate and parental-assignment status by library |
+| `model_gene.tsv`, `model_promoter.tsv` | Effect estimates, uncertainty, q-values, eligibility status |
+| `model_pairs.tsv` | Paired observations used by the model |
 
-After any recipe, the practical endpoint is a successful model job **plus** `models: complete`, with the input provenance, pilot review, assignment QC, eligibility statuses, and biological design limitations retained.
+Primary promoter groups use fixed-anchor 50-bp windows; 25/100-bp catalogs are
+also written. Public models use coverage-selected sentinels, dosage-adjusted
+log2 ratios, and reciprocal-cross orientation. Missing parental evidence is NA.
 
-The package's existing analysis rules remain unchanged:
-
-1. Missing parental evidence stays missing (`NA`), not zero. An uncallable event is not evidence of balanced expression.
-2. Assignment uses same-event, same-genomic-locus expected allocations. SNP rows are not independent RNA molecules.
-3. Sentinel and promoter-pair selection uses coverage rather than observed imbalance across all units. The configured depth threshold is 20.
-4. The primary promoter grouping is fixed-anchor 50 bp, with 25/100 bp structural alternatives and first-donor compatibility; it is not a transitive chain of nearby starts.
-5. Public models use `log2((M + 0.5)/(P + 0.5))` minus the log2 dosage ratio, with an unweighted intercept and reciprocal orientation term. Both directions, model rank, positive residual degrees of freedom, and justified independence matter.
-6. A single cross direction cannot separate strain/cis effects from parent of origin. A technical replicate does not fix that problem.
-7. Multiple-testing adjustment stays separate by cohort, stage, species, and endpoint. Do not combine raw counts or q-value denominators across these recipes.
-8. Maternal seed-coat, decidual, blood, or other tissue admixture; cis effects; parental proxies; and cellular composition can affect interpretation. The package does not eliminate them by completing successfully.
-9. Expected allocations and promoter-coordinate contrasts are candidate signals. They are not, alone, definitive imprinting or evidence that intragenomic conflict caused the signal.
-
-If all requested stages are complete, keep the analysis configuration and operational manifests fixed with their receipts. For a later approved change, document the change and rerun the affected stages and their dependents rather than modifying completed outputs by hand.
+Human promoter models use natural-log contrasts, cis orientation, and configured
+covariates. Eligibility requires depth ≥20, ≥10 families, ≥3 maternal-REF and
+maternal-ALT orientations at both sentinels, and ≥5 residual degrees of freedom.
+Inference uses HC3 t statistics and 2,000 family bootstraps, seed 1147, with
+≥90% valid fits. The q≤0.05 and absolute contrast≥log(2) flag denotes conditional
+discordance.

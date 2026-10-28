@@ -1,5 +1,5 @@
 #!/bin/bash
-# Every checked-in LSF stage enters here; native plans execute only on the host.
+# Run an LSF stage and its native host commands.
 set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
@@ -14,7 +14,7 @@ bootstrap="$("$rs" "$ROOT/runtime.R" "$CONFIG" "$stage" bootstrap "$sample" unus
 IFS=$'\t' read -r job lock <<< "$bootstrap"
 [[ -d "$job" && -n "$lock" ]] || { printf 'Invalid worker bootstrap\n' >&2; exit 1; }
 if ! mkdir "$lock" 2>/dev/null; then
-  printf 'Stage/library locked: %s. Inspect owner and active jobs; do not auto-delete.\n' "$lock" >&2; exit 1
+  printf 'Stage/library locked: %s. Owner details: %s/owner\n' "$lock" "$lock" >&2; exit 1
 fi
 printf 'pid=%s job=%s host=%s\n' "$$" "${LSB_JOBID:-local}" "$(hostname)" > "$lock/owner"
 cleanup() { rm -f "$lock/owner"; rmdir "$lock"; }

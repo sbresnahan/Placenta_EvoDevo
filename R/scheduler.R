@@ -27,9 +27,7 @@ submit_stage <- function(c,root,stage,submit=FALSE,dependency="none") {
     cat("DRY RUN ONLY\n",paste(shQuote(c$tools$bsub),paste(vapply(args,shQuote,character(1)),collapse=" "),
       "<",shQuote(script)),"\n");return(invisible(script))
   }
-  if(!isTRUE(c$lsf$memory_units_verified)||!isTRUE(c$lsf$memory_per_job_verified)||
-    !isTRUE(c$lsf$execution_environment_verified))stop("LSF memory/environment attestation required")
-  preflight_v2(c,root,execution=TRUE)
+  validate_inputs_v2(c,root,execution=TRUE)
   if(!file.exists(c$tools$bsub))stop("Configured bsub is not visible")
   if(isTRUE(c$execution$container_enabled)&&!file.exists(c$execution$image))stop("Container image missing")
   for(k in c("job_stdout","job_stderr"))ensure_parent(p(k))

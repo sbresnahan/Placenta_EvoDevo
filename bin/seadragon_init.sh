@@ -1,6 +1,6 @@
 #!/bin/bash
 # Source in a host subprocess, never inside the R container.
-POE_ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR to the repository root before bsub}"
+POE_ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR to the scripts directory}"
 POE_SITE_FILE="${POE_SITE_FILE:-${POE_ROOT}/config/seadragon.sh}"
 export POE_SITE_FILE SCRIPTS_DIR
 [[ -f "$POE_SITE_FILE" ]] || { printf 'Missing site file: %s\n' "$POE_SITE_FILE" >&2; return 1; }
