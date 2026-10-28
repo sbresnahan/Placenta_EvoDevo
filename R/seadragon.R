@@ -89,7 +89,7 @@ plan_line <- function(tool,args,stdout=NULL,stderr=NULL) {
 }
 write_plan <- function(lines,job,name="native") {
   p<-file.path(job,paste0(name,".sh"))
-  writeLines(c("#!/bin/bash","set -euo pipefail","umask 077",lines),p)
+  writeLines(c("#!/bin/bash","set -eo pipefail","umask 077",lines),p)
   p
 }
 sample_manifest <- function(c,sample) {

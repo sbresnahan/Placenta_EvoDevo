@@ -1,6 +1,6 @@
 #!/bin/bash
 # R prepares/validates the graph inside its container; bsub runs on the HOST.
-set -euo pipefail
+set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR to the repository root}"
 output="$("$ROOT/bin/Rscript_sif" "$ROOT/run_pipeline.R" "$@")"

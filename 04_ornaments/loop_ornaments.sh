@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 # xQTL-style loop interface: driver submits one checked-in worker per library.
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR}"
 CONFIG="${1:?Absolute CONFIG required}"; STAGE="${2:-pilot}"; shift; [[ $# -eq 0 ]] || shift

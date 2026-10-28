@@ -1,6 +1,6 @@
 #!/bin/bash
 # Every checked-in LSF stage enters here; native plans execute only on the host.
-set -euo pipefail
+set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
 CONFIG="${CONFIG:-${2:-}}"

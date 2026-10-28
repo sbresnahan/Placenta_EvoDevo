@@ -10,7 +10,7 @@
 #BSUB -W 3:00
 #BSUB -o /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/collect_pilot.%J.out
 #BSUB -e /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/collect_pilot.%J.err
-set -euo pipefail
+set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
 exec "$ROOT/bin/run_worker.sh" 'collect-pilot' "$@"

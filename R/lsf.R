@@ -70,7 +70,7 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none") {
   if(submit) {
     ensure_parent(hostplan)
     inventory<-paste0(registry,".native.tsv")
-    hostlines<-c("#!/bin/bash","set -euo pipefail","umask 077",
+    hostlines<-c("#!/bin/bash","set -eo pipefail","umask 077",
       paste("export SCRIPTS_DIR=",shQuote(root),sep=""),
       paste("export POE_SITE_FILE=",shQuote(c$execution$site_file),sep=""),
       paste("export POE_NATIVE_RECORD=",shQuote(inventory),sep=""),

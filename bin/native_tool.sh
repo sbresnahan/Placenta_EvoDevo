@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR}"
 source "$ROOT/bin/seadragon_init.sh"

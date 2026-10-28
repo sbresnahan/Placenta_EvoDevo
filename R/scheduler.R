@@ -15,7 +15,7 @@ submit_stage <- function(c,root,stage,submit=FALSE,dependency="none") {
   id<-paste0(format(Sys.time(),"%Y%m%dT%H%M%S"),"_",Sys.getpid())
   p<-function(k)cfg_path(c,k,stage=stage,job=id)
   script<-p("job_script");ensure_parent(script)
-  lines<-c("#!/bin/bash","set -euo pipefail","umask 077",
+  lines<-c("#!/bin/bash","set -eo pipefail","umask 077",
     paste0("export R_LIBS_USER=",shQuote(c$tools$r_library)),job_command(c,root,stage))
   writeLines(lines,script)
   r<-c$lsf$stages[[stage]]

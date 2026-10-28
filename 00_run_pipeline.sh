@@ -7,7 +7,7 @@
 #BSUB -W 0:30
 #BSUB -o /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/submit.%J.out
 #BSUB -e /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/logs/submit.%J.err
-set -euo pipefail
+set -eo pipefail
 umask 077
 ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly}"
 CONFIG="${CONFIG:?Set CONFIG to an absolute cohort YAML}"
