@@ -2,6 +2,7 @@
 # R counterpart to xQTL's driver; prepares checked-in-worker graph for HOST bsub.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(dirname(f),mustWork=TRUE)
+source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models [--submit] [--accept SHA] [--after JOB]")
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])

@@ -3,6 +3,7 @@
 f<-sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1])
 f<-gsub("~+~"," ",f,fixed=TRUE)
 root<-normalizePath(dirname(f),mustWork=TRUE)
+source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)<2)stop("Usage: Rscript poe.R CONFIG STAGE [--submit] [--execute] [--after JOB] [--accept SHA256]")
 source(file.path(root,"R/config.R"))

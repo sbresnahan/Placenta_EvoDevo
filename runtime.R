@@ -2,6 +2,7 @@
 # Internal worker phase interface, always called through the R-container bridge.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(dirname(f),mustWork=TRUE)
+source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=5L)stop("Usage: runtime.R CONFIG STAGE PHASE LIBRARY JOB_DIRECTORY")
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])

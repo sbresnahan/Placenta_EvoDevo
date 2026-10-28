@@ -2,6 +2,7 @@
 # Stage phase entry point. Native operations are emitted for the host, never run in R.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."),mustWork=TRUE)
+source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=4L)stop("Usage: stage.R CONFIG PHASE LIBRARY JOB_DIRECTORY; use the checked-in LSF wrapper")
 a<-c(a[1],"preflight",a[-1])

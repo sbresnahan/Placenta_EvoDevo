@@ -7,8 +7,27 @@ source "${POE_SITE_FILE:-$ROOT/config/seadragon.sh}"
 [[ -f "$POE_R_SIF" && -d "$POE_R_LIBRARY" ]] || {
   printf 'Missing R image or R library; inspect config/seadragon.sh\n' >&2; exit 1;
 }
+bootstrap="$ROOT/R/library_paths.R"
+[[ -r "$bootstrap" ]] || {
+  printf 'Missing R library initializer: %s\n' "$bootstrap" >&2; exit 1;
+}
+# Script entry points source the initializer before reading their YAML.
+# Inline expressions have no entry point, so prepend initialization explicitly.
+# Stop scanning at the script/--args boundary: a script argument named -e is data.
+r_args=("$@")
+for ((i=0; i<${#r_args[@]}; i++)); do
+  case "${r_args[i]}" in
+    -e)
+      r_args=("${r_args[@]:0:i}" -e 'source(Sys.getenv("POE_R_BOOTSTRAP"))' "${r_args[@]:i}")
+      break ;;
+    --args|--file=*|--) break ;;
+    --*) ;; # Leading Rscript/R options remain before the initialization expression.
+    *) break ;;
+  esac
+done
 # Do not inherit native conda/venv linker or Python settings into R.
 exec env -u LD_LIBRARY_PATH -u PYTHONPATH -u PYTHONHOME \
   "$POE_SINGULARITY" exec --cleanenv --bind /rsrch5 --bind /rsrch9 --bind /tmp \
   --env "R_LIBS_USER=$POE_R_LIBRARY" --env "POE_NATIVE_RECORD=${POE_NATIVE_RECORD:-}" \
-  "$POE_R_SIF" Rscript "$@"
+  --env "POE_R_LIBRARY=$POE_R_LIBRARY" --env "POE_R_BOOTSTRAP=$bootstrap" \
+  "$POE_R_SIF" Rscript "${r_args[@]}"
