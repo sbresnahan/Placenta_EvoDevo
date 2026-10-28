@@ -8,4 +8,6 @@ for(t in c("test_libpaths.R","test_core.R","test_workflow.R","test_v2.R","test_c
 }
 if(system2("bash",shQuote(file.path(root,"tests/test_fetch_host.sh")))!=0L)
   stop("Test failed: test_fetch_host.sh")
+if(system2("bash",shQuote(file.path(root,"tests/test_fetch_sra.sh")))!=0L)
+  stop("Test failed: test_fetch_sra.sh")
 cat("ALL LOCAL LOGICAL TEST SUITES PASSED. No cohort execution or live LSF validation.\n")

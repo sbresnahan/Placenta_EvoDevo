@@ -114,8 +114,7 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
     a<-source_fastq(c,s[i],1);b<-if(l$layout=="PE")source_fastq(c,s[i],2) else NULL
     if(!file.exists(a)||(!is.null(b)&&!file.exists(b)))stop("Raw FASTQ missing")
     if(c$profile=="public_cross")for(mate in seq_len(if(l$layout=="PE")2 else 1)) {
-      f<-if(mate==1)a else b
-      if(!verify_file(f,s[[paste0("bytes_",mate)]][i],s[[paste0("md5_",mate)]][i]))
+      if(!verify_public_source(c,s[i],mate))
         stop("Public raw source size/checksum mismatch")
     }
     if(is.finite(limit)) {

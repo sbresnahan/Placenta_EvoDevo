@@ -76,7 +76,7 @@ prepare_quant <- function(c,root,m,sample,mode,strand,limit,job) {
     raw<-c(raw,a,b)
     if(!all(file.exists(c(a,b))))stop("Raw FASTQ missing")
     if(c$profile=="public_cross")for(k in seq_len(if(l$layout=="PE")2 else 1)) {
-      if(!verify_file(c(a,b)[k],s[[paste0("bytes_",k)]][i],s[[paste0("md5_",k)]][i]))
+      if(!verify_public_source(c,s[i],k))
         stop("Public source size/checksum mismatch")
     }
     if(is.finite(limit)) {

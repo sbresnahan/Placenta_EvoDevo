@@ -151,6 +151,43 @@ for(i in seq_len(nrow(sources)))for(mate in 1:2) {
 }
 finish_host_retrieval(c,retrieve_job)
 check(nrow(fread(c$paths$resource_receipt))==4L)
+# Optional SRA mode uses one host command per run, not one per mate, and
+# accepts generated FASTQs only with their own checked receipt/read count.
+sra_c<-c;sra_c$retrieval$method<-"sra";sra_c$retrieval$sra_threads<-1L
+original_sources<-copy(sources)
+sources[,`:=`(run_id=c("ERR991","ERR992"),read_count=3)]
+for(i in seq_len(nrow(sources)))for(mate in 1:2) {
+  previous<-cfg_path(c,"fastq",run=original_sources$run_id[i],mate=mate)
+  current<-cfg_path(c,"fastq",run=sources$run_id[i],mate=mate)
+  check(file.copy(previous,current,overwrite=FALSE))
+}
+write_tsv(sources,c$paths$sources)
+sra_job<-file.path(d,"SRA retrieval plan");dir.create(sra_job)
+prepare_host_retrieval(sra_c,root,sra_job)
+sra_plan<-readLines(file.path(sra_job,"pre.sh"))
+check(sum(grepl("bin/fetch_sra.sh",sra_plan,fixed=TRUE))==nrow(sources))
+check(!any(grepl("bin/fetch_verified.sh",sra_plan,fixed=TRUE)))
+changed<-cfg_path(c,"fastq",run=sources$run_id[1],mate=1)
+con<-file(changed,"r+b");seek(con,where=4);writeBin(as.raw(1L),con);close(con)
+check(!verify_file(changed,sources$bytes_1[1],sources$md5_1[1]))
+check(system2("gzip",c("-t",shQuote(changed)))==0L)
+run<-sources$run_id[1]
+receipt_path<-sra_receipt(sra_c,run)
+record<-rbindlist(lapply(1:2,function(mate) {
+  path<-cfg_path(c,"fastq",run=run,mate=mate)
+  data.table(run_id=run,mate=as.character(mate),path=path,
+    bytes=as.character(file.info(path)$size),md5=unname(tools::md5sum(path)),transport="sra")
+}))
+write_tsv(record,receipt_path)
+check(verify_public_source(sra_c,sources[1],1L))
+bad_record<-copy(record);bad_record[1,path:="/not/the/actual/source.fastq.gz"]
+write_tsv(bad_record,receipt_path)
+check(!verify_public_source(sra_c,sources[1],1L))
+write_tsv(record,receipt_path)
+finish_host_retrieval(sra_c,sra_job)
+check(all(fread(c$paths$resource_receipt)$method=="sra"))
+check(nrow(fread(c$paths$resource_receipt))==4L)
+write_tsv(original_sources,c$paths$sources)
 # Test scheduler success/failure with a dedicated executable mock; NO bsub installed/called.
 p<-profiles[[1]];c<-p$c
 fake<-file.path(d,"fake_bsub")

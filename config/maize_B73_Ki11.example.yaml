@@ -163,6 +163,8 @@ fragments:
   fragment_sd_nt: 50
   fragment_parameter_origin: assumed_user_defined
 retrieval:
+  method: sra  # NCBI SRA Toolkit; accepts the original ERR run accessions
+  sra_threads: 4
   attempts: 3
   timeout_seconds: 1800
   connect_timeout_seconds: 30
@@ -196,9 +198,9 @@ lsf:
       reservation_value: 8.0
       queue: short
     retrieve:
-      memory_value: 4.0
-      reservation_value: 4.0
-      cpus: 1.0
+      memory_value: 8.0
+      reservation_value: 8.0
+      cpus: 4.0
       wall_time: '2:00'
       queue: transfer
 models:

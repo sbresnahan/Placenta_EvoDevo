@@ -17,7 +17,7 @@ Relative paths resolve against the YAML's directory.
 | `parents`, `dosage` | Focal/alternate parents and maternal/paternal dosage |
 | `markers` | Adapter, source/sample identities, quality filters, proxy description |
 | `pilot` | Strand/throughput fragment counts and diagnostic thresholds |
-| `retrieval` | Retry and connection settings |
+| `retrieval` | `method: https` (default) or `method: sra` for public Seadragon cohorts; `sra_threads` (default 1), retries and connection settings |
 | `lsf` | Queue, numeric GB units, cores, memory/reservation and wall time per stage |
 | `models` | Depth/family/orientation/bootstrap settings and covariate names |
 | `fragments` | SE fragment mean/SD and measured/assumed origin |
@@ -59,6 +59,12 @@ for the shared HPLRv2 GTF. Derived references stay in the cohort directory.
 | Covariates | Sample ID and configured covariate columns |
 
 Human source rows add actual `local_1`/`local_2` FASTQ paths.
+SRA mode uses existing SRR/ERR/DRR `run_id` accessions without renaming them.
+It creates FASTQs from NCBI SRA archives, so the manifest's ENA gzip MD5 and
+byte counts **do not apply** to those generated files. The host writes a
+per-run `.sra.tsv` checksum receipt and the R finish gate verifies generated
+checksums, mate consistency and manifest fragment counts. Existing ENA files
+are accepted only when their original manifest MD5/size match.
 PE read counts include both mates. Multiple runs link to one primary library.
 Missing cluster IDs retain descriptive public results.
 

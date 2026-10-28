@@ -91,6 +91,19 @@ read_config_v2 <- function(path,setup=FALSE) {
   if(c$ornaments$threads!=floor(c$ornaments$threads))stop("Integer thread count required")
   for(k in c("attempts","timeout_seconds","connect_timeout_seconds"))positive(c$retrieval[[k]],paste("retrieval",k))
   if(c$retrieval$attempts!=floor(c$retrieval$attempts))stop("Integer retry count required")
+  if(is.null(c$retrieval$method))c$retrieval$method<-"https"
+  if(!identical(c$retrieval$method,"https")&&!identical(c$retrieval$method,"sra"))
+    stop("retrieval.method must be https or sra")
+  if(is.null(c$retrieval$sra_threads))c$retrieval$sra_threads<-1L
+  positive(c$retrieval$sra_threads,"retrieval.sra_threads")
+  if(c$retrieval$sra_threads!=floor(c$retrieval$sra_threads))
+    stop("retrieval.sra_threads must be an integer")
+  if(c$retrieval$method=="sra") {
+    if(c$profile!="public_cross"||c$execution$backend!="seadragon")
+      stop("SRA retrieval is available only for public Seadragon cohorts")
+    if(c$retrieval$sra_threads>c$lsf$stages$retrieve$cpus)
+      stop("SRA threads exceed retrieval LSF CPU allocation")
+  }
   if(c$models$min_depth<20)stop("Depth floor cannot be below 20")
   if(c$profile=="human_trio" && (c$models$min_families<10||c$models$min_orientation<3||
       c$models$bootstrap<2000||c$models$seed!=1147))stop("Human gates cannot be relaxed")
