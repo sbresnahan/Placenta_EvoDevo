@@ -91,7 +91,6 @@ tools:
   Rscript: ../bin/Rscript_sif
   bash: /bin/bash
   bsub: ../bin/bsub_site
-  git: /usr/bin/git
   samtools: ../bin/native/samtools
   bcftools: ../bin/native/bcftools
   gzip: /usr/bin/gzip
@@ -99,14 +98,10 @@ tools:
   ornaments: ../bin/native/ornaments
   python: ../bin/native/python
   personalizer: ../bin/native/personalizer
-  ornaments_source: /rsrch5/home/epi/bhattacharya_lab/software/ornaments
   singularity: ../bin/singularity_site
   r_library: /rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1
   time: /usr/bin/time
 ornaments:
-  binary_sha256: REPLACE_WITH_INSTALLED_ORNAMENTS_SHA256
-  personalizer_sha256: REPLACE_WITH_INSTALLED_PERSONALIZER_SHA256
-  commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
   semantics: ref_alt
   threads: 2
 execution:
@@ -136,8 +131,6 @@ dosage:
 reference:
   build: GRCh38
   annotation_approved: no
-  genome_sha256: fb4243ebb014caf27111f24dd62b7ce42160f28581da6f8fcd6cba5977778d02
-  annotation_sha256: 88ac601ad75968427e4985b628f3eae4945e145e60ce1d37e1adb3a7b33884cc
   contig_aliases: []
   genome_source: /rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta
 markers:
@@ -225,7 +218,6 @@ exports:
   complementary_suppression_reviewed: no
   review_token: ~
   min_cell: ~
-  approved_candidate_sha256: ~
 provenance_hints:
   raw_rna: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/GUSTO/raw
   custom_gtf: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf

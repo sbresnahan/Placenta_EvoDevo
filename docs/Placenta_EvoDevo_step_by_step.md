@@ -4,7 +4,7 @@
 
 Complete **Part 1 once**, then use the complete recipe for the cohort you want to run. The five recipes do not depend on one another. You do not need to open another Markdown document.
 
-This guide describes the revised package, including installed-file checksum checks without source-build attestation. The commands are instructions for a future run on Seadragon. They have not been run against the cohorts as part of writing this guide. Scientific methods and cohort selections are unchanged.
+This guide describes the analysis package and its step-by-step operating procedure. The commands are instructions for a future run on Seadragon. They have not been run against the cohorts as part of writing this guide. Scientific methods and cohort selections are unchanged.
 
 **Do not paste the entire document into a terminal.** Run one numbered step at a time. A submission command only puts jobs in the queue: wait for completion and inspect the results before proceeding. Wherever the guide says **STOP**, the next stage is not justified until the stated evidence or file exists.
 
@@ -19,8 +19,8 @@ The examples contain real project paths. Text inside a non-executable YAML examp
 - **Biological unit:** the independently sampled organism, family, ear pool, or other justified replicate. Sequencing a unit twice does not make two biological replicates.
 - **Reference:** the genome and transcript annotation used to interpret reads.
 - **Marker:** a genomic SNP whose parental alleles are supported by the specified genotype evidence.
-- **Receipt:** a small file recording successful completion and hashes of inputs or outputs. A file merely existing is not the same as a valid receipt.
-- **SHA256 / MD5:** checksums identifying exact file bytes. A checksum proves byte identity, not biological suitability or the source history of software.
+- **Receipt:** a small record of successful stage completion and its output paths. A file merely existing is not the same as a completed stage.
+- **MD5:** the publisher-supplied download check used automatically with expected byte counts; it does not establish biological suitability.
 - **LSF:** Seadragon's job scheduler. `bsub` submits; `bjobs` inspects jobs.
 - **Pilot:** the small technical run required before full quantification.
 
@@ -43,29 +43,7 @@ The scripts must be in:
 
 `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts`
 
-If that directory already contains `poe.R`, `run_pipeline.R`, `bin/`, and `config/`, do not unpack over it.
-
-**Only if the package has not been deployed:** place the previously supplied `Placenta_promoter_POE.zip` somewhere you can read on Seadragon. Its top-level folder is `scripts/`. The following commands ask for the actual ZIP location, show its checksum, and check the archive; they do not unpack it yet.
-
-```bash
-read -r -p "Full path to Placenta_promoter_POE.zip: " PACKAGE_ZIP
-sha256sum "$PACKAGE_ZIP"
-unzip -t "$PACKAGE_ZIP"
-```
-
-The checksum of the supplied ZIP is:
-
-`e6aa306b4cdb47b7e0f6d846dec9abaa7f86100beb467a36e8c64ba686b45de0`
-
-**STOP** if it differs or the archive check fails. Do not replace an existing installation. If the archive is correct and `scripts/` does not exist, unpack once:
-
-```bash
-if [[ ! -e "$PROJECT/scripts" ]]; then
-  unzip "$PACKAGE_ZIP" -d "$PROJECT"
-else
-  printf 'Existing scripts directory left untouched.\n'
-fi
-```
+This guide assumes the analysis scripts are already present there, including `poe.R`, `run_pipeline.R`, `bin/`, and `config/`. **STOP** if they are missing. Do not overwrite an existing scripts directory or unpack an older archive over it.
 
 Now enter the script directory:
 
@@ -78,7 +56,6 @@ ls -l poe.R run_pipeline.R bin/submit_pipeline.sh bin/Rscript_sif
 
 Repeat these environment-setting commands whenever you open a new terminal. Later recipe commands assume this working directory. Setting `DATA_ROOT` does **not** rewrite paths inside a YAML file.
 
-**The ZIP above is the original deployment archive, not the updated repository.** This guide requires repository revision `8be693f0012e959c88aa4e14c78834052e134bad` with `Placenta_EvoDevo_workflow_revision.patch` applied, or a later revision containing those changes. That baseline already includes the R-library and no-nounset corrections. The original ZIP alone does not implement the revised runtime checks. Update deployed scripts through your normal version-control process before continuing; do not replace an existing deployment or apply changes while its jobs are active.
 
 ## 2. Make the working directories and editable copies
 
@@ -147,7 +124,7 @@ R runs inside Singularity through `bin/Rscript_sif`; native samtools, bcftools, 
 Check the R side:
 
 ```bash
-bin/Rscript_sif -e 'print(.libPaths()); p <- c("data.table","digest","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"); ok <- vapply(p, requireNamespace, logical(1), quietly=TRUE); print(data.frame(package=p, available=ok)); stopifnot(getRversion() >= "4.3.1", all(ok))'
+bin/Rscript_sif -e 'print(.libPaths()); p <- c("data.table","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"); ok <- vapply(p, requireNamespace, logical(1), quietly=TRUE); print(data.frame(package=p, available=ok)); stopifnot(getRversion() >= "4.3.1", all(ok))'
 ```
 
 **Success:** every package prints `TRUE`, R is at least 4.3.1, and the command exits without an error. **STOP** for a missing image, library, package, or native environment; ask the site maintainer to resolve the existing installation.
@@ -159,20 +136,9 @@ bin/host_inventory.sh "$DATA_ROOT/shared/software_inventory.tsv"
 less -S "$DATA_ROOT/shared/software_inventory.tsv"
 ```
 
-This inventories the actual executables, site file, R image, and Python dependency identity. It does not download cohort data or submit jobs. Hashing the container image can take time.
+This lists the actual executable paths, available versions, configured site/image paths, and Python package information. It does not download cohort data or submit jobs. The columns are `component`, `path`, and `version`. Review that the commands resolve in the intended existing environments; no installer evidence or checksum entry is required.
 
-The output columns are `component`, `path`, `version`, and `sha256`. Locate the `ornaments` and `personalizer` rows. Their `sha256` values identify the installed executable and console entry point, not just this package's wrappers.
-
-In each private YAML you intend to use, copy the two actual 64-character lowercase hashes from those inventory rows into:
-
-- `ornaments.binary_sha256`: the `ornaments` row's `sha256`.
-- `ornaments.personalizer_sha256`: the `personalizer` row's `sha256`.
-
-The second key is new: add it to existing private YAML files as well as filling it in fresh copies. Remove the retired `ornaments.installation_provenance` and `ornaments.installation_provenance_sha256` keys from old private copies; no evidence file is required.
-
-Keep `ornaments.commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17` and `ornaments.semantics: ref_alt` as the audited interface/semantics expectation. They are not proof of the installed build's ancestry. The inventory's optional `source_revision` row is informational; `unresolved`, a dirty checkout, or a different source revision no longer blocks Seadragon execution. Do not seek installer records, fabricate attestation, or rebuild the environment. The checksums record installed-file identity; the personalizer hash covers the console entry point, with the Python dependency digest also recorded, not a bytewise audit of every Python module.
-
-After updating code or existing private configurations, rerun that cohort's metadata and `--execute` preflight as shown in its recipe. Changed code/configuration/inventory can invalidate old receipts: regenerate affected stages rather than continuing an already accepted run with changed identities.
+Keep `ornaments.semantics: ref_alt` and the supplied thread count. Preflight checks installed-tool availability and the R environment, not correspondence to an earlier installation.
 
 ## 4. Use the established Seadragon storage and scheduler conventions
 
@@ -230,20 +196,20 @@ You can prepare only the cohort you intend to run now; do not approve unreviewed
 
 1. Verify that every cohort-owned path points to `data/<that cohort>/`. Keep the documented human source-reference exceptions in the GUSTO recipe.
 2. Keep `execution.site_file: seadragon.sh` consistent with `POE_SITE_FILE`. Keep the configured image and R library consistent with the site settings.
-3. Fill both installed-file checksum values from step 3, including the new `ornaments.personalizer_sha256` in any existing private YAML.
+3. Keep `ornaments.semantics: ref_alt` and confirm the installed commands resolve as shown in step 3.
 4. Set `execution.posix_work_approved: true` after checking your cohort's normal shared-filesystem directories as in step 4; do not redirect them to object storage.
 5. Set `lsf.memory_units: GB` and `lsf.memory_units_verified: true` using the established Seadragon convention. Set `lsf.memory_per_job_verified: true` only when the specific accounting check in step 4 supports it; GB units alone do not establish this.
 6. Use the existing site file, R binds, and native activation paths. Set `lsf.execution_environment_verified: true` when these match your working Seadragon deployment and the software checks in step 3 pass. Do not approve untested path or environment overrides.
 7. Under `lsf.stages`, inspect **each** of `retrieve`, `reference`, `pilot`, `scale`, and `models`. Start with the queue/CPU/memory/time values in step 4 and the examples; use matching numeric GB `memory_value` and `reservation_value` for this deployment. Wall time is hours and minutes, for example `'03:00'`. Keep requests within your allocation.
 8. Keep `ornaments.threads` no greater than the CPU request for pilot and scale. The supplied value is two.
 9. Review `pilot.max_projected_seconds` and `pilot.max_work_bytes` against local limits. These are technical gates, not measured resource needs.
-10. Set `lsf.resource_limits_approved: true` only when the proposed requests, storage allowance, and project budget are locally authorized. This approves the limits, **not** the eventual pilot result. You must still review the pilot and explicitly accept its exact hash before scale.
+10. Set `lsf.resource_limits_approved: true` only when the proposed requests, storage allowance, and project budget are locally authorized. This approves the limits, **not** the eventual pilot result. You must still review the pilot before explicitly submitting scale.
 11. For public cohorts only, keep the retrieval queue `transfer`, the public-download queue used by the reference project, and set `retrieval.internet_host_approved: true` when using that established authorized route. Do not enable public retrieval for GUSTO or silently substitute an ordinary compute queue.
 12. Leave `exports.enabled: false` throughout analysis.
 
 Do not change thresholds, parent identities, reference builds, or scientific choices merely to make a check pass. Cohort-specific annotation, marker, strand, independence, and human QC approvals are addressed in the recipes.
 
-**Finish all analysis-setting and manifest edits before reference construction.** The package fingerprints the entire configuration, manifests, software identity, and relevant code. Even a resource or approval edit after the pilot can invalidate earlier receipts. If evidence forces a change, make it, then regenerate the affected prerequisites and pilot; never reuse an old pilot acceptance.
+**Finish analysis-setting and manifest edits before reference construction.** Completion records say that stages finished and required outputs exist; the pipeline does not decide whether earlier results are still current. You are responsible for rerunning affected prerequisites and downstream stages after changing inputs, settings, software, or outputs. Review a newly run pilot before submitting scale.
 
 ## 6. Understand submission and completion before running any cohort
 
@@ -289,7 +255,7 @@ bin/Rscript_sif poe.R "$CONFIG" status
 less -S "$DATA_ROOT/$COHORT/status.tsv"
 ```
 
-This checks on-disk completion receipts and hashes. It does **not** query LSF. Before the first stages run, later stages are expected to be `blocked`.
+This checks completion records and the existence of required nonempty outputs. It does **not** query LSF. Before the first stages run, later stages are expected to be `blocked`.
 
 - After reference: expect `reference` to be `complete`.
 - After pilot: expect `pilot` to be `complete`.
@@ -305,10 +271,10 @@ For human reference jobs, shared `reference: complete` alone does not certify ev
 
 - If submission stopped partway through, some earlier jobs may already exist. Reconcile the real submitted IDs with LSF **before** rerunning. Do not replay a `.host.sh` plan or delete its `.started` guard.
 - Retrieval can resume valid partial downloads under its checked HTTP-range rules. It does not use an SRA fallback, trim reads, discover missing sources, or call new variants. A checksum/source problem requires resolving the real source, not bypassing validation.
-- A stale receipt means inputs, settings, software, or outputs changed. Correct the cause and rerun the affected stages in order.
+- A missing/incomplete receipt means a stage did not finish successfully or a required output is absent. Resolve the failure and rerun that stage. For a deliberate rerun, first confirm no jobs are using its files; move aside affected outputs/receipts where an existing-file protection requires it. Do not hand-edit receipts or delete active locks.
 - Locks under `receipts/locks/` are not automatically discarded. Confirm the owning job and live processes are gone before any locally supervised removal.
 - Never rebuild or replace a reference/index while downstream jobs are reading it.
-- If a pilot requires a different strand or resource setting, change the configuration or manifest, regenerate stale prerequisites, and repeat the pilot. Do not accept the old report.
+- If a pilot requires a different strand or resource setting, change the configuration or manifest, rerun affected prerequisites, and repeat the pilot. Do not accept the old report.
 
 ---
 
@@ -356,7 +322,7 @@ less -S "$COHORT_DIR/manifests/maize_B73_Ki11_resources.tsv"
 bin/submit_pipeline.sh "$CONFIG" retrieve
 ```
 
-The first preflight validates configuration/manifests. The `--execute` preflight additionally checks host identities and the R environment; it does not download or submit. It should accept the reviewed installed software. **STOP** if either preflight fails. The dry run should describe one retrieval job with the approved queue and resource requests.
+The first preflight validates configuration/manifests. The `--execute` preflight additionally checks host command availability and the R environment; it does not download or submit. It should accept the reviewed installed software. **STOP** if either preflight fails. The dry run should describe one retrieval job with the approved queue and resource requests.
 
 Then submit:
 
@@ -376,28 +342,26 @@ ls -lh "$COHORT_DIR/reference/"
 
 **STOP** for a failed download, checksum, gzip, or paired-read check. Do not proceed with partial inputs.
 
-## K4. Enter the reference and marker checksums
+## K4. Review the reference and marker files
 
 The genome must now be `reference/genome.fa`. The source annotation must be `reference/source_annotation.gtf`. The latter filename does not change the source's GFF content; keep the exact configured annotation rather than substituting a convenient GTF.
 
 Run:
 
 ```bash
-sha256sum "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-sha256sum "$COHORT_DIR/reference/"hmp321_raw_agpv4_chr*.vcf.gz
+ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
+ls -lh "$COHORT_DIR/reference/"hmp321_raw_agpv4_chr*.vcf.gz
 nano "$COHORT_DIR/manifests/maize_B73_Ki11_marker_sources.tsv"
 nano "$CONFIG"
 ```
 
-In the marker-source table, replace each placeholder checksum with the matching chromosome VCF's actual SHA256. There are ten rows, for chromosomes 1 through 10. Do not put a checksum from one chromosome in another row.
+In the marker-source table, verify each chromosome VCF's actual path and build. Keep the ten real source rows, for chromosomes 1 through 10, and do not substitute files from another reference build.
 
 In the YAML:
 
-1. Put the **uncompressed** `genome.fa` checksum in `reference.genome_sha256`.
-2. Put the exact source annotation checksum in `reference.annotation_sha256`.
-3. Set `reference.annotation_approved: true` only after confirming this annotation is compatible with B73 RefGen_v4 and is the intended annotation.
-4. Keep `markers.mode: panzea`, B73/Ki11 sample names, and the configured duplicate-line checks.
-5. Set `markers.provenance_approved: true` only after reviewing the ten raw, nonimputed AGPv4 sources and accepting that they are external lines, not genotypes measured in the original experimental plants.
+1. Set `reference.annotation_approved: true` only after confirming this annotation is compatible with B73 RefGen_v4 and is the intended annotation.
+2. Keep `markers.mode: panzea`, B73/Ki11 sample names, and the configured duplicate-line checks.
+3. Set `markers.provenance_approved: true` only after reviewing the ten raw, nonimputed AGPv4 sources and accepting that they are external lines, not genotypes measured in the original experimental plants.
 
 The existing marker preparation requires supported opposite homozygous parental SNPs, depth at least five, called-allele fraction at least 0.9, allowed site filters, and at least 99% REF agreement with the actual genome. It excludes NI5 and does not infer missing genotypes.
 
@@ -453,13 +417,11 @@ Check `pseudoalignment_fraction`, strand comparisons, `elapsed_seconds`, `peak_r
 Only after reviewing the report and confirming the authorized resource limits:
 
 ```bash
-PILOT_SHA=$(sha256sum "$COHORT_DIR/pilot_report.tsv" | cut -d ' ' -f 1)
-printf 'Pilot selected for acceptance: %s\n' "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-The first scale command authorizes that exact report and prints a plan; it does not submit. Expect **nine submitted jobs** from the second command: four quantifications, four dependent parent assignments, and a collector.
+The first scale command only prints a plan. The explicit second command authorizes scale after your manual review and submits it. Expect **nine submitted jobs** from the second command: four quantifications, four dependent parent assignments, and a collector.
 
 Wait for all nine, then:
 
@@ -541,12 +503,12 @@ Put that actual table under this cohort's `reference/` directory. Record its sou
 
 ```bash
 read -r -p "Full path to the real approved B73/W22 prepared marker table: " MARKER_FILE
-sha256sum "$MARKER_FILE"
+ls -lh "$MARKER_FILE"
 nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
 nano "$CONFIG"
 ```
 
-The marker-source file currently has only the header `source_id`, `path`, `build`, `sha256`. Add a row naming your real source, its actual absolute path, build **`B73_RefGen_v4`**, and the printed SHA256. Add more rows only if there are real additional sources. Keep `markers.mode: prepared`.
+The marker-source file has the header `source_id`, `path`, `build`. Add a row naming your real source, its actual absolute path, and build **`B73_RefGen_v4`**. Add more rows only if there are real additional sources. Keep `markers.mode: prepared`.
 
 **STOP before reference** if either the approved annotation or the supported marker table is missing. Setting an approval to true does not supply those inputs. You may retrieve the specified public RNA/genome before resolving this blocker, but that does not make reference construction ready.
 
@@ -562,7 +524,7 @@ nano "$CONFIG"
 
 Keep six biological pools and the supplied run-to-library relationships. Confirm independent ear sampling in `cluster_id` and `independence_verified`. The supplied strand is `rf` with `strand_verified=FALSE`. Verify the library protocol; set `strand_verified=TRUE` only with actual protocol evidence. Resolve any orientation disagreement before pilot.
 
-Keep B73/W22 parental identities and the normal-endosperm maternal:paternal dosage **2:1**. Confirm the common software identity, storage, scheduler, and public internet approvals. Keep exports off.
+Keep B73/W22 parental identities and the normal-endosperm maternal:paternal dosage **2:1**. Confirm the common software availability, storage, scheduler, and public internet approvals. Keep exports off.
 
 ## W4. Retrieve the specified RNA and genome
 
@@ -590,13 +552,13 @@ When all three real inputs exist:
 If this is a new terminal, first set `MARKER_FILE` again to the exact path recorded in the marker-source table.
 
 ```bash
-sha256sum "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-sha256sum "$MARKER_FILE"
+ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
+ls -lh "$MARKER_FILE"
 nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
 nano "$CONFIG"
 ```
 
-Enter the uncompressed genome and exact source annotation hashes in `reference.genome_sha256` and `reference.annotation_sha256`. Ensure the table's marker checksum matches the real file. Set `reference.annotation_approved: true` only after annotation/build review and `markers.provenance_approved: true` only after parental-source review. Retain the external-parent limitation where the genotype source is not the original experimental plants.
+Verify that the configured genome and source annotation are the intended B73 RefGen_v4 files, and that the marker table names the real compatible source. Set `reference.annotation_approved: true` only after annotation/build review and `markers.provenance_approved: true` only after parental-source review. Retain the external-parent limitation where the genotype source is not the original experimental plants.
 
 The marker preparation still validates the actual genome REF and requires at least 99% agreement. It does not repair a mismatched build.
 
@@ -642,15 +604,13 @@ less -S "$COHORT_DIR/pilot_report.tsv"
 
 Require `pilot: complete`. Review every library's strand diagnostics, pseudoalignment fraction, measured elapsed time and peak RSS, index size, projected quantification time, and work-byte lower bound. Defaults are 100,000 fragments for strand diagnostics and a one-million-fragment nonrandom throughput prefix. The selected strand must pass the configured 0.2 pseudoalignment floor and orientation checks, including the 0.05 tolerance where applicable.
 
-Confirm available storage and the authorized budget; endpoint work size is not peak disk demand. If a protocol or resource change is necessary, edit and regenerate stale prerequisites/pilot. **Do not accept the previous pilot.**
+Confirm available storage and the authorized budget; endpoint work size is not peak disk demand. If a protocol or resource change is necessary, edit and rerun affected prerequisites/pilot. **Do not accept the previous pilot.**
 
 ## W8. Accept and run full quantification
 
 ```bash
-PILOT_SHA=$(sha256sum "$COHORT_DIR/pilot_report.tsv" | cut -d ' ' -f 1)
-printf 'Pilot selected for acceptance: %s\n' "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
 Expect **13 jobs**: six quantifications, six parent assignments, and a collector. Wait for all to succeed.
@@ -745,7 +705,7 @@ read -r -p "Full path to the approved joint MGP v5 GRCm38 VCF.gz: " MGP_INPUT
 cp -n -- "$MGP_INPUT" "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
 ```
 
-If a destination already exists, verify it against the approved source; `cp -n` leaves it untouched. A self-computed hash must be tied to the reviewed source, not treated as proof of provenance. **STOP before reference** until all three inputs are real and reviewed.
+If a destination already exists, verify it against the approved source; `cp -n` leaves it untouched. Review the actual source records and reference build. **STOP before reference** until all three inputs are real and reviewed.
 
 ## B3. Review the Babr proxy, independence, and single-end assumptions
 
@@ -790,13 +750,13 @@ If the MGP row stayed `required=FALSE`, this job did not acquire it. A successfu
 ## B5. Record the exact reference and marker identities
 
 ```bash
-sha256sum "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-sha256sum "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
+ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
+ls -lh "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
 nano "$COHORT_DIR/manifests/mouse_Babr_CAST_marker_sources.tsv"
 nano "$CONFIG"
 ```
 
-Replace the MGP source checksum placeholder with the actual approved VCF checksum. Its build must be `GRCm38`. Fill the YAML's uncompressed genome and exact annotation checksums.
+Verify the actual joint MGP VCF path in the marker-source table and keep its build `GRCm38`. Review that the genome and annotation are the intended compatible files.
 
 Set `reference.annotation_approved: true` after the compatibility review, and `markers.provenance_approved: true` after reviewing the joint MGP source and B6J-reference proxy. Retain `markers.mode: mgp`.
 
@@ -844,15 +804,13 @@ less -S "$COHORT_DIR/pilot_report.tsv"
 
 Require `pilot: complete`. Review protocol/strand checks, pseudoalignment fraction, elapsed time, peak RSS, index size, projected quantification time, and work-byte lower bound for every library. Confirm the report records the single-end 250/50 assumption and marker-proxy limitation.
 
-The one-million-fragment throughput prefixes are nonrandom. Do not treat their performance or callability as a whole-cohort biological result. Endpoint work bytes do not measure peak disk usage. Resolve any protocol/resource failure and rerun stale prerequisites/pilot before accepting.
+The one-million-fragment throughput prefixes are nonrandom. Do not treat their performance or callability as a whole-cohort biological result. Endpoint work bytes do not measure peak disk usage. Resolve any protocol/resource failure and rerun affected prerequisites/pilot before accepting.
 
 ## B8. Accept the pilot and quantify all five units
 
 ```bash
-PILOT_SHA=$(sha256sum "$COHORT_DIR/pilot_report.tsv" | cut -d ' ' -f 1)
-printf 'Pilot selected for acceptance: %s\n' "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
 Expect **11 jobs**: five quantifications, five assignments, and a collector. Wait for all.
@@ -867,7 +825,7 @@ Use the actual strand directory if the reviewed protocol changed it. Inspect all
 
 ## B9. Fit models only with justified biological independence
 
-Recheck that the units table has genuine cluster/independence evidence, not convenience labels. If it is unresolved, stop here. If resolving it changes a manifest after pilot, regenerate the stale stages first.
+Recheck that the units table has genuine cluster/independence evidence, not convenience labels. If it is unresolved, stop here. If resolving it changes a manifest after pilot, rerun the affected stages first.
 
 ```bash
 bin/submit_pipeline.sh "$CONFIG" models
@@ -957,7 +915,7 @@ The libraries are `PE`, supplied `rf`, initially unverified. Confirm orientation
 
 Keep the configured FVB_NJ and CAST_EiJ MGP sample identities and actual maternal/paternal labels. Keep diploid dosage **1:1**. This is not the Babr proxy analysis.
 
-Confirm common software identity, local filesystem, scheduler, resource-limit, and internet approvals. Leave exports off.
+Confirm common software availability, local filesystem, scheduler, resource-limit, and internet approvals. Leave exports off.
 
 ## F4. Retrieve the public RNA and any enabled resources
 
@@ -978,16 +936,16 @@ ls -lh "$COHORT_DIR/reference/"
 
 If the MGP row remained `required=FALSE`, it was not downloaded. Confirm the locally supplied VCF exists before continuing.
 
-## F5. Fill checksums and approve the actual sources
+## F5. Review and approve the actual sources
 
 ```bash
-sha256sum "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
-sha256sum "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
+ls -lh "$COHORT_DIR/reference/genome.fa" "$COHORT_DIR/reference/source_annotation.gtf"
+ls -lh "$COHORT_DIR/reference/mgp.v5.merged.snps_all.dbSNP142.vcf.gz"
 nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_marker_sources.tsv"
 nano "$CONFIG"
 ```
 
-Replace the marker-source SHA256 placeholder with the approved joint VCF checksum. Keep build `GRCm38`. Put the uncompressed genome and exact source annotation checksums into the YAML.
+Verify that the marker-source table names the real approved joint VCF. Keep build `GRCm38` and review the genome/annotation compatibility.
 
 Set `reference.annotation_approved: true` only after compatibility review. Set `markers.provenance_approved: true` only after reviewing the joint MGP v5 source and FVB_NJ/CAST_EiJ genotype identities. Keep `markers.mode: mgp`. The existing preparation uses called parental `FI=1` evidence and checks genome REF agreement; it does not require every joint site to be blanket PASS.
 
@@ -1033,15 +991,13 @@ less -S "$COHORT_DIR/pilot_report.tsv"
 
 Require `pilot: complete`. Review all four libraries' strand checks, pseudoalignment, measured elapsed time/peak RSS, index size, projected quantification time, and work-byte lower bound. Defaults use 100,000-fragment strand diagnostics and a one-million-fragment nonrandom throughput prefix per library.
 
-Confirm the approved resources can accommodate the actual measurements and projected work. Peak temporary storage is not measured by the endpoint work-byte lower bound. A strand or resource change invalidates the old acceptance; regenerate stale stages/pilot before proceeding.
+Confirm the approved resources can accommodate the actual measurements and projected work. Peak temporary storage is not measured by the endpoint work-byte lower bound. After a strand or resource change, rerun affected prerequisites and the pilot before proceeding.
 
 ## F8. Accept the exact report and run full quantification
 
 ```bash
-PILOT_SHA=$(sha256sum "$COHORT_DIR/pilot_report.tsv" | cut -d ' ' -f 1)
-printf 'Pilot selected for acceptance: %s\n' "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
 Expect **nine jobs**: four quantifications, four assignments, and one collector. Wait for all:
@@ -1056,7 +1012,7 @@ Use the actual strand directory if different. Inspect assignment QC for every li
 
 ## F9. Fit and inspect models only after independence is justified
 
-If litter independence remains unresolved, stop before modeling; retain that limitation explicitly. Any late manifest change requires regeneration of stale stages.
+If litter independence remains unresolved, stop before modeling; retain that limitation explicitly. Any late manifest change requires rerunning affected stages.
 
 ```bash
 bin/submit_pipeline.sh "$CONFIG" models
@@ -1111,7 +1067,7 @@ read -r -p "Full path to the approved typed trio VCF.gz: " TYPED_INPUT
 read -r -p "Full path to the approved personalization VCF.gz: " PERSONAL_INPUT
 cp -n -- "$TYPED_INPUT" "$COHORT_DIR/private/typed.vcf.gz"
 cp -n -- "$PERSONAL_INPUT" "$COHORT_DIR/private/personalization.vcf.gz"
-sha256sum "$COHORT_DIR/private/typed.vcf.gz" "$COHORT_DIR/private/personalization.vcf.gz"
+ls -lh "$COHORT_DIR/private/typed.vcf.gz" "$COHORT_DIR/private/personalization.vcf.gz"
 ```
 
 Compare those exact project files with the approved source records. Existing destinations are not replaced by `cp -n`. For RNA, copy only files in the verified crosswalk, keeping mate identities intact; do not use a guessed wildcard over a private directory. If a file needs copying:
@@ -1158,7 +1114,7 @@ Add one row per actual sequencing run/lane group:
 - `read_count`: actual complete-file read count in the source-table convention; PE totals count both mates, and the pilot projection divides that total by two to obtain fragments. SE totals are reads/fragments. Do not enter a prefix count or a guessed ENA-like total.
 - Keep URL fields empty where there is no public source; human data are not fetched through public retrieval.
 
-Obtain counts and hashes from verified local sequencing/QC records or an approved full-file check. Several run rows can point to one `sample_id`; they must not become extra independent libraries.
+Obtain read counts and the required download-table fields from verified local sequencing/QC records or an approved full-file check. Several run rows can point to one `sample_id`; they must not become extra independent libraries.
 
 ### In `GUSTO_libraries.tsv`
 
@@ -1228,38 +1184,30 @@ Keep these two read-only source references:
 
 `/rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta`
 
-Expected SHA256:
-
-`fb4243ebb014caf27111f24dd62b7ce42160f28581da6f8fcd6cba5977778d02`
-
 **HPLRv2 annotation**
 
 `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf`
-
-Expected SHA256:
-
-`88ac601ad75968427e4985b628f3eae4945e145e60ce1d37e1adb3a7b33884cc`
 
 The configured GTF is on `/rsrch9`, not `/rsrch5`. Do not invent a different GTF path to make both references appear to reside on one filesystem.
 
 Check the actual files:
 
 ```bash
-sha256sum \
+ls -lh \
   /rsrch5/home/epi/stbresnahan/bhattacharya_lab/data/GenomicReferences/genome/GCA_000001405.15_GRCh38_no_alt_analysis_set_cleaned_ready_for_salmon.fasta \
   /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/reference/HPLRv2.0.annotated.PANTRY.gtf
 nano "$CONFIG"
 ```
 
-**STOP** if a file is unreadable or a checksum differs. Resolve the reference identity rather than replacing the expected hash without review.
+**STOP** if either file is missing, empty, unreadable, or not the intended reference. Resolve the path/build mismatch before proceeding.
 
 Keep `reference.build: GRCh38`, `reference.genome_source` pointing to the shared FASTA, `paths.genome` pointing to this cohort's `reference/genome.fa`, and `paths.annotation` pointing to the exact shared HPLRv2 GTF. The reference job copies the shared genome into the project before indexing; it must not write an index beside the shared source.
 
-If a project `reference/genome.fa` already exists, verify its checksum too; the reference job does not blindly replace an existing project genome. Keep the supplied expected genome/annotation hashes when the source files match. Set `reference.annotation_approved: true` only after confirming the intended HPLRv2/GRCh38 combination.
+If a project `reference/genome.fa` already exists, confirm it is the intended shared genome; the reference job does not blindly replace it. Move aside an incorrect project copy only after confirming no active jobs use it. Set `reference.annotation_approved: true` only after confirming the intended HPLRv2/GRCh38 combination.
 
 ## H6. Complete preflight before scheduling
 
-Finish the common software identity, scheduler, storage, resources, and all private table/model decisions before reference. Confirm that no human sample identifiers or paths have been placed in public documents.
+Finish the common software availability, scheduler, storage, resources, and all private table/model decisions before reference. Confirm that no human sample identifiers or paths have been placed in public documents.
 
 ```bash
 00_setup/preflight.sh "$CONFIG"
@@ -1310,17 +1258,15 @@ Require `pilot: complete`. Review every selected library's strand evidence, pseu
 
 The default diagnostics use 100,000 fragments per strand and a one-million-fragment nonrandom throughput prefix per library. A completed technical pilot is not a human association result or a sample-size guarantee. Endpoint work bytes underestimate peak storage; projected quantification time excludes other pipeline work.
 
-If protocol, covariates, sample links, software, or resources need changing, make the approved correction and regenerate stale prerequisites and pilot. Do not use an old pilot hash after edits.
+If protocol, covariates, sample links, software, or resources need changing, make the approved correction and rerun affected prerequisites and pilot. Review the new pilot after those reruns.
 
 ## H9. Accept the report and run full private quantification
 
 Only after local resource review:
 
 ```bash
-PILOT_SHA=$(sha256sum "$COHORT_DIR/pilot_report.tsv" | cut -d ' ' -f 1)
-printf 'Pilot selected for acceptance: %s\n' "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
 Expect **2n + 1 jobs**: quantification and dependent parent assignment for each library, plus a collector. Wait for all.
@@ -1366,7 +1312,7 @@ It fits a natural-log paired-promoter contrast with cis orientation and approved
 
 ## H11. Optional: prepare a separately reviewed aggregate release
 
-**Do not do this as part of ordinary analysis.** Keep `GUSTO.private.yaml` fixed. First verify the completed analysis receipts, private result integrity, and eligibility. The release scripts check aggregate schema, policy, and approved hash; they do not independently validate the entire analysis receipt chain.
+**Do not do this as part of ordinary analysis.** Keep `GUSTO.private.yaml` fixed. First verify the completed analysis receipts, private result integrity, and eligibility. The release scripts check aggregate schema and policy; they do not independently validate the entire analysis history or compare candidate bytes with a previously reviewed copy.
 
 Obtain the institution's approved disclosure policy, actual integer minimum cell size, complementary-suppression review, and authorization to prepare aggregates. There is no universal default threshold supplied here.
 
@@ -1391,7 +1337,7 @@ Create the local candidate:
 ```bash
 bin/Rscript_sif 07_exports/prepare_candidate.R "$RELEASE_CONFIG"
 less -S "$COHORT_DIR/candidate.tsv"
-sha256sum "$COHORT_DIR/candidate.tsv"
+ls -lh "$COHORT_DIR/candidate.tsv"
 ```
 
 The candidate remains private. Review its exact contents and possible complementary disclosure against other releasable tables. Do not assume threshold filtering alone proves disclosure safety.
@@ -1404,7 +1350,6 @@ nano "$RELEASE_CONFIG"
 
 Enter:
 
-- `approved_candidate_sha256`: the exact approved candidate's printed hash.
 - `review_token`: the real local approval/review identifier.
 - `complementary_suppression_reviewed: true`: only after that review.
 - `enabled: true`: only when local release-file creation is authorized.
@@ -1436,4 +1381,4 @@ The package's existing analysis rules remain unchanged:
 8. Maternal seed-coat, decidual, blood, or other tissue admixture; cis effects; parental proxies; and cellular composition can affect interpretation. The package does not eliminate them by completing successfully.
 9. Expected allocations and promoter-coordinate contrasts are candidate signals. They are not, alone, definitive imprinting or evidence that intragenomic conflict caused the signal.
 
-If all requested stages are complete, keep the analysis configuration and operational manifests fixed with their receipts. For a later approved change, document the change and rerun the stages whose fingerprints are invalidated rather than modifying completed outputs by hand.
+If all requested stages are complete, keep the analysis configuration and operational manifests fixed with their receipts. For a later approved change, document the change and rerun the affected stages and their dependents rather than modifying completed outputs by hand.

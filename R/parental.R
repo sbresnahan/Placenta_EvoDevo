@@ -16,10 +16,9 @@ transmitted_maternal_allele <- function(child, mother, father) {
     return(list(maternal = NA_integer_, status = "ambiguous_transmission"))
   list(maternal = as.integer(possible$m[1]), status = "typed_trio")
 }
-read_ornament_counts <- function(path, semantics, verified_commit) {
-  if (!identical(semantics, "ref_alt") || is.null(verified_commit) ||
-      !nzchar(verified_commit))
-    stop("Explicit verified ref_alt semantics/commit required; L/R is not assumed")
+read_ornament_counts <- function(path, semantics) {
+  if (!identical(semantics, "ref_alt"))
+    stop("Explicit ref_alt output semantics required; L/R is not assumed")
   x <- data.table::fread(path, header = FALSE, na.strings = c("NA", "."))
   if (ncol(x) != 8L) stop("Unrecognized Ornament count schema; expected 8 columns")
   data.table::setnames(x, c("transcript_id", "tx_pos", "tx_ref", "tx_alt",

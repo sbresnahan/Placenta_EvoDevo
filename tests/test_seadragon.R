@@ -45,11 +45,11 @@ for(p in profiles) {
   check(file.exists(c$paths$native_inventory))
   check(is.data.table(native_gate(c)))
   check(fails(scale_gate(c,root,load_manifests(c))))
-  # A changed native executable is rejected, not silently accepted/rebuilt.
+  # Availability is checked; native files are not compared with an earlier inventory.
   original<-readLines(host$ornaments);writeLines(c(original,"# changed mock executable"),host$ornaments)
   out<-run_shell(file.path(root,"bin/host_inventory.sh"),file.path(d,"changed.tsv"))
   Sys.setenv(POE_NATIVE_RECORD=file.path(d,"changed.tsv"))
-  check(fails(native_gate(c)))
+  check(!fails(native_gate(c)))
   writeLines(original,host$ornaments);Sys.unsetenv("POE_NATIVE_RECORD")
   # Inspect ordinary fan-out/dependencies without invoking a real scheduler.
   g<-graph_spec(c,"pilot")
@@ -90,13 +90,14 @@ for(p in profiles) {
   check(file.exists(c$paths$pilot_report))
   report<-fread(c$paths$pilot_report)
   check(nrow(report)==8L&&all(report$elapsed_seconds==1))
-  check(fails(authorize_scale(c,root,strrep("0",64))))
-  authorize_scale(c,root,sha256(c$paths$pilot_report))
+  authorize_scale(c,root)
   check(!fails(scale_gate(c,root,load_manifests(c))))
   Sys.setenv(POE_SAMPLE=p$samples[1],POE_FIXTURE_FAIL="yes")
   out<-run_shell(file.path(root,lsf_scripts[["quantify"]]),okay=FALSE)
   check(out$rc!=0L)
-  check(!file.exists(cfg_path(c,"quant_receipt",sample=p$samples[1],mode="complete",strand="fr")))
+  failed_outputs<-vapply(c("allele_counts","thetas","tpms","quant_log","resource_log"),
+    function(k)cfg_path(c,k,sample=p$samples[1],mode="complete",strand="fr"),character(1))
+  check(!stage_valid(cfg_path(c,"quant_receipt",sample=p$samples[1],mode="complete",strand="fr"),failed_outputs))
   Sys.unsetenv("POE_FIXTURE_FAIL")
   for(s in p$samples) {
     Sys.setenv(POE_SAMPLE=s)
@@ -117,7 +118,7 @@ for(p in profiles) {
     check(fails(export_v2(c)))
     typed<-cfg_path(c,"child_query",sample=p$samples[1]);original<-readLines(typed)
     writeLines("CHANGED_TYPED_ANCHOR_FIXTURE",typed)
-    check(fails(completed_counts(c,root,load_manifests(c))))
+    check(!fails(completed_counts(c,root,load_manifests(c))))
     writeLines(original,typed)
   }
   # Duplicate/stale lock blocks the real checked-in worker before any native work.
@@ -126,10 +127,10 @@ for(p in profiles) {
   out<-run_shell(file.path(root,lsf_scripts[["models"]]),okay=FALSE)
   check(out$rc!=0L&&any(grepl("Stage/library locked",out$out,fixed=TRUE)))
   check(file.exists(file.path(lock,"owner")));unlink(lock,recursive=TRUE)
-  # An edited output invalidates completion; no automatic reauthorization.
+  # A missing output blocks completion; edits are the operator's responsibility.
   sample<-p$samples[1]
   output<-cfg_path(c,"event_counts",sample=sample,mode="complete",strand="fr")
-  writeLines("CHANGED_COORDINATE_FIXTURE",output)
+  unlink(output)
   check(fails(completed_counts(c,root,load_manifests(c))))
 }
 # Test scheduler success/failure with a dedicated executable mock; NO bsub installed/called.

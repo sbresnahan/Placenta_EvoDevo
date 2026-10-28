@@ -90,7 +90,7 @@ retrieve_inputs <- function(c,native=TRUE) {
       cfg_path(c,"response",run=id,mate=mate),s[[paste0("bytes_",mate)]],
       s[[paste0("md5_",mate)]],c)
     if(native)run_checked(c$tools$gzip,c("-t",p))
-    records[[length(records)+1L]]<-data.table(id=id,mate=mate,path=p,sha256=sha256(p),bytes=file.info(p)$size)
+    records[[length(records)+1L]]<-data.table(id=id,mate=mate,path=p,bytes=file.info(p)$size)
   }
   for(i in seq_len(nrow(m$sources))) {
     s<-m$sources[i]
@@ -116,7 +116,7 @@ retrieve_inputs <- function(c,native=TRUE) {
       }
     }
     records[[length(records)+1L]]<-data.table(id=r$resource_id[i],mate=NA_integer_,
-      path=r$destination[i],sha256=sha256(r$destination[i]),bytes=file.info(r$destination[i])$size)
+      path=r$destination[i],bytes=file.info(r$destination[i])$size)
   }
   write_tsv(rbindlist(records),c$paths$resource_receipt)
 }

@@ -1,6 +1,6 @@
 # Operations and troubleshooting
 
-Use [the walkthrough](WALKTHROUGH.md) for the normal run order. All examples
+Use [the step-by-step workflow](Placenta_EvoDevo_step_by_step.md) for the normal run order. All examples
 assume the script root is your current directory and `CONFIG` names one
 absolute private YAML.
 
@@ -59,7 +59,7 @@ bin/submit_pipeline.sh "$CONFIG" reference --after "$AFTER_JOB"
 
 This is a dry-run; `--submit` is still required for actual submission. A
 dependency does not waive input, receipt or approval checks. Do not chain pilot
-completion to scale; scale needs its separate reviewed report hash.
+completion to scale; inspect the report, then explicitly submit scale.
 
 ## Manual submission
 
@@ -93,21 +93,21 @@ LSF spool paths do not locate the project. Driver `-env` values cannot contain
 commas, quotes or newlines; spaces are supported.
 
 `00_run_pipeline.sh` is an optional short driver job controlled by `STAGE`,
-`SUBMIT=yes`, optional `AFTER` and `ACCEPT`. It exits after graph submission.
+`SUBMIT=yes`, optional `AFTER`. It exits after graph submission.
 The ordinary interactive shell interface is simpler.
 
 ## Restart and failure handling
 
 | Problem | Action |
 |---|---|
-| Missing/unreviewed binary identity | Inspect pending inventory and actual build/install evidence; complete [setup review](SETUP.md#installed-tool-identity) |
+| Missing native tool | Inspect the configured environment and command paths; complete [setup review](SETUP.md#installed-tool-identity) |
 | Resource missing checksum/size | Complete the intended asset contract; do not replace it with an arbitrary file |
 | Missing reference/marker approval | Verify build, exact bytes and parent/proxy provenance first |
 | Failed download | Inspect response/error; retry through the supported retrieval stage after resolving the cause |
 | Native tool failure or empty allele output | Inspect private tool/LSF logs; a success receipt must not be fabricated |
 | One missing pilot library | Resolve it and rerun needed work; collector requires all libraries |
-| Resource budget too small | Revise reviewed settings; rerun invalidated prerequisites/pilot before accepting a new report |
-| Missing/stale receipt | Recompute affected stage with consistent inputs/settings; never hand-edit receipt hashes |
+| Resource budget too small | Revise reviewed settings; rerun affected prerequisites/pilot before accepting a new report |
+| Missing/incomplete receipt | Resolve the failure or missing output, then rerun the stage; never fabricate a success record |
 | Lock collision | Inspect recorded owner, live jobs and processes; remove only after verifying the lock is stale |
 | Partial scheduler submission | Reconcile actual IDs in `.submitted.tsv` and LSF before any retry |
 | Technical success but ineligible model | Report design/callability limitation; do not lower inference gates |
@@ -121,11 +121,9 @@ Locks protect shared reference and per-library mutations, plus collectors/
 models. No automatic stale-lock deletion is provided. Do not rebuild a reference
 while downstream jobs are reading it.
 
-With unchanged inputs/settings, validated completed quantification can be
-reused; source/output hashes are checked. Reference/preparation stages can
-rebuild and are not promised to skip every expensive operation. Changed
-wrappers, tools, site/image, configurations, manifests or inputs invalidate
-affected receipts or block execution.
+Completion records indicate that work finished and required nonempty outputs exist; they do not detect changed inputs, settings, software, or output bytes. An explicit stage rerun performs the requested work rather than automatically reusing prior quantification. A stage records that a rerun has started, so failure cannot leave that stage's earlier success in effect.
+
+Before a deliberate rerun, reconcile active jobs and move aside affected outputs/records if existing-file protections require it. Rerun affected downstream stages yourself; do not delete active locks or overwrite files another job is reading.
 
 Download resume accepts only verified matching HTTP range responses; an
 HTTP 200 response is not appended to a partial. Retries/timeouts are bounded.
@@ -139,6 +137,5 @@ and indices stay private; entry points use `umask 077`. Aggregate review and
 release are explicit local actions, with no automatic transfer.
 
 Use the walkthrough's separate release configuration after recording completed
-analysis/result integrity. Its changed export settings have a different
-fingerprint; do not restart analysis with it. Aggregate validation does not
+analysis/result integrity. Do not restart analysis with the release configuration. Aggregate validation does not
 replace model-receipt validation or local disclosure-policy review.

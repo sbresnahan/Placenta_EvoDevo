@@ -1,38 +1,21 @@
 reference_outputs <- function(c)c(unlist(c$paths[c("genome_fai","transcripts_fai","gtf","transcripts","exons","tx_map","event_map",
   "events","pairs","annotation_audit","deferred")]),if(c$profile=="public_cross")
     unlist(c$paths[c("markers","tx_vcf","tx_marker_map","personal_fasta","index")]))
-reference_inputs <- function(c) {
-  x<-c(c$paths$genome,c$paths$annotation)
-  if(c$profile=="public_cross") {
-    s<-resolve_manifest_paths(fread(c$paths$marker_sources),"path",c)
-    x<-c(x,c$paths$marker_sources,s$path)
-  };x
-}
 reference_gate <- function(c,root) {
-  sig<-fingerprint(c,root,reference_inputs(c))
-  if(!stage_valid(c$paths$reference_receipt,sig,reference_outputs(c)))
-    stop("Missing/stale reference receipt; run reference with approved checksums/assets")
+  if(!stage_valid(c$paths$reference_receipt,reference_outputs(c)))
+    stop("Missing/incomplete reference receipt or outputs; run reference")
 }
 worker_reference <- function(c,root) {
   tool_gate(c);snapshot(c)
-  sig<-fingerprint(c,root,reference_inputs(c))
-  if(stage_valid(c$paths$reference_receipt,sig,reference_outputs(c)))return(invisible(TRUE))
+  stage_begin(c$paths$reference_receipt)
   for(p in reference_outputs(c))ensure_parent(p)
   build_reference(c);ensure_parent(c$paths$reference_receipt)
-  stage_finish(c$paths$reference_receipt,sig,reference_outputs(c))
+  stage_finish(c$paths$reference_receipt,reference_outputs(c))
 }
-raw_inputs <- function(c,m) {
-  unlist(lapply(seq_len(nrow(m$sources)),function(i)
-    vapply(seq_len(if(m$sources$layout[i]=="PE")2 else 1),
-      function(k)source_fastq(c,m$sources[i],k),character(1))))
-}
-pilot_signature <- function(c,root,m)fingerprint(c,root,c(raw_inputs(c,m),c$paths$reference_receipt,
-  if(c$profile=="human_trio")c(c$paths$typed_vcf,c$paths$personalization_vcf)))
 worker_pilot <- function(c,root) {
   tool_gate(c);snapshot(c);reference_gate(c,root);m<-load_manifests(c)
+  stage_begin(c$paths$pilot_receipt)
   if(c$profile=="human_trio")human_linkage(c,m)
-  sig<-pilot_signature(c,root,m)
-  if(stage_valid(c$paths$pilot_receipt,sig,c$paths$pilot_report))return(invisible(TRUE))
   metrics<-list()
   for(sample in m$libraries$sample_id) {
     l<-m$libraries[sample_id==sample]
@@ -63,24 +46,22 @@ worker_pilot <- function(c,root) {
       any(report$work_bytes_endpoint_lower_bound>c$pilot$max_work_bytes))
     stop("Measured projection exceeds configured local budget; no scale authorization")
   write_tsv(report,c$paths$pilot_report);ensure_parent(c$paths$pilot_receipt)
-  stage_finish(c$paths$pilot_receipt,sig,c$paths$pilot_report)
-  cat("Technical pilot complete. Explicit scale approval remains required. Report SHA256: ",
-    sha256(c$paths$pilot_report),"\n",sep="")
+  stage_finish(c$paths$pilot_receipt,c$paths$pilot_report)
+  cat("Technical pilot complete. Review the report before explicitly submitting scale.\n")
 }
-authorize_scale <- function(c,root,accept) {
-  m<-load_manifests(c);reference_gate(c,root);sig<-pilot_signature(c,root,m)
-  if(!stage_valid(c$paths$pilot_receipt,sig,c$paths$pilot_report))stop("Successful unchanged pilot required")
-  if(is.null(accept)||!identical(accept,sha256(c$paths$pilot_report)))stop("Accept exact pilot-report SHA256")
+authorize_scale <- function(c,root) {
+  reference_gate(c,root)
+  if(!stage_valid(c$paths$pilot_receipt,c$paths$pilot_report))stop("Completed pilot required")
   if(!isTRUE(c$lsf$resource_limits_approved))stop("Local projected CPU/storage/budget acceptance required")
   ensure_parent(c$paths$scale_receipt)
-  saveRDS(list(signature=sig,report_hash=accept,authorized=TRUE,
+  saveRDS(list(authorized=TRUE,approved_at=format(Sys.time(),tz="UTC",usetz=TRUE),
     approval="explicit_scale_command_and_local_resource_attestation"),c$paths$scale_receipt)
 }
 scale_gate <- function(c,root,m) {
   if(!file.exists(c$paths$scale_receipt))stop("Explicit scale authorization missing")
-  r<-readRDS(c$paths$scale_receipt)
-  if(!isTRUE(r$authorized)||!identical(r$signature,pilot_signature(c,root,m))||
-      !identical(r$report_hash,sha256(c$paths$pilot_report)))stop("Scale authorization stale")
+  r<-tryCatch(readRDS(c$paths$scale_receipt),error=function(e)NULL)
+  if(!is.list(r)||!isTRUE(r$authorized))stop("Explicit scale authorization missing or invalid")
+  if(!stage_valid(c$paths$pilot_receipt,c$paths$pilot_report))stop("Completed pilot required")
 }
 assignment_outputs <- function(c,sample,mode,l) {
   vapply(c("gene_counts","event_counts","assignment_qc"),function(k)
@@ -94,12 +75,9 @@ worker_scale <- function(c,root) {
     allmetrics[[length(allmetrics)+1L]]<-quant_sample(c,root,m,sample)
     qr<-cfg_path(c,"quant_receipt",sample=sample,mode="complete",strand=l$strand_mode)
     ar<-cfg_path(c,"assign_receipt",sample=sample,mode="complete",strand=l$strand_mode)
-    sig<-if(identical(c$execution$backend,"seadragon"))assignment_signature(c,root,sample,qr) else
-      fingerprint(c,root,c(qr,c$paths$reference_receipt))
     outs<-assignment_outputs(c,sample,"complete",l)
-    if(!stage_valid(ar,sig,outs)) {
-      assign_sample(c,m,sample);ensure_parent(ar);stage_finish(ar,sig,outs)
-    }
+    stage_begin(ar)
+    assign_sample(c,m,sample);ensure_parent(ar);stage_finish(ar,outs)
   }
   write_tsv(rbindlist(allmetrics),c$paths$metrics)
   cat("Complete configured cohort processed. Models require a separate command.\n")
@@ -112,35 +90,17 @@ completed_counts <- function(c,root,m) {
     qr<-cfg_path(c,"quant_receipt",sample=sample,mode="complete",strand=l$strand_mode)
     ar<-cfg_path(c,"assign_receipt",sample=sample,mode="complete",strand=l$strand_mode)
     outs<-assignment_outputs(c,sample,"complete",l)
-    sig<-if(identical(c$execution$backend,"seadragon"))assignment_signature(c,root,sample,qr) else
-      fingerprint(c,root,c(qr,c$paths$reference_receipt))
-    if(!stage_valid(ar,sig,outs))stop("Incomplete/stale primary biological unit: ",sample)
-    # Validate quant outputs against their recorded hashes even before costly input rehash.
-    q<-readRDS(qr)
-    sr<-m$sources[sample_id==sample]
-    raw<-unlist(lapply(seq_len(nrow(sr)),function(i)vapply(seq_len(if(l$layout=="PE")2 else 1),
-      function(k)source_fastq(c,sr[i],k),character(1))))
-    index<-if(c$profile=="public_cross")c$paths$index else cfg_path(c,"child_index",sample=sample)
-    vcf<-if(c$profile=="public_cross")c$paths$tx_vcf else cfg_path(c,"child_tx_vcf",sample=sample)
-    if(!identical(q$signature,fingerprint(c,root,c(raw,index,vcf,c$paths$reference_receipt))))
-      stop("Quant inputs/settings changed: ",sample)
-    if(!all(file.exists(names(q$output_hashes)))||
-       !identical(q$output_hashes,vapply(names(q$output_hashes),sha256,character(1))))
-      stop("Quant outputs changed: ",sample)
+    if(!stage_valid(ar,outs))stop("Incomplete primary biological unit: ",sample)
+    quant_outputs<-vapply(c("allele_counts","thetas","tpms","quant_log","resource_log"),
+      function(k)cfg_path(c,k,sample=sample,mode="complete",strand=l$strand_mode),character(1))
+    if(!stage_valid(qr,quant_outputs))stop("Quantification incomplete: ",sample)
     ans$gene[[sample]]<-fread(outs[1]);ans$event[[sample]]<-fread(outs[2])
   }
   lapply(ans,rbindlist,fill=TRUE)
 }
-model_signature <- function(c,root,m) {
-  paths<-unlist(lapply(m$libraries$sample_id,function(sample) {
-    l<-m$libraries[sample_id==sample]
-    c(cfg_path(c,"assign_receipt",sample=sample,mode="complete",strand=l$strand_mode),
-      assignment_outputs(c,sample,"complete",l))
-  }))
-  fingerprint(c,root,c(c$paths$scale_receipt,c$paths$pilot_receipt,paths))
-}
 worker_models <- function(c,root) {
   tool_gate(c);snapshot(c);reference_gate(c,root);m<-load_manifests(c);scale_gate(c,root,m)
+  stage_begin(c$paths$model_receipt)
   x<-completed_counts(c,root,m)
   if(c$profile=="public_cross") {
     distinguishable<-fread(c$paths$events)[window==50 & distinguishing_bp>0,event_id]
@@ -171,7 +131,7 @@ worker_models <- function(c,root) {
     write_tsv(p,c$paths$model_pairs);write_tsv(out,c$paths$model_promoter)
     write_tsv(data.table(status="deferred_unimplemented"),c$paths$model_gene)
   }
-  stage_finish(c$paths$model_receipt,model_signature(c,root,m),
+  stage_finish(c$paths$model_receipt,
     unlist(c$paths[c("model_gene","model_promoter","model_pairs")]))
 }
 status_v2 <- function(c,root) {
@@ -179,14 +139,14 @@ status_v2 <- function(c,root) {
   actions<-list(
     reference=function()reference_gate(c,root),
     pilot=function() {
-      if(!stage_valid(c$paths$pilot_receipt,pilot_signature(c,root,m),c$paths$pilot_report))
-        stop("Missing/stale pilot receipt")
+      if(!stage_valid(c$paths$pilot_receipt,c$paths$pilot_report))
+        stop("Missing/incomplete pilot receipt or report")
     },
     scale=function()scale_gate(c,root,m),
     quantification=function(){scale_gate(c,root,m);completed_counts(c,root,m)},
     models=function() {
-      if(!stage_valid(c$paths$model_receipt,model_signature(c,root,m),
-        unlist(c$paths[c("model_gene","model_promoter","model_pairs")])))stop("Missing/stale model receipt")
+      if(!stage_valid(c$paths$model_receipt,
+        unlist(c$paths[c("model_gene","model_promoter","model_pairs")])))stop("Missing/incomplete model receipt or outputs")
     })
   z<-rbindlist(lapply(names(actions),function(k)tryCatch({
     actions[[k]]();data.table(stage=k,state=if(k=="scale")"authorized" else "complete",reason="")
@@ -198,8 +158,8 @@ export_v2 <- function(c) {
   e<-c$exports
   if(!isTRUE(e$enabled)||!isTRUE(e$policy_approved)||!isTRUE(e$complementary_suppression_reviewed)||
       is.null(e$review_token)||!nzchar(e$review_token))stop("Release disabled: exact manual policy review required")
-  if(!file.exists(c$paths$candidate)||!identical(sha256(c$paths$candidate),e$approved_candidate_sha256))
-    stop("Exact candidate hash approval required")
+  if(!file.exists(c$paths$candidate)||file.info(c$paths$candidate)$size<=0)
+    stop("Reviewed candidate file missing or empty")
   x<-fread(c$paths$candidate);validate_aggregate(x,fread(c$paths$pairs),e$min_cell)
   write_tsv(x,c$paths$release)
 }
@@ -213,5 +173,5 @@ review_v2 <- function(c) {
   x<-x[,..export_columns]
   validate_aggregate(x,fread(c$paths$pairs),c$exports$min_cell)
   write_tsv(x,c$paths$candidate)
-  cat("Local review candidate only; no transfer authorized. SHA256: ",sha256(c$paths$candidate),"\n",sep="")
+  cat("Local review candidate only; inspect it before separately authorizing export. No transfer performed.\n")
 }

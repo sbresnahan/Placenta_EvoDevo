@@ -4,12 +4,12 @@
 native/R environments without installing software, acquiring data or submitting
 jobs.
 
-**Prerequisites:** complete [shared setup](../docs/WALKTHROUGH.md#shared-setup),
+**Prerequisites:** complete [shared setup](../docs/Placenta_EvoDevo_step_by_step.md#part-1-shared-setup--do-this-once),
 select a profile, copy its operational manifests into the data directory and
 edit its private YAML. Set `SCRIPTS_DIR`, `POE_SITE_FILE` and absolute `CONFIG`.
 
 **Inputs:** private YAML, trusted site file, manifest tables, installed tools,
-R image/library and reviewed installation evidence.
+R image/library and existing native environments.
 
 From the script root:
 
@@ -19,8 +19,8 @@ From the script root:
 ```
 
 **Outputs:** metadata validation; accepted `paths.native_inventory` on execution
-success, or a printed pending inventory path to review on identity failure.
-Acceptance requires the exact reviewed binary/source identity and R packages.
+success, or a printed pending inventory path to inspect if environment checks fail.
+Acceptance requires available native commands and compatible R packages.
 See [installed-tool identity](../docs/SETUP.md#installed-tool-identity).
 
 **Next:** public [retrieval](../01_retrieval/README.md), or private GUSTO input/

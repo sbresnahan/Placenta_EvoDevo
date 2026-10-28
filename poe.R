@@ -5,21 +5,21 @@ f<-gsub("~+~"," ",f,fixed=TRUE)
 root<-normalizePath(dirname(f),mustWork=TRUE)
 source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
-if(length(a)<2)stop("Usage: Rscript poe.R CONFIG STAGE [--submit] [--execute] [--after JOB] [--accept SHA256]")
+if(length(a)<2)stop("Usage: Rscript poe.R CONFIG STAGE [--submit] [--execute] [--after JOB]")
 source(file.path(root,"R/config.R"))
 c<-read_config_v2(a[1]);stage<-a[2];flags<-a[-c(1,2)]
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(module in c("common","workflow","parental","models","exports","acquisition",
                  "public","reference","pipeline","stages","scheduler","seadragon","lsf"))
   source(file.path(root,"R",paste0(module,".R")))
-allowed<-c("--submit","--execute","--after","--accept")
+allowed<-c("--submit","--execute","--after")
 value<-function(flag) {
   k<-match(flag,flags);if(is.na(k))return(NULL)
   if(k==length(flags)||startsWith(flags[k+1],"--"))stop("Missing value for ",flag)
   flags[k+1]
 }
 extras<-flags
-for(flag in c("--after","--accept"))if(flag %in% extras) {
+for(flag in "--after")if(flag %in% extras) {
   k<-match(flag,extras);if(k==length(extras))stop("Missing flag value")
   extras<-extras[-c(k,k+1)]
 }
@@ -38,7 +38,7 @@ tryCatch({
     else {snapshot(c);retrieve_inputs(c)}
   } else if(stage %in% c("reference","pilot","scale","models")) {
     preflight_v2(c,root)
-    if(stage=="scale"&&"--submit" %in% flags)authorize_scale(c,root,value("--accept"))
+    if(stage=="scale"&&"--submit" %in% flags)authorize_scale(c,root)
     submit_stage(c,root,stage,"--submit" %in% flags,
       if(is.null(value("--after")))"none" else value("--after"))
   } else if(startsWith(stage,"worker-")) {

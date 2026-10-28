@@ -145,12 +145,13 @@ l<-m$libraries[1];qargs<-quant_args(c,l,"INDEX","VCF","GENOTYPE","READ","OUT")
 check("--single" %in% qargs && qargs[match("-l",qargs)+1]=="250")
 l$layout<-"PE";qargs<-quant_args(c,l,"INDEX","VCF","GENOTYPE",c("R1","R2"),"OUT")
 check(!"--single" %in% qargs && !"-l" %in% qargs)
-# Invalidation by fragment settings, source changes, output changes.
+# Completion records do not determine whether inputs or outputs are current.
 i<-file.path(temp,"i");o<-file.path(temp,"o");r<-file.path(temp,"r.rds")
 writeLines("truth",i);writeLines("truth",o)
-s1<-stage_signature(i,list(fragment_mean=250));s2<-stage_signature(i,list(fragment_mean=251))
-check(s1!=s2);stage_finish(r,s1,o);check(stage_valid(r,s1,o));check(!stage_valid(r,s2,o))
-writeLines("changed",o);check(!stage_valid(r,s1,o))
+stage_finish(r,o);check(stage_valid(r,o))
+writeLines("changed",o);check(stage_valid(r,o))
+writeLines("changed input",i);check(stage_valid(r,o))
+stage_begin(r);check(!stage_valid(r,o))
 # Scheduler quoting, dependencies, no actual bsub.
 # Legacy adapter remains regression-tested independently of the new host backend.
 c$execution$backend<-"legacy"
@@ -205,8 +206,6 @@ if(nzchar(Sys.which("samtools"))) {
   addtx("plus1","G","+",c(1,21),c(8,28));addtx("plus2","G","+",c(11,21),c(18,28))
   addtx("minus","H","-",c(31,51),c(38,58))
   writeLines(unlist(records),rcfg$paths$annotation)
-  rcfg$reference$genome_sha256<-sha256(rcfg$paths$genome)
-  rcfg$reference$annotation_sha256<-sha256(rcfg$paths$annotation)
   build_reference(rcfg)
   check(nrow(fread(rcfg$paths$tx_map))==3)
   check(all(Biostrings::width(Biostrings::readDNAStringSet(rcfg$paths$transcripts))==16))

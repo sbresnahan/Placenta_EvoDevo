@@ -14,6 +14,5 @@ CONFIG="${CONFIG:?Set CONFIG to an absolute cohort YAML}"
 STAGE="${STAGE:?Set STAGE to reference, pilot, scale, models, or retrieve}"
 args=("$CONFIG" "$STAGE")
 [[ "${SUBMIT:-no}" != yes ]] || args+=(--submit)
-[[ -z "${ACCEPT:-}" ]] || args+=(--accept "$ACCEPT")
 [[ -z "${AFTER:-}" ]] || args+=(--after "$AFTER")
 exec "$ROOT/bin/submit_pipeline.sh" "${args[@]}"

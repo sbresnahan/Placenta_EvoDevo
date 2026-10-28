@@ -10,14 +10,13 @@ exe="$(command -v "$command_name")"
 [[ -n "$exe" && -x "$exe" && "$exe" == /* ]] || { printf 'Native executable not resolved: %s\n' "$command_name" >&2; exit 1; }
 if [[ "${1:-}" == --identity ]]; then
   exe="$(readlink -f "$exe")"
-  hash="$(sha256sum "$exe")"; hash="${hash%% *}"
   case "$tool" in
-    personalizer) version="console-entrypoint (source and SHA256 gated separately)" ;;
+    personalizer) version="installed console entry point" ;;
     python|samtools|bcftools) version="$("$exe" --version 2>&1)" ;;
     ornaments) version="$("$exe" version 2>&1 || "$exe" --version 2>&1 || true)" ;;
   esac
   version="${version//$'\t'/ }"; version="${version//$'\r'/ }"; version="${version//$'\n'/; }"
-  printf '%s\t%s\t%s\t%s\n' "$tool" "$exe" "${version:0:500}" "$hash"
+  printf '%s\t%s\t%s\n' "$tool" "$exe" "${version:0:500}"
 else
   exec "$exe" "$@"
 fi

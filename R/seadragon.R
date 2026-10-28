@@ -5,71 +5,50 @@ runtime_record <- function(c) {
   if(nzchar(x))x else c$paths$native_inventory
 }
 native_gate <- function(c,establish=FALSE) {
-  for(p in c("data.table","digest","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"))
+  for(p in c("data.table","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"))
     if(!requireNamespace(p,quietly=TRUE))stop("Missing R-container package: ",p)
   if(getRversion()<"4.3.1")stop("R >=4.3.1 required")
   f<-runtime_record(c)
   if(!file.exists(f))stop("Host inventory missing; run 00_setup/preflight.sh CONFIG --execute")
   d<-fread(f,colClasses="character",na.strings=NULL)
-  require_columns(d,c("component","path","version","sha256"))
+  require_columns(d,c("component","path","version"))
   assert_unique(d,"component")
-  # source_revision, when present, is informational rather than build attestation.
   need<-c("ornaments","personalizer","samtools","bcftools","python","python_dependencies","site","r_image")
-  if(!all(need %in% d$component)||any(!nzchar(d[component!="source_revision"]$path))||
-     any(!grepl("^[a-f0-9]{64}$",d[component!="source_revision"]$sha256)))
+  if(!all(need %in% d$component)||anyNA(d$path)||any(!nzchar(d$path)))
     stop("Incomplete host inventory")
   val<-function(k,field)d[[field]][match(k,d$component)]
   if(!dir.exists(c$tools$r_library))stop("Declared R library is not visible inside the R container")
   if(!identical(normalizePath(val("site","path"),mustWork=TRUE),
-                normalizePath(c$execution$site_file,mustWork=TRUE))||
-     !identical(val("site","sha256"),sha256(c$execution$site_file)))
+                normalizePath(c$execution$site_file,mustWork=TRUE)))
     stop("Executed site file differs from the explicitly configured site file")
   if(!identical(val("r_image","path"),c$execution$image))
     stop("Executed R image differs from the configured image")
-  if(!identical(val("ornaments","sha256"),c$ornaments$binary_sha256))
-    stop("Installed Ornaments binary SHA256 differs from the configured installed-file identity")
-  if(!identical(val("personalizer","sha256"),c$ornaments$personalizer_sha256))
-    stop("Installed personalizer SHA256 differs from the configured installed-file identity")
-  if(!establish) {
-    if(!file.exists(c$paths$native_inventory)||
-       !identical(sha256(f),sha256(c$paths$native_inventory)))
-      stop("Host environment differs from accepted preflight inventory; re-review before continuing")
-  }
   invisible(d)
 }
 catalog_outputs <- function(c)unlist(c$paths[c("genome_fai","transcripts_fai","gtf","transcripts",
   "exons","tx_map","event_map","events","pairs","annotation_audit","deferred")])
-catalog_signature <- function(c,root)fingerprint(c,root,c(c$paths$genome,c$paths$annotation))
 catalog_gate <- function(c,root) {
-  if(!stage_valid(c$paths$catalog_receipt,catalog_signature(c,root),catalog_outputs(c)))
-    stop("Missing/stale reference catalog")
+  if(!stage_valid(c$paths$catalog_receipt,catalog_outputs(c)))
+    stop("Missing/incomplete reference catalog")
 }
 marker_outputs <- function(c)unlist(c$paths[c("markers","tx_vcf","tx_marker_map")])
-marker_signature <- function(c,root)fingerprint(c,root,c(c$paths$catalog_receipt,reference_inputs(c)))
 marker_gate <- function(c,root) {
   catalog_gate(c,root)
-  if(!stage_valid(c$paths$marker_receipt,marker_signature(c,root),marker_outputs(c)))
-    stop("Missing/stale parental marker/transcript VCF receipt")
+  if(!stage_valid(c$paths$marker_receipt,marker_outputs(c)))
+    stop("Missing/incomplete parental marker/transcript VCF receipt")
 }
 child_outputs <- function(c,sample)vapply(c("child_query","personal_query","child_vcf","personal_vcf",
   "child_tx_vcf","child_tx_map"),function(k)cfg_path(c,k,sample=sample),character(1))
-child_signature <- function(c,root)fingerprint(c,root,c(c$paths$typed_vcf,
-  c$paths$personalization_vcf,c$paths$reference_receipt))
 child_gate <- function(c,root,sample) {
   reference_gate(c,root)
-  if(!stage_valid(cfg_path(c,"child_receipt",sample=sample),child_signature(c,root),child_outputs(c,sample)))
-    stop("Missing/stale typed child preparation")
+  if(!stage_valid(cfg_path(c,"child_receipt",sample=sample),child_outputs(c,sample)))
+    stop("Missing/incomplete typed child preparation")
 }
 child_index_gate <- function(c,root,sample) {
   child_gate(c,root,sample)
   outputs<-vapply(c("child_fasta","child_index"),function(k)cfg_path(c,k,sample=sample),character(1))
-  sig<-fingerprint(c,root,c(cfg_path(c,"child_receipt",sample=sample),c$paths$reference_receipt))
-  if(!stage_valid(cfg_path(c,"human_receipt",sample=sample),sig,outputs))
-    stop("Missing/stale child personalized index")
-}
-assignment_signature <- function(c,root,sample,qr) {
-  fingerprint(c,root,c(qr,c$paths$reference_receipt,if(c$profile=="human_trio")
-    c(cfg_path(c,"child_receipt",sample=sample),cfg_path(c,"human_receipt",sample=sample))))
+  if(!stage_valid(cfg_path(c,"human_receipt",sample=sample),outputs))
+    stop("Missing/incomplete child personalized index")
 }
 plan_line <- function(tool,args,stdout=NULL,stderr=NULL) {
   cmd<-paste(vapply(c(tool,as.character(args)),shQuote,character(1)),collapse=" ")
@@ -112,25 +91,18 @@ prepare_quant <- function(c,root,m,sample,mode,strand,limit,job) {
   vcf<-if(c$profile=="human_trio")cfg_path(c,"child_tx_vcf",sample=sample) else c$paths$tx_vcf
   p<-function(k)cfg_path(c,k,sample=sample,mode=mode,strand=strand)
   outputs<-vapply(c("allele_counts","thetas","tpms","quant_log","resource_log"),p,character(1))
-  sig<-fingerprint(c,root,c(files,index,vcf,c$paths$reference_receipt))
+  stage_begin(p("quant_receipt"))
   for(o in outputs)ensure_parent(o)
   dir.create(p("quant_dir"),recursive=TRUE,showWarnings=FALSE)
-  cached<-stage_valid(p("quant_receipt"),sig,outputs)
   args<-quant_args(c,l,index,vcf,genotype,files,p("quant_dir"),strand)
   lines<-vapply(raw,function(f)plan_line(c$tools$gzip,c("-t",f)),character(1))
-  if(!cached)lines<-c(lines,plan_line(c$tools$time,c("-v","-o",p("resource_log"),c$tools$ornaments,args),
+  lines<-c(lines,plan_line(c$tools$time,c("-v","-o",p("resource_log"),c$tools$ornaments,args),
     p("quant_log"),p("quant_log")))
-  list(sample=sample,mode=mode,strand=strand,fragments=n,signature=sig,outputs=outputs,
-    raw=raw,files=files,index=index,vcf=vcf,receipt=p("quant_receipt"),cached=cached,lines=lines)
+  list(sample=sample,mode=mode,strand=strand,fragments=n,outputs=outputs,
+    raw=raw,files=files,index=index,vcf=vcf,receipt=p("quant_receipt"),lines=lines)
 }
 finish_quant <- function(c,root,q) {
-  if(!identical(q$signature,fingerprint(c,root,c(q$files,q$index,q$vcf,c$paths$reference_receipt))))
-    stop("Quant inputs changed during native execution")
-  if(q$cached) {
-    if(!stage_valid(q$receipt,q$signature,q$outputs))stop("Cached quant outputs changed")
-    return(readRDS(q$receipt)$metrics)
-  }
-  x<-read_ornament_counts(q$outputs["allele_counts"],c$ornaments$semantics,c$ornaments$commit)
+  x<-read_ornament_counts(q$outputs["allele_counts"],c$ornaments$semantics)
   if(!nrow(x))stop("Empty allelic output is failed callability")
   log<-readLines(q$outputs["quant_log"],warn=FALSE)
   line<-grep("\\[quant\\] processed .* reads, .* reads pseudoaligned",log,value=TRUE)
@@ -159,17 +131,17 @@ finish_quant <- function(c,root,q) {
     index_bytes=file.info(q$index)$size,fragment_mean_nt=l$fragment_mean_nt,
     fragment_sd_nt=l$fragment_sd_nt,fragment_parameter_origin=l$fragment_parameter_origin,
     marker_proxy=isTRUE(c$markers$proxy),proxy_reason=if(isTRUE(c$markers$proxy))c$markers$proxy_reason else "")
-  stage_finish(q$receipt,q$signature,q$outputs)
+  stage_finish(q$receipt,q$outputs)
   r<-readRDS(q$receipt);r$metrics<-metrics;saveRDS(r,q$receipt)
   metrics
 }
 library_pilot_receipt <- function(c,s)cfg_path(c,"library_pilot_receipt",sample=s)
 library_pilot_report <- function(c,s)cfg_path(c,"library_pilot_report",sample=s)
 collect_pilot <- function(c,root,m) {
-  sig<-pilot_signature(c,root,m)
+  stage_begin(c$paths$pilot_receipt)
   reports<-lapply(m$libraries$sample_id,function(s) {
     p<-library_pilot_report(c,s)
-    if(!stage_valid(library_pilot_receipt(c,s),sig,p))stop("Incomplete/stale pilot library: ",s)
+    if(!stage_valid(library_pilot_receipt(c,s),p))stop("Incomplete pilot library: ",s)
     fread(p)
   })
   report<-rbindlist(reports)
@@ -184,8 +156,8 @@ collect_pilot <- function(c,root,m) {
      any(report$work_bytes_endpoint_lower_bound>c$pilot$max_work_bytes))
     stop("Pilot exceeds configured compute/storage budget")
   write_tsv(report,c$paths$pilot_report)
-  stage_finish(c$paths$pilot_receipt,sig,c$paths$pilot_report)
-  cat("Pilot report SHA256:",sha256(c$paths$pilot_report),"\nScale requires a separate explicit authorization.\n")
+  stage_finish(c$paths$pilot_receipt,c$paths$pilot_report)
+  cat("Pilot report complete. Review it before explicitly submitting scale.\n")
 }
 runtime_action <- function(c,root,stage,phase,sample,job) {
   if(phase=="bootstrap") {
@@ -203,13 +175,14 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     native_gate(c,establish=TRUE);ensure_parent(c$paths$native_inventory)
     if(!identical(runtime_record(c),c$paths$native_inventory))
       writeLines(readLines(runtime_record(c)),c$paths$native_inventory)
-    cat("Host identity accepted; native and R environments checked separately.\n")
+    cat("Host inventory recorded; native and R environments checked separately.\n")
     return(invisible())
   }
   native_gate(c);snapshot(c);m<-load_manifests(c)
   if(stage=="preflight") {preflight_v2(c,root);return(invisible())}
   if(stage=="reference") {
     if(phase=="prepare") {
+      stage_begin(c$paths$catalog_receipt);stage_begin(c$paths$reference_receipt)
       lines<-character()
       if(!is.null(c$reference$genome_source)&&!file.exists(c$paths$genome)) {
         ensure_parent(c$paths$genome)
@@ -220,20 +193,22 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
       build_reference(c,native=FALSE,public=FALSE)
       write_plan(plan_line(c$tools$samtools,c("faidx",c$paths$transcripts)),job,"post")
     } else if(phase=="finish") {
-      stage_finish(c$paths$catalog_receipt,catalog_signature(c,root),catalog_outputs(c))
+      stage_finish(c$paths$catalog_receipt,catalog_outputs(c))
       if(c$profile=="human_trio")
-        stage_finish(c$paths$reference_receipt,fingerprint(c,root,reference_inputs(c)),reference_outputs(c))
+        stage_finish(c$paths$reference_receipt,reference_outputs(c))
     }
   } else if(stage=="markers") {
     if(c$profile!="public_cross")stop("Public markers stage cannot run on human trios")
+    stage_begin(c$paths$marker_receipt)
     catalog_gate(c,root);v<-prepare_markers(c);v[,gt:="0/1"]
     tx_variant_map(v,fread(c$paths$exons),c,c$paths$tx_vcf,c$paths$tx_marker_map,c$cohort_id)
-    stage_finish(c$paths$marker_receipt,marker_signature(c,root),marker_outputs(c))
+    stage_finish(c$paths$marker_receipt,marker_outputs(c))
   } else if(stage=="child") {
     if(c$profile!="human_trio")stop("Child stage requires human trio profile")
     reference_gate(c,root);sample_manifest(c,sample)
     s<-human_linkage(c,m)[sample_id==sample];if(nrow(s)!=1L)stop("Unique child required")
     if(phase=="prepare") {
+      stage_begin(cfg_path(c,"child_receipt",sample=sample))
       lines<-character()
       for(mode in c("typed","personalization")) {
         ids<-if(mode=="typed")c(s$child_id,s$mother_id,s$father_id) else s$child_id
@@ -255,7 +230,7 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
       d<-d[gt %in% c("0/1","1/0","1/1","0|1","1|0","1|1")]
       tx_variant_map(d,fread(c$paths$exons),c,cfg_path(c,"child_tx_vcf",sample=sample),
         cfg_path(c,"child_tx_map",sample=sample),s$child_id)
-      stage_finish(cfg_path(c,"child_receipt",sample=sample),child_signature(c,root),child_outputs(c,sample))
+      stage_finish(cfg_path(c,"child_receipt",sample=sample),child_outputs(c,sample))
     }
   } else if(stage=="index") {
     if(c$profile=="public_cross") {
@@ -267,21 +242,23 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
       fasta<-cfg_path(c,"child_fasta",sample=sample);index<-cfg_path(c,"child_index",sample=sample)
     }
     if(phase=="prepare") {
+      stage_begin(if(c$profile=="public_cross")c$paths$reference_receipt else
+        cfg_path(c,"human_receipt",sample=sample))
       ensure_parent(fasta);ensure_parent(index)
       write_plan(c(plan_line(c$tools$personalizer,c("-f",c$paths$transcripts,"-v",vcf,"-t","ornament",
         "-o",fasta,"-s",genotype)),plan_line(c$tools$ornaments,c("index","-i",index,fasta))),job,"pre")
     } else {
       if(!all(file.exists(c(fasta,index)))||any(file.info(c(fasta,index))$size<=0))stop("Missing/empty personalized index")
       if(c$profile=="public_cross")
-        stage_finish(c$paths$reference_receipt,fingerprint(c,root,reference_inputs(c)),reference_outputs(c)) else
-        stage_finish(cfg_path(c,"human_receipt",sample=sample),
-          fingerprint(c,root,c(cfg_path(c,"child_receipt",sample=sample),c$paths$reference_receipt)),c(fasta,index))
+        stage_finish(c$paths$reference_receipt,reference_outputs(c)) else
+        stage_finish(cfg_path(c,"human_receipt",sample=sample),c(fasta,index))
     }
   } else if(stage %in% c("pilot","quantify")) {
     sample_manifest(c,sample);reference_gate(c,root)
     if(stage=="quantify")scale_gate(c,root,m)
     state<-file.path(job,"quant_state.rds")
     if(phase=="prepare") {
+      if(stage=="pilot")stage_begin(library_pilot_receipt(c,sample))
       l<-m$libraries[sample_id==sample]
       specs<-if(stage=="pilot")c(lapply(c("fr","rf","unstranded"),function(s)
         list(mode="strand",strand=s,limit=c$pilot$strand_fragments)),
@@ -300,7 +277,7 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
           report[mode=="pilot",fragments]<c$pilot$fragments)stop("Pilot strand/protocol/chunk gate failed")
         assign_sample(c,m,sample,"pilot")
         write_tsv(report,library_pilot_report(c,sample))
-        stage_finish(library_pilot_receipt(c,sample),pilot_signature(c,root,m),library_pilot_report(c,sample))
+        stage_finish(library_pilot_receipt(c,sample),library_pilot_report(c,sample))
       } else write_tsv(report,cfg_path(c,"library_metrics",sample=sample))
     }
   } else if(stage=="collect-pilot") {
@@ -311,17 +288,13 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     l<-m$libraries[sample_id==sample]
     qr<-cfg_path(c,"quant_receipt",sample=sample,mode="complete",strand=l$strand_mode)
     if(!file.exists(qr))stop("Quantification receipt missing")
-    q<-readRDS(qr)
-    index<-if(c$profile=="public_cross")c$paths$index else cfg_path(c,"child_index",sample=sample)
-    vcf<-if(c$profile=="public_cross")c$paths$tx_vcf else cfg_path(c,"child_tx_vcf",sample=sample)
-    sr<-m$sources[sample_id==sample]
-    raw<-unlist(lapply(seq_len(nrow(sr)),function(i)vapply(seq_len(if(l$layout=="PE")2 else 1),
-      function(k)source_fastq(c,sr[i],k),character(1))))
-    if(!identical(q$signature,fingerprint(c,root,c(raw,index,vcf,c$paths$reference_receipt)))||
-       !stage_valid(qr,q$signature,names(q$output_hashes)))stop("Quantification receipt invalid/stale")
-    assign_sample(c,m,sample)
+    quant_outputs<-vapply(c("allele_counts","thetas","tpms","quant_log","resource_log"),
+      function(k)cfg_path(c,k,sample=sample,mode="complete",strand=l$strand_mode),character(1))
+    if(!stage_valid(qr,quant_outputs))stop("Quantification receipt or outputs incomplete")
     ar<-cfg_path(c,"assign_receipt",sample=sample,mode="complete",strand=l$strand_mode)
-    stage_finish(ar,assignment_signature(c,root,sample,qr),assignment_outputs(c,sample,"complete",l))
+    stage_begin(ar)
+    assign_sample(c,m,sample)
+    stage_finish(ar,assignment_outputs(c,sample,"complete",l))
   } else if(stage=="collect-quantification") {
     scale_gate(c,root,m);completed_counts(c,root,m)
     write_tsv(rbindlist(lapply(m$libraries$sample_id,function(s) {

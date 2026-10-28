@@ -6,29 +6,31 @@ run_checked <- function(command, args, stdout = "", stderr = "") {
   if (!identical(as.integer(status), 0L)) stop("Command failed: ", basename(command))
   invisible(TRUE)
 }
-stage_signature <- function(inputs, settings, source_files = character()) {
-  paths <- c(inputs, source_files)
-  if (any(!file.exists(paths)) || any(file.info(paths)$size <= 0))
-    stop("Missing/empty stage inputs")
-  digest::digest(list(hashes = vapply(paths, sha256, character(1)), settings = settings),
-                 algo = "sha256")
-}
-stage_valid <- function(receipt, signature, outputs) {
-  if (!file.exists(receipt) || any(!file.exists(outputs))) return(FALSE)
+stage_valid <- function(receipt, outputs) {
+  # Completion only: the operator decides when inputs/settings require reruns.
+  outputs <- unname(outputs)
+  if (!length(outputs) || !file.exists(receipt) || any(!file.exists(outputs))) return(FALSE)
   r <- tryCatch(readRDS(receipt), error = function(e) NULL)
-  !is.null(r) && identical(r$signature, signature) &&
-    identical(r$output_hashes, setNames(vapply(unname(outputs), sha256, character(1)),unname(outputs))) &&
-    all(file.info(outputs)$size > 0)
+  is.list(r) && identical(r$state, "complete") &&
+    all(outputs %in% r$outputs) && all(file.info(outputs)$size > 0)
 }
-stage_finish <- function(receipt, signature, outputs) {
-  if (any(!file.exists(outputs)) || any(file.info(outputs)$size <= 0))
-    stop("Cannot commit missing/empty stage outputs")
+stage_begin <- function(receipt) {
+  # An explicitly requested rerun must not leave a previous success on failure.
   dir.create(dirname(receipt),recursive=TRUE,showWarnings=FALSE)
   tmp<-tempfile(".receipt-",tmpdir=dirname(receipt))
-  saveRDS(list(signature = signature,
-    state = "complete", outputs=unname(outputs),
-    output_hashes = setNames(vapply(unname(outputs), sha256, character(1)),unname(outputs))), tmp)
-  if(!file.rename(tmp,receipt))stop("Atomic receipt commit failed")
+  saveRDS(list(state="running",outputs=character(),
+    started_at=format(Sys.time(),tz="UTC",usetz=TRUE)),tmp)
+  if(!file.rename(tmp,receipt))stop("Atomic receipt write failed")
+}
+stage_finish <- function(receipt, outputs) {
+  outputs <- unname(outputs)
+  if (!length(outputs) || any(!file.exists(outputs)) || any(file.info(outputs)$size <= 0))
+    stop("Cannot record missing/empty stage outputs")
+  dir.create(dirname(receipt),recursive=TRUE,showWarnings=FALSE)
+  tmp<-tempfile(".receipt-",tmpdir=dirname(receipt))
+  saveRDS(list(state = "complete", outputs = outputs,
+    completed_at = format(Sys.time(), tz = "UTC", usetz = TRUE)), tmp)
+  if(!file.rename(tmp,receipt))stop("Atomic receipt write failed")
 }
 check_linkage <- function(samples, trios) {
   require_columns(samples, c("sample_id","child_id","layout","strand_mode","fastq_1","fastq_2",

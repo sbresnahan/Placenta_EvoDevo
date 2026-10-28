@@ -36,7 +36,7 @@
   plus empty private schemas. Copy operational tables into the data root.
 - `tests/`: deterministic software tests and tiny real-samtools coordinate
   integration when available; not biological cohort results.
-- `docs/`: [walkthrough](docs/WALKTHROUGH.md), setup, operations and validation.
+- `docs/`: [step-by-step workflow](docs/Placenta_EvoDevo_step_by_step.md), setup, operations and validation.
   Auxiliary TSV inventories/environment metadata are not execution instructions.
 - `evidence/`: resource catalog, human recommendations and
   [scientific review](evidence/review.md).

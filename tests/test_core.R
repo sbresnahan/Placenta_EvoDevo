@@ -48,7 +48,7 @@ tx <- data.table(transcript_id = c("plus","minus"), event_id = c("P","M"), gene_
 ev <- event_locus_counts(oriented, tx, "coordinate_test", "truth_table")
 check(nrow(ev) == 6L) # NOT collapsed across loci.
 check(sum(ev$maternal_count) == 0)
-check(fails(read_ornament_counts(tempfile(), "left_right", "commit")))
+check(fails(read_ornament_counts(tempfile(), "left_right")))
 check(fails(assert_unique(data.table(id = c("a","a")), "id")))
 check(equivalence_call(0, .01, 20)$equivalent)
 check(!equivalence_call(0, 1, 20)$equivalent)

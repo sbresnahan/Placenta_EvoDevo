@@ -25,5 +25,5 @@ same explicit environment, not in addition to a submitted job.
 **Outputs:** validated cohort raw/reference files and `paths.resource_receipt`.
 Missing required checksum/size contracts block acquisition.
 
-**Next:** enter uncompressed genome/annotation SHA256 and exact marker-source
-SHA256 values, complete reviews, then [reference preparation](../02_reference/README.md).
+**Next:** review the actual genome/annotation and compatible marker-source
+paths/builds, then [reference preparation](../02_reference/README.md).

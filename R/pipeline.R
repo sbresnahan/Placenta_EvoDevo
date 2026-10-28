@@ -10,39 +10,20 @@ source_fastq <- function(c,s,mate) {
 tool_gate <- function(c) {
   if(identical(c$execution$backend,"seadragon"))return(native_gate(c))
   if(!dir.exists(c$tools$r_library))stop("Configured R library directory is not visible")
-  for(p in c("data.table","digest","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"))
+  for(p in c("data.table","yaml","curl","GenomicRanges","IRanges","S4Vectors","Rsamtools","Biostrings"))
     if(!requireNamespace(p,quietly=TRUE))stop("Missing configured R dependency: ",p)
-  for(k in c("Rscript","bash","git","samtools","bcftools","gzip","ornaments","python","personalizer","time"))
+  for(k in c("Rscript","bash","samtools","bcftools","gzip","ornaments","python","personalizer","time"))
     if(!file.exists(c$tools[[k]]))stop("Configured tool missing: ",k)
-  commit<-system2(c$tools$git,c("-C",shQuote(c$tools$ornaments_source),"rev-parse","HEAD"),stdout=TRUE)
-  if(!identical(commit,c$ornaments$commit))stop("Ornaments commit mismatch")
-  if(!identical(sha256(c$tools$ornaments),c$ornaments$binary_sha256))
-    stop("Exact locally reviewed Ornaments build SHA256 required")
   if(getRversion()<"4.3.1")stop("R >=4.3.1 required")
   version_output<-function(tool) {
     x<-system2(tool,"--version",stdout=TRUE,stderr=TRUE)
     if(!is.null(attr(x,"status")))stop("Tool version check failed: ",basename(tool))
     paste(x,collapse="; ")
   }
-  versions<-data.table(component=c("R","Ornaments_source","Ornaments_binary_sha256","samtools","bcftools"),
-    value=c(as.character(getRversion()),commit,sha256(c$tools$ornaments),
+  versions<-data.table(component=c("R","samtools","bcftools"),
+    value=c(as.character(getRversion()),
       version_output(c$tools$samtools),version_output(c$tools$bcftools)))
   write_tsv(versions,c$paths$tool_versions)
-}
-fingerprint <- function(c,root,extra=character()) {
-  files<-c(c$paths$sources,c$paths$libraries,c$paths$units,c$paths$resources,
-    if(c$profile=="human_trio")c(c$paths$trios,c$paths$covariates),
-    list.files(file.path(root,"R"),pattern="\\.R$",full.names=TRUE),
-    file.path(root,"poe.R"),extra)
-  tools<-unlist(c$tools[c("Rscript","ornaments","python","personalizer","samtools","bcftools","time")])
-  if(identical(c$execution$backend,"seadragon")) {
-    files<-c(files,c$paths$native_inventory,
-      list.files(file.path(root,"bin"),recursive=TRUE,full.names=TRUE),
-      file.path(root,"config/seadragon.sh"),file.path(root,"run_pipeline.R"),file.path(root,"runtime.R"),
-      list.files(root,pattern="\\.(lsf|sh)$",recursive=TRUE,full.names=TRUE))
-  }
-  files<-unique(c(files,tools))
-  stage_signature(files,c)
 }
 snapshot <- function(c) {
   for(k in c("work","scratch","logs","receipts"))dir.create(c$paths[[k]],recursive=TRUE,showWarnings=FALSE)
@@ -86,9 +67,8 @@ human_prepare <- function(c,m,sample,root) {
   outputs<-vapply(c("child_query","personal_query","child_vcf","personal_vcf",
     "child_tx_vcf","child_tx_map","child_fasta","child_index"),
     function(k)cfg_path(c,k,sample=sample),character(1))
-  sig<-fingerprint(c,root,c(c$paths$typed_vcf,c$paths$personalization_vcf,c$paths$reference_receipt))
   receipt<-cfg_path(c,"human_receipt",sample=sample)
-  if(stage_valid(receipt,sig,outputs))return(s)
+  stage_begin(receipt)
   for(mode in c("typed","personalization")) {
     ids<-if(mode=="typed")c(s$child_id,s$mother_id,s$father_id) else s$child_id
     vcf<-cfg_path(c,if(mode=="typed")"child_vcf" else "personal_vcf",sample=sample)
@@ -111,7 +91,7 @@ human_prepare <- function(c,m,sample,root) {
     cfg_path(c,"child_tx_map",sample=sample),s$child_id)
   make_index(c,cfg_path(c,"child_tx_vcf",sample=sample),s$child_id,
     cfg_path(c,"child_fasta",sample=sample),cfg_path(c,"child_index",sample=sample))
-  ensure_parent(receipt);stage_finish(receipt,sig,outputs)
+  ensure_parent(receipt);stage_finish(receipt,outputs)
   s
 }
 quant_args <- function(c,l,index,vcf,genotype,files,out,strand=l$strand_mode) {
@@ -155,9 +135,8 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
   args<-list(sample=sample,mode=mode,strand=strand)
   p<-function(k)do.call(cfg_path,c(list(c=c,key=k),args))
   outputs<-vapply(c("allele_counts","thetas","tpms","quant_log","resource_log"),p,character(1))
-  sig<-fingerprint(c,root,c(files,index,vcf,c$paths$reference_receipt))
   rec<-p("quant_receipt")
-  if(stage_valid(rec,sig,outputs))return(readRDS(rec)$metrics)
+  stage_begin(rec)
   for(o in outputs)ensure_parent(o)
   dir.create(p("quant_dir"),recursive=TRUE,showWarnings=FALSE)
   t<-proc.time()[["elapsed"]]
@@ -165,7 +144,7 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
   run_checked(c$tools$time,c("-v","-o",p("resource_log"),c$tools$ornaments,qa),
     stdout=p("quant_log"),stderr=p("quant_log"))
   elapsed<-proc.time()[["elapsed"]]-t
-  x<-read_ornament_counts(p("allele_counts"),c$ornaments$semantics,c$ornaments$commit)
+  x<-read_ornament_counts(p("allele_counts"),c$ornaments$semantics)
   if(!nrow(x))stop("Empty allelic output is failed callability, not successful completion")
   log<-readLines(p("quant_log"),warn=FALSE)
   q<-grep("\\[quant\\] processed .* reads, .* reads pseudoaligned",log,value=TRUE)
@@ -183,13 +162,13 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
     fragment_sd_nt=if(l$layout=="SE")l$fragment_sd_nt else NA_real_,
     fragment_parameter_origin=if(l$layout=="SE")l$fragment_parameter_origin else "paired_end_quantifier",
     marker_proxy=isTRUE(c$markers$proxy),proxy_reason=if(isTRUE(c$markers$proxy))c$markers$proxy_reason else "")
-  ensure_parent(rec);stage_finish(rec,sig,outputs)
+  ensure_parent(rec);stage_finish(rec,outputs)
   r<-readRDS(rec);r$metrics<-metrics;saveRDS(r,rec);metrics
 }
 assign_sample <- function(c,m,sample,mode="complete") {
   l<-m$libraries[sample_id==sample];strand<-l$strand_mode
   p<-function(k)cfg_path(c,k,sample=sample,mode=mode,strand=strand)
-  x<-read_ornament_counts(p("allele_counts"),c$ornaments$semantics,c$ornaments$commit)
+  x<-read_ornament_counts(p("allele_counts"),c$ornaments$semantics)
   ex<-fread(c$paths$exons);tx<-fread(c$paths$tx_map)
   if(any(!x$transcript_id %in% tx$transcript_id))stop("Counts/reference transcript mismatch")
   x<-map_tx_loci(x,ex);x[,locus_id:=paste(chrom,genomic_pos,ref,alt,sep=":")]

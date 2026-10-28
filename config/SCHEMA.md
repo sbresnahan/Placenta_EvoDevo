@@ -22,49 +22,32 @@ Human shared input references and installed software are explicit exceptions.
 | `schema_version`, `profile`, `species`, `cohort_id` | Schema 2; `public_cross` maize/mouse or `human_trio` human; safe unique cohort identifier |
 | `paths` | Single-file/root inputs, outputs, operational manifests, receipts and snapshot |
 | `templates` | Repeated per-run/library/mode/strand/job paths |
-| `tools` | Repository host wrappers, R bridge, utilities and installed-library/source prefix |
+| `tools` | Project host wrappers, R bridge, utilities and installed R-library path |
 | `execution` | `backend: seadragon`, image/binds, trusted site file and POSIX approval |
-| `ornaments` | Audited interface pin, installed binary and personalizer hashes, REF/ALT semantics and threads |
-| `reference` | Build, exact uncompressed input hashes, annotation approval and explicit contig spelling map |
+| `ornaments` | Required REF/ALT output semantics and native thread count |
+| `reference` | Build, compatible genome/annotation files, annotation approval and explicit contig spelling map |
 | `parents`, `dosage` | Actual focal/alternate identities and reviewed tissue/ploidy dosage |
 | `markers` | `panzea`, `mgp` or `prepared`, exact samples, quality/source and proxy checks |
 | `pilot`, `retrieval` | Bounded prefixes/diagnostics, budgets, retry/timeouts and internet-host approval |
 | `lsf` | Verified memory/environment semantics and per-stage queue/CPU/limit/reservation/time |
 | `models`, `human` | Depth/family/orientation/bootstrap floors, covariates and genotype/identity approvals |
 | `fragments` | One YAML mean/SD/origin setting applied to SE libraries only |
-| `exports` | Disabled initially; local policy, cell threshold, review token, suppression and exact candidate hash |
+| `exports` | Disabled initially; local policy, cell threshold, review token and suppression review |
 
 Keep all base path/template/tool keys even for unused branches. Required
 Seadragon keys include `paths.native_inventory`, `catalog_receipt`,
 `marker_receipt`, `job_registry` and templates `child_receipt`,
 `library_pilot_report`, `library_pilot_receipt`, `library_metrics`.
 `provenance_hints` supplies context only; it does not establish linkage.
-The entire resolved configuration, including hints, is fingerprinted.
+Settings are recorded for the operator; they are not compared with earlier settings to decide whether results are current.
 
 ## Software and reference identity
 
 Infrastructure defaults live in `seadragon.sh` and `bin/Rscript_sif`.
 `execution.site_file` must match `POE_SITE_FILE`; image overrides must match
-`execution.image`. `tools.ornaments_source` is an installation prefix, not
-necessarily a source checkout. In the Seadragon backend, configure
-`ornaments.binary_sha256` and `ornaments.personalizer_sha256` from the actual
-`ornaments` and `personalizer` inventory rows. Both must be 64-character
-lowercase hexadecimal SHA256 values, not hashes of this repository's wrappers.
-The personalizer digest identifies its installed console entry point; the
-inventory also records a Python dependency digest.
+`execution.image`. The installed commands must be available in the configured native environments. Inventories record command paths, available versions, site/image paths, and Python package information. They are not compared with an earlier installation.
 
-`ornaments.commit` remains `2c4b1a2c18616f9de1cb307749688daaf3313d17` with
-`semantics: ref_alt` as the audited compatibility expectation. It is not proof
-of installed-build ancestry. Seadragon no longer requires source-build
-attestation, a clean source checkout, or an installation-provenance file.
-An optional `source_revision` inventory row is informational only.
-
-For existing private configurations, add `ornaments.personalizer_sha256`,
-fill both installed-file hashes, and remove the retired
-`installation_provenance` / `installation_provenance_sha256` keys from
-`ornaments`. Rerun metadata and execute preflight before analysis. Changes
-to code, configuration, or accepted inventory invalidate dependent receipts;
-do not resume old accepted stages with changed identities.
+Keep `ornaments.semantics: ref_alt`; the count reader still requires the eight-column REF/ALT output contract.
 
 For GUSTO, `reference.genome_source` is read-only. The wrapper copies it to
 `paths.genome` before indexing. `paths.annotation` names the exact shared
@@ -98,7 +81,7 @@ keys and linkage; a sample label is not automatically a biological replicate.
 - **Resources:** unique `resource_id`, HTTPS URL, destination/partial/response,
   expected bytes/MD5, required flag, build and optional `decompress_to`.
   Unresolved required contracts cannot be downloaded.
-- **Marker sources:** unique `source_id`, path, build, exact SHA256. Prepared
+- **Marker sources:** unique `source_id`, path, and build. Prepared
   data have `chrom`, `genomic_pos`, `ref`, `alt`, `focal_index`,
   `alternate_index`; indices are opposite homozygous 0/1 states.
 - **Trios:** exact unique child, mother, father and family linkage; no conflicting

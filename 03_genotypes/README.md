@@ -4,7 +4,7 @@
 and personalization inputs with consistent reference coordinates.
 
 **Prerequisites:** reference catalog and approved matching sources. Public
-marker-source paths/build/SHA256 must be complete. Human inputs need exact
+marker-source paths/build must be complete. Human inputs need exact
 trio linkage and independent RNA/DNA/genotype QC.
 
 **Inputs and outputs:**

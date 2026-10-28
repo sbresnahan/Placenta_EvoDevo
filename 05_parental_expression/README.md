@@ -11,14 +11,13 @@ orientation and exact primary-library identity.
 
 The scale graph submits `01_assign_parents.lsf` after its library's
 quantification. No additional manual command is needed. The graph is submitted
-once using the accepted report hash:
+once after reviewing the completed pilot:
 
 ```bash
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
-`PILOT_SHA` must already contain the exact reviewed report hash as in the
-[walkthrough](../docs/WALKTHROUGH.md). Do not resubmit scale to run assignment
+Follow the [step-by-step guide](../docs/Placenta_EvoDevo_step_by_step.md). Do not resubmit scale to run assignment
 again without first reconciling jobs.
 
 **Outputs:** `templates.gene_counts`, `templates.event_counts`,

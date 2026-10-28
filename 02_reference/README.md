@@ -4,7 +4,7 @@
 and promoter/event maps.
 
 **Prerequisites:** successful preflight; actual compatible genome/annotation;
-verified uncompressed hashes; annotation review; complete downstream public
+annotation review; complete downstream public
 marker contracts or private typed-child inputs.
 
 **Inputs:** `paths.genome`, `paths.annotation`, build/contig settings and

@@ -45,11 +45,11 @@ participant-supplied shell code. `POE_SITE_FILE` and `execution.site_file` must
 identify the same file. An R-image override must match `execution.image`.
 The bridge's actual binds must cover all inputs/outputs.
 
-Required R packages: **data.table, digest, yaml, curl, GenomicRanges, IRanges,
+Required R packages: **data.table, yaml, curl, GenomicRanges, IRanges,
 S4Vectors, Rsamtools and Biostrings**. R must be at least 4.3.1. The preflight
 checks packages through the R bridge. Missing/incompatible packages need a
 reviewed site fix; the project does not modify the shared library automatically.
-Host utilities include Bash, GNU time, gzip, curl, git and the site scheduler/
+Host utilities include Bash, GNU time, gzip, curl and the site scheduler/
 Singularity executables.
 
 ## Configuration checklist
@@ -62,8 +62,6 @@ them. See [the schema](../config/SCHEMA.md) for table headers and path rules.
 |---|---|---|
 | `paths.*`, `templates.*` | Correct absolute cohort destinations, no cross-cohort collisions | Before any stage |
 | `execution.site_file`, `execution.image` | Same trusted site file/image used by shell wrappers | Before preflight |
-| `ornaments.binary_sha256` | Reviewed digest of the installed binary, not of its wrapper | Before execution |
-| `ornaments.personalizer_sha256` | Digest of the installed personalizer console entry point, not its wrapper | Before execution |
 | `execution.posix_work_approved` | True only after checking work/scratch/receipt storage | Before submission |
 | `lsf.memory_units_verified`, `lsf.memory_per_job_verified` | Actual site interpretation of limit and reservation | Before submission |
 | `lsf.execution_environment_verified` | Worker access to image, library, native tools and input/output storage | Before submission |
@@ -71,9 +69,9 @@ them. See [the schema](../config/SCHEMA.md) for table headers and path rules.
 | `lsf.resource_limits_approved` | Reviewed total resource budget, not just one job's RAM | Before pilot/scale acceptance |
 | `retrieval.internet_host_approved` | Approved internet/transfer execution location | Public retrieval only |
 | Resource rows | Correct HTTPS source, expected byte size/MD5, build and destinations | Before acquiring that resource |
-| `reference.genome_sha256`, `reference.annotation_sha256` | Verified exact uncompressed input bytes | After files available, before reference |
+| `paths.genome`, `paths.annotation` | Actual compatible genome and annotation files | Before reference |
 | `reference.annotation_approved` | Correct tissue/build/annotation and scientific review | Before reference |
-| Marker-source rows, `markers.provenance_approved` | Correct source path/build, verified SHA256 and actual parent/proxy provenance | Before public markers |
+| Marker-source rows, `markers.provenance_approved` | Correct source path/build and actual parent/proxy provenance | Before public markers |
 | `markers.proxy*` | Explicit applicable proxy, approval and reason; no silent strain substitution | Before public markers |
 | Library `strand_mode`, `strand_verified` | Actual protocol review, not guessed from labels | Before pilot |
 | Unit `cluster_id`, `independence_verified` | True independent unit/cluster definition | Before inference; review before pilot |
@@ -87,26 +85,9 @@ Approval fields are attestations, not instructions to fabricate evidence.
 Empty/unresolved input contracts must be completed; setting a flag does not
 create a reference, genotype table, independent replicate or identity link.
 
-Fingerprinting is conservative: even a later approval/resource-setting edit
-can invalidate reference/pilot/scale receipts. Complete settings before reference
-preparation. If pilot results require changes, rerun affected stages rather
-than editing receipts or reusing an accepted report.
+Completion records do not determine whether earlier results are current. The operator decides when changes require rerunning prerequisites and downstream stages. Keep the stage order in the unified guide.
 
-### Calculate file checksums
-
-For a real file that you have independently verified against its intended
-source/build, obtain its exact SHA256:
-
-```bash
-read -r -p "Absolute path to verified file: " VERIFIED_FILE
-[[ -f "$VERIFIED_FILE" && "$VERIFIED_FILE" == /* ]] || { printf 'Provide an existing absolute path\n' >&2; exit 1; }
-sha256sum -- "$VERIFIED_FILE"
-```
-
-Use the **uncompressed** genome and annotation for the YAML reference hashes.
-Use the exact file named by a marker-source row for its SHA256 (including
-compression if the source path ends in `.gz`). MD5/byte-size acquisition
-contracts and SHA256 analysis identities serve different checks.
+Publisher MD5 and expected byte counts remain part of public download contracts. They are checked automatically during retrieval, not used for stage freshness.
 
 ## Installed-tool identity
 
@@ -122,33 +103,10 @@ and checks R dependencies separately. It does not install tools, download
 data or submit jobs. The pending inventory path is printed before acceptance.
 Review that file privately if a gate fails.
 
-The audited Ornaments interface/semantics expectation remains:
+The inventory lists executable paths and available versions, configured site/image paths, and Python package information. Ornaments is already installed in the Conda environment `/rsrch5/home/epi/bhattacharya_lab/software/ornaments`. No source-build evidence or software checksum entry is required.
 
-```text
-2c4b1a2c18616f9de1cb307749688daaf3313d17
-```
-
-The inventory records executable paths, versions and SHA256 values, site/image
-identity and a Python dependency digest. Ornaments is an existing Conda
-environment at `/rsrch5/home/epi/bhattacharya_lab/software/ornaments`;
-`tools.ornaments_source` names that installation prefix, not a required Git
-checkout. Any `source_revision` row is informational in the Seadragon backend.
-No installer attestation or source-build evidence file is required.
-
-Run `bin/host_inventory.sh "$DATA_ROOT/shared/software_inventory.tsv"` after
-shared setup, then copy the `ornaments` and `personalizer` rows' actual hashes
-into `ornaments.binary_sha256` and `ornaments.personalizer_sha256` respectively.
-Both must be 64-character lowercase hexadecimal values. The personalizer hash
-identifies the installed console entry point, not every imported Python module.
-Add the personalizer key to existing private YAML files, remove the retired
-installation-provenance keys, and rerun both preflight commands.
-These identities do not prove ancestry from the interface pin above.
-
-**Success:** an accepted inventory at `paths.native_inventory` and valid metadata.
-**Failure:** missing/mismatched installed-file hashes, library/image/package
-problems or bad manifests must be corrected locally. An unresolved source
-revision is not a failure. Do not change the audited interface pin or rebuild
-the installed software to make a gate pass.
+**Success:** required commands/environments and R packages are available, and the selected metadata pass validation.
+**Failure:** resolve missing commands, library/image/package problems, or bad manifests locally; do not reinstall software merely to bypass a check.
 
 Metadata preflight does not certify that all reference/read inputs exist,
 that LSF policy is correct or that models will be eligible. GUSTO's empty
@@ -164,8 +122,7 @@ CPUs. Review public input totals from manifests and actual local GUSTO inventory
 Use the bounded pilot's measured RSS/time and actual index sizes to choose
 allocations and review total runtime/storage. Projection covers quantification,
 not all downloading, indexing, startup or queue delays. Endpoint work size
-is not a disk high-water mark. The R image is hashed during host inventory;
-its I/O overhead also needs site observation.
+is not a disk high-water mark. Container startup/I/O overhead also needs site observation.
 
 ## Analysis rules
 

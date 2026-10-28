@@ -61,7 +61,6 @@ make_host_fixture <- function(root,dir) {
     paste0("export POE_CONDA=",shQuote(conda)),
     "export POE_SAMTOOLS_ENV=samtools-1.16.1","export POE_BCFTOOLS_ENV=bcftools-1.16",
     paste0("export POE_ORNAMENTS_ACTIVATE=",shQuote(activate)),
-    "export POE_ORNAMENTS_SOURCE=''",
     paste0("export POE_R_SIF=",shQuote(sif)),
     paste0("export POE_R_LIBRARY=",shQuote(.libPaths()[1])),
     paste0("export POE_SINGULARITY=",shQuote(singularity))))
@@ -96,8 +95,6 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
   x$reference$genome_source<-NULL;x$reference$annotation_approved<-TRUE
   x$reference$contig_aliases<-list()
   x$markers$mode<-"prepared";x$markers$proxy<-FALSE;x$markers$provenance_approved<-TRUE
-  x$ornaments$binary_sha256<-sha256(host$ornaments)
-  x$ornaments$personalizer_sha256<-sha256(host$personalizer)
   # Resolve repository tools against the actual checkout, not fixture config location.
   for(k in names(x$tools))if(startsWith(x$tools[[k]],"../bin/"))
     x$tools[[k]]<-file.path(root,sub("^\\.\\./","",x$tools[[k]]))
@@ -118,7 +115,6 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
       paste("chrT","fixture","exon",starts,ends,".","+",".",paste0(attr,' exon_number "',1:2,'";'),sep="\t"))
   }
   writeLines(gtf,x$paths$annotation)
-  x$reference$genome_sha256<-sha256(x$paths$genome);x$reference$annotation_sha256<-sha256(x$paths$annotation)
   samples<-c("fixtureA","fixtureB")
   libs<-data.table(sample_id=samples,unit_id=samples,layout="PE",strand_mode="fr",strand_verified=TRUE)
   if(human)libs[,`:=`(child_id=c("childA","childB"),identity_verified=TRUE)]
@@ -141,7 +137,7 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
   write_tsv(resource,x$paths$resources)
   markers<-data.table(chrom="chrT",genomic_pos=c(2L,62L),ref="A",alt="G",focal_index=0L,alternate_index=1L)
   mp<-file.path(dir,"fixture_markers.tsv");write_tsv(markers,mp)
-  write_tsv(data.table(source_id="coordinate_fixture",path=mp,build=x$reference$build,sha256=sha256(mp)),x$paths$marker_sources)
+  write_tsv(data.table(source_id="coordinate_fixture",path=mp,build=x$reference$build),x$paths$marker_sources)
   if(human) {
     write_tsv(data.table(child_id=c("childA","childB"),mother_id=c("motherA","motherB"),
       father_id=c("fatherA","fatherB"),family_id=c("familyA","familyB")),x$paths$trios)

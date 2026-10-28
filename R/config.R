@@ -1,4 +1,3 @@
-pin <- "2c4b1a2c18616f9de1cb307749688daaf3313d17"
 scalar_text <- function(x, label) {
   if (!is.character(x)||length(x)!=1L||is.na(x)||!nzchar(x)) stop("Required scalar text: ",label)
   x
@@ -27,13 +26,8 @@ read_config_v2 <- function(path) {
   if((c$species=="human")!=(c$profile=="human_trio"))stop("Mixed public/trio profile")
   scalar_text(c$cohort_id,"cohort_id")
   if(!grepl("^[A-Za-z0-9_.-]+$",c$cohort_id))stop("Unsafe cohort ID")
-  if(!identical(c$ornaments$commit,pin)||!identical(c$ornaments$semantics,"ref_alt"))
-    stop("Only audited REF/ALT Ornaments is supported")
-  for(k in c("binary_sha256","personalizer_sha256")) {
-    scalar_text(c$ornaments[[k]],paste0("ornaments.",k))
-    if(!grepl("^[a-f0-9]{64}$",c$ornaments[[k]]))
-      stop("Required installed-file SHA256 (64 lowercase hex characters): ornaments.",k)
-  }
+  if(!identical(c$ornaments$semantics,"ref_alt"))
+    stop("Only REF/ALT Ornaments output semantics are supported")
   required<-list(
     paths=c("work","scratch","logs","receipts","snapshot","sources","libraries","units","resources",
       "genome","annotation","gtf","transcripts","exons","tx_map","event_map","events","pairs",
@@ -46,8 +40,8 @@ read_config_v2 <- function(path) {
       "personal_vcf","child_tx_vcf","child_tx_map","child_fasta","child_index","quant_dir",
       "allele_counts","thetas","tpms","event_counts","gene_counts","assignment_qc","quant_receipt",
       "assign_receipt","human_receipt","quant_log","resource_log","job_script","job_stdout","job_stderr"),
-    tools=c("Rscript","bash","bsub","git","samtools","bcftools","gzip","curl","ornaments",
-      "python","personalizer","ornaments_source","singularity","r_library","time"))
+    tools=c("Rscript","bash","bsub","samtools","bcftools","gzip","curl","ornaments",
+      "python","personalizer","singularity","r_library","time"))
   for(section in names(required)) {
     for(k in required[[section]])if(is.null(c[[section]][[k]]))stop("Missing ",section,".",k)
     c[[section]]<-lapply(c[[section]],resolve_value,base=dirname(path),allowed=unlist(c$environment_allowlist))

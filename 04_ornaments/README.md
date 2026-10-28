@@ -4,8 +4,8 @@
 bounded pilots and quantify complete primary libraries.
 
 **Prerequisites:** validated transcript/reference/SNP inputs, native identity,
-actual raw reads and approved protocol/resources. Scale also needs the exact
-accepted pilot-report hash.
+actual raw reads and approved protocol/resources. Scale also needs a completed
+pilot, manual report review, and a separate explicit submission.
 
 **Execution:** native installed `create_personalized_transcriptome` and
 `ornaments` run on the host after activation of the configured environment.
@@ -23,10 +23,8 @@ Wait for all library jobs and `10_collect_pilot.lsf`; inspect the report and
 measured resources. Pilot completion never submits scale. After review:
 
 ```bash
-read -r -p "Accepted pilot-report SHA256: " PILOT_SHA
-[[ "$PILOT_SHA" =~ ^[a-f0-9]{64}$ ]] || { printf 'Invalid SHA256\n' >&2; exit 1; }
-bin/submit_pipeline.sh "$CONFIG" scale --accept "$PILOT_SHA"
-bin/submit_pipeline.sh "$CONFIG" scale --submit --accept "$PILOT_SHA"
+bin/submit_pipeline.sh "$CONFIG" scale
+bin/submit_pipeline.sh "$CONFIG" scale --submit
 ```
 
 **Outputs:** public `paths.personal_fasta`/`paths.index` or private child index

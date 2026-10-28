@@ -91,7 +91,6 @@ tools:
   Rscript: ../bin/Rscript_sif
   bash: /bin/bash
   bsub: ../bin/bsub_site
-  git: /usr/bin/git
   samtools: ../bin/native/samtools
   bcftools: ../bin/native/bcftools
   gzip: /usr/bin/gzip
@@ -99,14 +98,10 @@ tools:
   ornaments: ../bin/native/ornaments
   python: ../bin/native/python
   personalizer: ../bin/native/personalizer
-  ornaments_source: /rsrch5/home/epi/bhattacharya_lab/software/ornaments
   singularity: ../bin/singularity_site
   r_library: /rsrch5/home/epi/bhattacharya_lab/software/R_package_library/ubuntu/4.3.1
   time: /usr/bin/time
 ornaments:
-  binary_sha256: REPLACE_WITH_INSTALLED_ORNAMENTS_SHA256
-  personalizer_sha256: REPLACE_WITH_INSTALLED_PERSONALIZER_SHA256
-  commit: 2c4b1a2c18616f9de1cb307749688daaf3313d17
   semantics: ref_alt
   threads: 2
 execution:
@@ -136,8 +131,6 @@ dosage:
 reference:
   build: GRCm38
   annotation_approved: no
-  genome_sha256: REPLACE_AFTER_VERIFICATION
-  annotation_sha256: REPLACE_AFTER_VERIFICATION
   contig_aliases: []
 markers:
   mode: mgp
@@ -224,5 +217,4 @@ exports:
   complementary_suppression_reviewed: no
   review_token: ~
   min_cell: ~
-  approved_candidate_sha256: ~
 provenance_hints: []

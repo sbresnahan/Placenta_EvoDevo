@@ -4,7 +4,7 @@ f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]
 root<-normalizePath(dirname(f),mustWork=TRUE)
 source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
-if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models [--submit] [--accept SHA] [--after JOB]")
+if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models [--submit] [--after JOB]")
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(k in c("common","workflow","parental","models","exports","acquisition","public","reference",
@@ -16,13 +16,13 @@ take<-function(k) {
   if(i==length(flags)||startsWith(flags[i+1],"--"))stop("Missing value: ",k)
   flags[i+1]
 }
-after<-take("--after");accept<-take("--accept")
+after<-take("--after")
 extra<-flags
-for(k in c("--after","--accept"))if(k %in% extra) {
+for(k in "--after")if(k %in% extra) {
   i<-match(k,extra);extra<-extra[-c(i,i+1)]
 }
 if(any(!extra %in% "--submit"))stop("Unknown flag")
 if(!is_seadragon(c))stop("run_pipeline.R requires the Seadragon backend")
 preflight_v2(c,root)
-if(a[2]=="scale"&&"--submit" %in% flags)authorize_scale(c,root,accept)
+if(a[2]=="scale"&&"--submit" %in% flags)authorize_scale(c,root)
 submit_graph(c,root,a[2],"--submit" %in% flags,if(is.null(after))"none" else after)
