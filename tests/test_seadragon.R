@@ -153,6 +153,18 @@ check(length(plan)==1L&&file.exists(plan))
 out<-run_shell(plan)
 submitted<-paste0(sub("\\.host\\.sh$","",plan),".submitted.tsv")
 check(fread(submitted)$job_id==12345L)
+# LSF -env receives literal argument bytes, so inner quotes would become part
+# of SCRIPTS_DIR and make the worker path invalid on the execution host.
+args_first<-readLines(paste0(counter,".12345.args"))
+env_pos<-match("-env",args_first)
+check(!is.na(env_pos)&&env_pos<length(args_first))
+env_arg<-args_first[env_pos+1L]
+check(identical(env_arg,paste0("all,CONFIG=",p$config,",SCRIPTS_DIR=",root,
+  ",POE_SAMPLE=shared,POE_SITE_FILE=",host$site)))
+env_pairs<-strsplit(sub("^all,","",env_arg),",",fixed=TRUE)[[1]]
+env_values<-setNames(sub("^[^=]*=","",env_pairs),sub("=.*$","",env_pairs))
+check(identical(env_values[["SCRIPTS_DIR"]],root)&&
+  file.exists(file.path(env_values[["SCRIPTS_DIR"]],"bin/run_worker.sh")))
 check(run_shell(plan,okay=FALSE)$rc!=0L) # one-shot plan cannot duplicate a submission
 text<-capture.output(reg<-submit_graph(c,root,"reference",TRUE))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))

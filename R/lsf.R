@@ -91,7 +91,9 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none") {
     env<-c(CONFIG=attr(c,"file"),SCRIPTS_DIR=root,POE_SAMPLE=node$sample,
       POE_SITE_FILE=c$execution$site_file)
     if(any(grepl("[,\r\n\"']",env)))stop("Path cannot be represented safely in LSF -env")
-    envarg<-paste0("all,",paste(paste0(names(env),'="',env,'"'),collapse=","))
+    # -env is already shell-quoted below. Adding quotes around individual
+    # values passes literal quote characters into the LSF job environment.
+    envarg<-paste0("all,",paste(paste0(names(env),"=",env),collapse=","))
     args<-c("-q",r$queue,"-n",r$cpus,"-M",r$memory_value,
       "-R",paste0("rusage[mem=",r$reservation_value,"]"),"-W",r$wall_time,
       "-J",jobname,"-o",file.path(logs,paste0(jobname,".%J.out")),
