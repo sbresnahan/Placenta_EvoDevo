@@ -18,6 +18,9 @@ YAMLs are not automatically updated by changing an example.
 The LSF transfer-node Bash worker loads `sratoolkit`, calls `prefetch` with the
 **original** `SRR`/`ERR`/`DRR` run ID, validates the SRA archive, then calls
 `fasterq-dump --split-files --threads 4 --temp <cohort-scratch>/sra_tmp/...`.
+Failed `prefetch` calls retry up to `retrieval.attempts` times with increasing
+delays based on `retrieval.retry_seconds`; cached SRA data is preserved between
+attempts and subsequent submissions.
 Its output is gzip-compressed into the original `{run}_{mate}.fastq.gz` paths.
 Reference resources still use verified HTTPS downloads. No R process retrieves
 data or submits LSF jobs.

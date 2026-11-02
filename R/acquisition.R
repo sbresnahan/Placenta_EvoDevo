@@ -200,7 +200,9 @@ prepare_host_retrieval <- function(c,root,job) {
         format(item$read_count,scientific=FALSE,trim=TRUE),item$sra_receipt,
         format(item$bytes,scientific=FALSE,trim=TRUE),item$md5,
         if(nrow(second))format(second$bytes,scientific=FALSE,trim=TRUE) else "0",
-        if(nrow(second))second$md5 else "-")))
+        if(nrow(second))second$md5 else "-",
+        format(c$retrieval$attempts,scientific=FALSE,trim=TRUE),
+        format(c$retrieval$retry_seconds,scientific=FALSE,trim=TRUE))))
     } else {
       lines<-c(lines,plan_line(file.path(root,"bin/fetch_verified.sh"),
         c(c$tools$curl,item$url,item$destination,item$partial,

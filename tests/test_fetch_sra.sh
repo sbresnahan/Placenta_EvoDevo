@@ -16,9 +16,16 @@ set -eo pipefail
 [[ "$1" == --max-size && "$2" == u && "$3" == --output-directory ]] || exit 71
 dir="$4"; run="$5"
 [[ "$run" =~ ^(SRR|ERR|DRR)[0-9]+$ ]] || exit 72
+printf '%s\n' "$run" >> "$MOCK_PREFETCH_COUNT"
+if [[ "$run" == "${MOCK_PREFETCH_FAIL_RUN:-}" ]]; then
+  attempt="$(grep -c "^${run}$" "$MOCK_PREFETCH_COUNT")"
+  if (( attempt <= ${MOCK_PREFETCH_FAIL_COUNT:-0} )); then
+    echo "Mock transient NCBI failure for $run (attempt $attempt)" >&2
+    exit 76
+  fi
+fi
 mkdir -p "$dir"
 printf 'MOCK SRA\n' > "$dir/$run.sra"
-printf '%s\n' "$run" >> "$MOCK_PREFETCH_COUNT"
 SCRIPT
 cat > "$fixture/mockbin/vdb-validate" <<'SCRIPT'
 #!/bin/bash
@@ -46,23 +53,37 @@ export PATH="$fixture/mockbin:$PATH"
 dest1="$fixture/raw with spaces/ERR991_1.fastq.gz"
 dest2="$fixture/raw with spaces/ERR991_2.fastq.gz"
 receipt="$dest1.sra.tsv"
+export MOCK_PREFETCH_FAIL_RUN=ERR991 MOCK_PREFETCH_FAIL_COUNT=2
 args=(ERR991 PE "$dest1" "$dest2" "$MOCK_SRA_SCRATCH" 2 1 "$receipt" \
-  123 0123456789abcdef0123456789abcdef 123 0123456789abcdef0123456789abcdef)
+  123 0123456789abcdef0123456789abcdef 123 0123456789abcdef0123456789abcdef 3 0)
 bash "$root/bin/fetch_sra.sh" "${args[@]}"
 gzip -t "$dest1" "$dest2"
-[[ -s "$receipt" && "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 1 ]]
+[[ -s "$receipt" && "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 [[ "$(wc -l < "$receipt")" == 3 ]]
 bash "$root/bin/fetch_sra.sh" "${args[@]}" # Valid receipt permits reuse.
-[[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 1 ]]
+[[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 printf 'tampered' > "$dest1"
 if bash "$root/bin/fetch_sra.sh" "${args[@]}" 2>/dev/null; then
   echo 'Tampered SRA destination incorrectly accepted' >&2; exit 1
 fi
-[[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 1 ]]
+[[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
+
+# Exhausting retries must fail without promoting FASTQs or writing a receipt.
+export MOCK_PREFETCH_FAIL_RUN=ERR993 MOCK_PREFETCH_FAIL_COUNT=9
+failed="$fixture/raw with spaces/ERR993_1.fastq.gz"
+if bash "$root/bin/fetch_sra.sh" ERR993 SE "$failed" - "$MOCK_SRA_SCRATCH" 2 1 \
+    "$failed.sra.tsv" 123 0123456789abcdef0123456789abcdef 0 - 2 0 \
+    > "$fixture/exhausted.log" 2>&1; then
+  echo 'Exhausted prefetch retries incorrectly succeeded' >&2; exit 1
+fi
+[[ "$(grep -c '^ERR993$' "$MOCK_PREFETCH_COUNT")" == 2 ]]
+[[ ! -e "$failed" && ! -e "$failed.sra.tsv" ]]
+grep -q 'NCBI prefetch failed for ERR993 after 2 attempts' "$fixture/exhausted.log"
+unset MOCK_PREFETCH_FAIL_RUN MOCK_PREFETCH_FAIL_COUNT
 
 single="$fixture/raw with spaces/ERR992_1.fastq.gz"
 bash "$root/bin/fetch_sra.sh" ERR992 SE "$single" - "$MOCK_SRA_SCRATCH" 2 1 \
   "$single.sra.tsv" 123 0123456789abcdef0123456789abcdef 0 -
 gzip -t "$single"
 [[ ! -e "$fixture/raw with spaces/ERR992_2.fastq.gz" ]]
-echo 'PASS: offline SRA prefetch, scratch isolation, PE/SE splitting, receipt reuse and corruption rejection'
+echo 'PASS: offline SRA prefetch retries, exhaustion, scratch isolation, PE/SE splitting, receipt reuse and corruption rejection'

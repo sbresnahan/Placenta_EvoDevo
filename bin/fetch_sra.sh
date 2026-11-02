@@ -2,16 +2,19 @@
 # Host-only NCBI SRA retrieval. Never run from the R container.
 set -eo pipefail
 umask 077
-[[ $# == 12 ]] || {
-  echo 'Usage: fetch_sra.sh RUN LAYOUT DEST1 DEST2 SCRATCH THREADS READ_COUNT RECEIPT ENA_BYTES1 ENA_MD5_1 ENA_BYTES2 ENA_MD5_2' >&2
+[[ $# == 12 || $# == 14 ]] || {
+  echo 'Usage: fetch_sra.sh RUN LAYOUT DEST1 DEST2 SCRATCH THREADS READ_COUNT RECEIPT ENA_BYTES1 ENA_MD5_1 ENA_BYTES2 ENA_MD5_2 [ATTEMPTS RETRY_SECONDS]' >&2
   exit 2
 }
 run="$1"; layout="$2"; dest1="$3"; dest2="$4"; scratch="$5"
 threads="$6"; read_count="$7"; receipt="$8"
 ena_bytes1="$9"; ena_md51="${10}"; ena_bytes2="${11}"; ena_md52="${12}"
+attempts="${13-3}"; retry_seconds="${14-5}"
 [[ "$run" =~ ^(SRR|ERR|DRR)[0-9]+$ && "$layout" =~ ^(SE|PE)$ &&
    "$threads" =~ ^[1-9][0-9]*$ && "$read_count" =~ ^[1-9][0-9]*$ &&
-   "$dest1" == /* && "$scratch" == /* && "$receipt" == /* ]] || {
+   "$dest1" == /* && "$scratch" == /* && "$receipt" == /* &&
+   "$attempts" =~ ^[1-9][0-9]*$ &&
+   "$retry_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
   echo 'Unsafe SRA argument or accession' >&2; exit 2;
 }
 [[ "$layout" == PE && "$dest2" == /* || "$layout" == SE && "$dest2" == - ]] || exit 2
@@ -73,7 +76,18 @@ mkdir -p "$temp/output" "$temp/work"
 
 # Preserve the accession as assigned by ENA (ERR), NCBI (SRR), or DDBJ (DRR).
 # The NCBI run must actually be available; do not silently substitute another run.
-prefetch --max-size u --output-directory "$cache" "$run"
+for ((attempt=1;attempt<=attempts;attempt++)); do
+  if prefetch --max-size u --output-directory "$cache" "$run"; then break; fi
+  if (( attempt == attempts )); then
+    printf 'NCBI prefetch failed for %s after %s attempts\n' "$run" "$attempts" >&2
+    exit 1
+  fi
+  # Increasing backoff for transient resolver/storage failures; retain the SRA cache.
+  delay="$(awk -v base="$retry_seconds" -v n="$attempt" 'BEGIN {printf "%.3f", base*n}')"
+  printf 'NCBI prefetch attempt %s/%s failed for %s; retrying in %s seconds\n' \
+    "$attempt" "$attempts" "$run" "$delay" >&2
+  sleep "$delay"
+done
 sra="$cache/$run.sra"
 if [[ ! -f "$sra" && -f "$cache/$run/$run.sra" ]]; then sra="$cache/$run/$run.sra"; fi
 [[ -f "$sra" ]] || { echo "NCBI did not provide $sra" >&2; exit 1; }
