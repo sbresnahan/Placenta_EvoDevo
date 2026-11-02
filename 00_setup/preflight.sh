@@ -6,7 +6,9 @@ CONFIG="${1:-${CONFIG:-}}"
 [[ "$CONFIG" == /* && -f "$CONFIG" ]] || { printf 'Provide an absolute cohort YAML\n' >&2; exit 1; }
 export CONFIG
 source "$ROOT/bin/seadragon_init.sh"
-for tool in bash gzip curl bsub "$POE_SINGULARITY" /usr/bin/time; do
+# Production uses /usr/bin/time. Offline fixtures may supply their own dummy
+# timing executable without requiring GNU time inside the R container.
+for tool in bash gzip curl bsub "$POE_SINGULARITY" "${POE_TIME:-/usr/bin/time}"; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'Required tool unavailable: %s\n' "$tool" >&2; exit 1;
   }

@@ -3,6 +3,7 @@
 f<-sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1])
 f<-gsub("~+~"," ",f,fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."))
+source(file.path(root,"R/library_paths.R"))
 for(k in c("common","workflow","config","annotation","parental","models","exports","acquisition",
   "public","reference","pipeline","stages","scheduler"))source(file.path(root,"R",paste0(k,".R")))
 n<-0L

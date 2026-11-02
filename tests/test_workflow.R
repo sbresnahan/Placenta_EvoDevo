@@ -2,6 +2,7 @@
 f<-sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1])
 f<-gsub("~+~"," ",f,fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."))
+source(file.path(root,"R/library_paths.R"))
 source(file.path(root,"R/common.R"));source(file.path(root,"R/workflow.R"))
 source(file.path(root,"R/config.R"))
 source(file.path(root,"R/exports.R"));source(file.path(root,"R/models.R"))

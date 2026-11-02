@@ -9,11 +9,21 @@ make_host_fixture <- function(root,dir) {
   conda<-put("conda",c("#!/bin/bash",
     '[[ "$*" == "shell.bash hook" ]] || exit 9',
     "printf '%s\\n' 'conda() { [[ \"$1\" == activate ]] || return 8; export CONDA_PREFIX=\"/fixture/$2\"; export POE_FIXTURE_ACTIVE=\"$2\"; }'"))
-  real_samtools<-Sys.which("samtools")
-  if(!nzchar(real_samtools))stop("Tiny coordinate integration requires local samtools")
+  # These tests run inside the R image, which intentionally has no host
+  # samtools/conda tools. Mock only the faidx interface for tiny FASTA fixtures;
+  # real reference-coordinate checks still use Rsamtools::scanFa in R.
   samtools<-put("samtools",c("#!/bin/bash","set -euo pipefail",
     '[[ "${POE_FIXTURE_ACTIVE:-}" == samtools-1.16.1 ]] || exit 71',
-    paste("exec",shQuote(real_samtools),'"$@"')))
+    'if [[ "${1:-}" == --version ]]; then printf "samtools 1.16.1 (fixture)\\n"; exit 0; fi',
+    '[[ "$#" == 2 && "$1" == faidx && -s "$2" ]] || exit 72',
+    "awk 'BEGIN {OFS=\"\\t\"; offset=0; id=\"\"; bases=0; width=0}",
+    '/^>/ {if(id!="") print id,bases,start,width,width+1;',
+    '  id=substr($0,2); sub(/[ \\t].*$/, "", id); bases=0; width=0;',
+    '  start=offset+length($0)+1; offset+=length($0)+1; next}',
+    '{if(id=="" || length($0)==0) exit 73;',
+    '  if(width==0) width=length($0); bases+=length($0);',
+    '  offset+=length($0)+1}',
+    "END {if(id!=\"\") print id,bases,start,width,width+1}' \"$2\" > \"$2.fai\""))
   bcftools<-put("bcftools",c("#!/bin/bash","set -euo pipefail",
     '[[ "${POE_FIXTURE_ACTIVE:-}" == bcftools-1.16 ]] || exit 72',
     '[[ "${1:-}" != --version ]] || { printf "MOCK_bcftools_not_real_version\\n"; exit 0; }',
@@ -42,6 +52,9 @@ make_host_fixture <- function(root,dir) {
     'input=""; dest=""; while [[ $# -gt 0 ]]; do case "$1" in -f) input="$2"; shift 2 ;; -o) dest="$2"; shift 2 ;; *) shift ;; esac; done',
     'cp "$input" "$dest"'))
   python<-put("python",c("#!/bin/bash",'printf "MOCK_PYTHON_NOT_EXECUTED\\n"'))
+  # preflight.sh checks that host curl is on PATH; no test may perform network I/O.
+  put("curl",c("#!/bin/bash","set -euo pipefail",
+    'printf "Offline fixture must never invoke curl\\n" >&2; exit 84'))
   put("bsub",c("#!/bin/bash","exit 99")) # Availability only; submission uses its own mock.
   activate<-put("activate",c(paste0("export PATH=",shQuote(dir),':"$PATH"'),
     "export POE_FIXTURE_ACTIVE=ornaments"))
@@ -63,6 +76,7 @@ make_host_fixture <- function(root,dir) {
     paste0("export POE_CONDA=",shQuote(conda)),
     "export POE_SAMTOOLS_ENV=samtools-1.16.1","export POE_BCFTOOLS_ENV=bcftools-1.16",
     paste0("export POE_ORNAMENTS_ACTIVATE=",shQuote(activate)),
+    paste0("export POE_TIME=",shQuote(timer)),
     paste0("export POE_R_SIF=",shQuote(sif)),
     paste0("export POE_R_LIBRARY=",shQuote(.libPaths()[1])),
     paste0("export POE_SINGULARITY=",shQuote(singularity))))

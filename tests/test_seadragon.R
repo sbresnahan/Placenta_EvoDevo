@@ -2,6 +2,7 @@
 # No biological observations. Quantifier, bcftools, container and scheduler are MOCKS.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."),mustWork=TRUE)
+source(file.path(root,"R/library_paths.R"))
 for(k in c("common","workflow","config","parental","models","exports","acquisition","public",
            "reference","pipeline","stages","scheduler","seadragon","lsf"))
   source(file.path(root,"R",paste0(k,".R")))
@@ -79,9 +80,7 @@ for(p in profiles) {
     # Manual scale worker cannot bypass the missing report authorization.
     out<-run_shell(file.path(root,lsf_scripts[["quantify"]]),okay=FALSE)
     check(out$rc!=0L&&any(grepl("Scale request missing",out$out,fixed=TRUE)))
-    before<-proc.time()[["elapsed"]]
     out<-run_shell(file.path(root,lsf_scripts[["pilot"]]))
-    cat(c$cohort_id,s,"mock pilot wall seconds:",round(proc.time()[["elapsed"]]-before,2),"\n")
     check(file.exists(library_pilot_report(c,s)))
   }
   check(!file.exists(c$paths$scale_receipt))
@@ -137,7 +136,12 @@ for(p in profiles) {
 # directly to exercise the finish/receipt gate without contacting a remote URL.
 p<-profiles[[1]];c<-p$c
 sources<-fread(c$paths$sources)
+# fread infers entirely blank URL fields as logical. Replace those columns
+# before setting fixture URLs so data.table cannot silently coerce them to NA.
+sources[,c("url_1","url_2"):=NULL]
 sources[,`:=`(url_1="https://example.invalid/left",url_2="https://example.invalid/right")]
+check(is.character(sources$url_1)&&is.character(sources$url_2)&&
+      !anyNA(sources[,.(url_1,url_2)]))
 write_tsv(sources,c$paths$sources)
 retrieve_job<-file.path(d,"offline retrieval plan");dir.create(retrieve_job)
 prepare_host_retrieval(c,root,retrieve_job)

@@ -3,6 +3,7 @@
 f <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1L])
 f <- gsub("~+~", " ", f, fixed = TRUE)
 root <- normalizePath(file.path(dirname(f), ".."), mustWork = TRUE)
+source(file.path(root,"R/library_paths.R"))
 
 main <- function() {
   n <- 0L
@@ -162,6 +163,15 @@ main <- function() {
     Sys.setenv(POE_R_LIBRARY = file.path(d, "missing library"))
     z <- run(rs, c("--vanilla", file.path(root, entry)))
     check(z$rc != 0L && any(grepl("R library is missing", z$out, fixed = TRUE)))
+  }
+  # Every standalone test must initialize the same library before loading
+  # package-dependent helpers; the host R wrapper does not source script files.
+  test_entries <- file.path("tests", c("run_all.R", "test_cli.R", "test_core.R",
+    "test_libpaths.R", "test_seadragon.R", "test_v2.R", "test_workflow.R"))
+  for (entry in test_entries) {
+    lines <- readLines(file.path(root, entry))
+    init <- grep('source(file.path(root,"R/library_paths.R"))', lines, fixed = TRUE)
+    check(length(init) == 1L && init <= 10L)
   }
   Sys.setenv(POE_R_LIBRARY = "")
   z <- run(rs, c("--vanilla", direct))

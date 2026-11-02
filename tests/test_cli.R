@@ -3,6 +3,7 @@
 f<-sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1])
 f<-gsub("~+~"," ",f,fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."))
+source(file.path(root,"R/library_paths.R"))
 d<-tempfile("relocated config with spaces ");dir.create(d)
 dir.create(file.path(d,"config"));dir.create(file.path(d,"manifests"))
 cfg<-file.path(d,"config","mouse.example.yaml")
