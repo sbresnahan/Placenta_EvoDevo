@@ -16,17 +16,17 @@ sra_receipt <- function(c,run) paste0(cfg_path(c,"fastq",run=run,mate=1),".sra.t
 verify_public_source <- function(c,s,mate) {
   expected_path<-cfg_path(c,"fastq",run=s$run_id,mate=mate)
   expected_mate<-as.character(mate)
-  # An original ENA download remains valid even when SRA mode is selected.
-  if(verify_file(expected_path,s[[paste0("bytes_",mate)]],s[[paste0("md5_",mate)]]))return(TRUE)
-  if(retrieval_method(c)!="sra"||!file.exists(sra_receipt(c,s$run_id)))return(FALSE)
-  d<-tryCatch(fread(sra_receipt(c,s$run_id),colClasses="character"),error=function(e)NULL)
-  if(is.null(d)||!all(c("run_id","mate","path","bytes","md5","transport") %in% names(d)))
-    return(FALSE)
-  expected_run<-s$run_id
-  d<-d[run_id==expected_run & mate==expected_mate & path==expected_path & transport=="sra"]
-  if(nrow(d)!=1L||!grepl("^[1-9][0-9]*$",d$bytes)||
-     !grepl("^[0-9a-f]{32}$",d$md5))return(FALSE)
-  verify_file(expected_path,as.numeric(d$bytes),d$md5)
+  if(retrieval_method(c)=="sra"&&file.exists(sra_receipt(c,s$run_id))) {
+    d<-tryCatch(fread(sra_receipt(c,s$run_id),colClasses="character"),error=function(e)NULL)
+    if(!is.null(d)&&all(c("run_id","mate","path","bytes","transport") %in% names(d))) {
+      expected_run<-s$run_id
+      d<-d[run_id==expected_run & mate==expected_mate & path==expected_path & transport=="sra"]
+      if(nrow(d)==1L&&grepl("^[1-9][0-9]*$",d$bytes)&&file.exists(expected_path)&&
+         file.info(expected_path)$size==as.numeric(d$bytes))return(TRUE)
+    }
+  }
+  # An original ENA download remains valid; its manifest checksum is authoritative.
+  verify_file(expected_path,s[[paste0("bytes_",mate)]],s[[paste0("md5_",mate)]])
 }
 fetch_one <- function(url,dest,partial,response,bytes,md5,c,transport=curl::curl_fetch_disk) {
   bytes<-as.numeric(bytes) # curl must not receive bit64's underlying double representation.
@@ -181,12 +181,21 @@ host_retrieval_items <- function(c) {
   if(nrow(sra)&&(any(!grepl("^(SRR|ERR|DRR)[0-9]+$",sra$id))||
       any(!is.finite(sra$read_count)|sra$read_count<=0|sra$read_count!=floor(sra$read_count))||
       anyNA(sra$sra_receipt)))stop("SRA retrieval requires valid run IDs and read counts")
+  items[,target:=ifelse(method=="sra",paste0("sra_",id),
+    ifelse(!is.na(mate),paste0("fastq_",id,"_",mate),paste0("resource_",id)))]
+  if(any(!grepl("^[A-Za-z0-9_.-]+$",items$target)))
+    stop("Unsafe retrieval target identifier")
   items
 }
-prepare_host_retrieval <- function(c,root,job) {
+prepare_host_retrieval <- function(c,root,job,target="shared") {
   items<-host_retrieval_items(c)
+  if(!target %in% c("shared","finalize")) {
+    items<-items[items$target==target]
+    if(!nrow(items))stop("Unknown retrieval target: ",target)
+  }
   write_tsv(items,file.path(job,"retrieve_items.tsv"))
   lines<-character()
+  if(target=="finalize")return(write_plan(lines,job,"pre"))
   for(i in seq_len(nrow(items))) {
     item<-items[i]
     if(item$method=="sra") {
@@ -209,8 +218,6 @@ prepare_host_retrieval <- function(c,root,job) {
           format(item$bytes,scientific=FALSE,trim=TRUE),item$md5,
           c$retrieval$attempts,c$retrieval$timeout_seconds,
           c$retrieval$connect_timeout_seconds,c$retrieval$retry_seconds)))
-      if(!is.na(item$mate)||endsWith(item$destination,".gz"))
-        lines<-c(lines,plan_line(c$tools$gzip,c("-t",item$destination)))
     }
     if(!is.na(item$decompress_to)) {
       ensure_parent(item$decompress_to)
@@ -220,7 +227,7 @@ prepare_host_retrieval <- function(c,root,job) {
   }
   write_plan(lines,job,"pre")
 }
-finish_host_retrieval <- function(c,job) {
+finish_host_retrieval <- function(c,job,target="shared") {
   items<-fread(file.path(job,"retrieve_items.tsv"),colClasses=c(bytes="numeric"))
   m<-load_manifests(c)
   for(i in seq_len(nrow(items))) {
@@ -228,21 +235,16 @@ finish_host_retrieval <- function(c,job) {
     valid<-if(item$method=="sra") {
       s<-m$sources[run_id==item$id]
       nrow(s)==1L&&verify_public_source(c,s,item$mate)
-    } else verify_file(item$destination,item$bytes,item$md5)
+    } else file.exists(item$destination)&&file.info(item$destination)$size==item$bytes
     if(!valid)
       stop("Host retrieval missing/invalid: ",basename(item$destination))
     if(!is.na(item$decompress_to)&&
        (!file.exists(item$decompress_to)||file.info(item$decompress_to)$size<=0))
       stop("Host decompression missing/empty: ",basename(item$decompress_to))
   }
-  for(i in seq_len(nrow(m$sources))) {
-    s<-m$sources[i]
-    n<-validate_fastq(cfg_path(c,"fastq",run=s$run_id,mate=1),
-      if(s$layout=="PE")cfg_path(c,"fastq",run=s$run_id,mate=2) else NULL)
-    if(retrieval_method(c)=="sra"&&n!=s$read_count)
-      stop("SRA-derived FASTQ read count disagrees with manifest: ",s$run_id)
-  }
+  if(!target %in% c("shared","finalize"))return(invisible(TRUE))
+  # Transfer tools already completed. Do not re-read entire FASTQs at finalization.
   items[,`:=`(bytes=vapply(destination,function(p)file.info(p)$size,numeric(1)),
-    actual_md5=vapply(destination,function(p)unname(tools::md5sum(p)),character(1)))]
-  write_tsv(items[,.(id,mate,path=destination,bytes,md5=actual_md5,method)],c$paths$resource_receipt)
+    receipt_md5=ifelse(method=="sra",NA_character_,md5))]
+  write_tsv(items[,.(id,mate,path=destination,bytes,md5=receipt_md5,method)],c$paths$resource_receipt)
 }

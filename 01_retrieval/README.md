@@ -4,9 +4,14 @@
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Downloads public FASTQs and resources marked `required=TRUE` from the source
-and resource tables. Checks MD5/bytes, gzip integrity and FASTQ structure/mates.
-Writes raw/reference files and `resource_receipt.tsv`.
+Submits one transfer job per SRA run (both mates), or per HTTPS file, followed
+by a final receipt job dependent on all acquisitions. The default concurrency
+cap is `retrieval.max_parallel_jobs: 2` to limit simultaneous scratch use;
+raise it only after checking available storage. HTTPS files retain verified
+byte sizes/MD5 during transfer. SRA conversion requires successful commands,
+nonempty expected mate files and a size-only local receipt, without a second
+pass through the FASTQs. The final job checks file presence and sizes and
+writes `resource_receipt.tsv` without rereading entire FASTQs.
 
 ### NCBI SRA alternative on Seadragon
 
@@ -16,7 +21,7 @@ The `maize_B73_Ki11.example.yaml` demonstrates these settings. Existing private
 YAMLs are not automatically updated by changing an example.
 
 The LSF transfer-node Bash worker loads `sratoolkit`, calls `prefetch` with the
-**original** `SRR`/`ERR`/`DRR` run ID, validates the SRA archive, then calls
+**original** `SRR`/`ERR`/`DRR` run ID, then calls
 `fasterq-dump --split-files --threads 4 --temp <cohort-scratch>/sra_tmp/...`.
 Failed `prefetch` calls retry up to `retrieval.attempts` times with increasing
 delays based on `retrieval.retry_seconds`; cached SRA data is preserved between
@@ -26,19 +31,21 @@ Reference resources still use verified HTTPS downloads. No R process retrieves
 data or submits LSF jobs.
 
 SRA-derived compressed files will not have ENA's original gzip MD5/size.
-The worker records the generated files' own size/MD5 in a per-run `.sra.tsv`
-receipt, checks `gzip -t`, and R rechecks the receipt, full FASTQ structure,
-mate pairing and expected read count. Downstream quantification verifies the
-same local checksum receipt. A missing SRA accession, partial/missing mate,
-unpaired reads or unverified pre-existing destination fails explicitly.
+The worker records generated FASTQ sizes in a per-run `.sra.tsv` receipt and
+does not perform MD5, gzip-integrity or full FASTQ-content scans afterward.
+Existing legacy per-run receipts are accepted by file size; this trades away
+silent-corruption detection for speed. A missing SRA accession, missing mate,
+unexpected unpaired reads, or unreceipted existing destination still fails.
+When `pigz` is installed, compression uses the configured SRA thread count;
+otherwise it falls back to single-threaded `gzip`.
 
 NCBI's `prefetch` and `fasterq-dump` may need substantial space for the `.sra`
 cache and **uncompressed** FASTQ/temp files; reserve several times the FASTQ
 size under `paths.scratch`, not `$HOME` or a default `/tmp`. Completed `.sra`
-archives remain in `scratch/sra_cache` for restartability; delete only after
-verified completion if space is needed. Run time can exceed the example's
-two-hour LSF transfer wall limit: confirm your site's transfer-queue limits
-and submit sufficiently sized batches. The real availability of each ERR run
+archives remain in `scratch/sra_cache` for restartability; remove only after
+all required outputs have been produced if space is needed. Individual run
+time can exceed the example's two-hour LSF transfer wall limit: confirm your
+site's transfer-queue limits. The real availability of each ERR run
 at NCBI and transfer-node access to NCBI must be checked by the first live job.
 
 Next: [reference preparation](../02_reference/README.md).

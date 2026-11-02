@@ -144,6 +144,19 @@ prepare_host_retrieval(c,root,retrieve_job)
 planned<-readLines(file.path(retrieve_job,"pre.sh"))
 check(any(grepl("bin/fetch_verified.sh",planned,fixed=TRUE)))
 check(!any(grepl("curl_fetch_disk",planned,fixed=TRUE)))
+targets<-unique(host_retrieval_items(c)$target)
+check(length(targets)==4L)
+g_https<-graph_spec(c,"retrieve")
+check(length(g_https)==5L && g_https[[5]]$sample=="finalize")
+check(identical(g_https[[3]]$deps,g_https[[1]]$key)) # two concurrent lanes
+one_job<-file.path(d,"one FASTQ retrieval plan");dir.create(one_job)
+prepare_host_retrieval(c,root,one_job,targets[1])
+one_plan<-readLines(file.path(one_job,"pre.sh"))
+check(sum(grepl("bin/fetch_verified.sh",one_plan,fixed=TRUE))==1L)
+check(!any(grepl("gzip.*-t",one_plan)))
+final_job<-file.path(d,"final receipt plan");dir.create(final_job)
+prepare_host_retrieval(c,root,final_job,"finalize")
+check(!any(grepl("fetch_",readLines(file.path(final_job,"pre.sh")),fixed=TRUE)))
 for(i in seq_len(nrow(sources)))for(mate in 1:2) {
   dest<-cfg_path(c,"fastq",run=sources$run_id[i],mate=mate)
   ensure_parent(dest)
@@ -151,8 +164,10 @@ for(i in seq_len(nrow(sources)))for(mate in 1:2) {
 }
 finish_host_retrieval(c,retrieve_job)
 check(nrow(fread(c$paths$resource_receipt))==4L)
+finish_host_retrieval(c,one_job,targets[1])
+finish_host_retrieval(c,final_job,"finalize")
 # Optional SRA mode uses one host command per run, not one per mate, and
-# accepts generated FASTQs only with their own checked receipt/read count.
+# reuses staged FASTQs by receipt size without a complete FASTQ re-read.
 sra_c<-c;sra_c$retrieval$method<-"sra";sra_c$retrieval$sra_threads<-1L
 original_sources<-copy(sources)
 sources[,`:=`(run_id=c("ERR991","ERR992"),read_count=3)]
@@ -168,6 +183,8 @@ sra_plan<-readLines(file.path(sra_job,"pre.sh"))
 check(sum(grepl("bin/fetch_sra.sh",sra_plan,fixed=TRUE))==nrow(sources))
 check(!any(grepl("bin/fetch_verified.sh",sra_plan,fixed=TRUE)))
 check(all(grepl("'3' '5'",sra_plan[grepl("bin/fetch_sra.sh",sra_plan,fixed=TRUE)],fixed=TRUE)))
+g<-graph_spec(sra_c,"retrieve")
+check(length(g)==3L && g[[3]]$sample=="finalize" && length(g[[3]]$deps)==2L)
 changed<-cfg_path(c,"fastq",run=sources$run_id[1],mate=1)
 con<-file(changed,"r+b");seek(con,where=4);writeBin(as.raw(1L),con);close(con)
 check(!verify_file(changed,sources$bytes_1[1],sources$md5_1[1]))
@@ -177,7 +194,7 @@ receipt_path<-sra_receipt(sra_c,run)
 record<-rbindlist(lapply(1:2,function(mate) {
   path<-cfg_path(c,"fastq",run=run,mate=mate)
   data.table(run_id=run,mate=as.character(mate),path=path,
-    bytes=as.character(file.info(path)$size),md5=unname(tools::md5sum(path)),transport="sra")
+    bytes=as.character(file.info(path)$size),md5="-",transport="sra")
 }))
 write_tsv(record,receipt_path)
 check(verify_public_source(sra_c,sources[1],1L))
@@ -203,12 +220,18 @@ writeLines(c("#!/bin/bash","set -euo pipefail",
 c$tools$bsub<-fake
 # Only acquisition needs no completed-reference gate; remains a no-download scheduler mock.
 text<-capture.output(reg<-submit_graph(c,root,"retrieve",TRUE))
-check(reg$state=="host_planned"&&!file.exists(counter))
+check(all(reg$state=="host_planned")&&nrow(reg)==5L&&!file.exists(counter))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))
 check(length(plan)==1L&&file.exists(plan))
 out<-run_shell(plan)
 submitted<-paste0(sub("\\.host\\.sh$","",plan),".submitted.tsv")
-check(fread(submitted)$job_id==12345L)
+ids<-fread(submitted)$job_id
+check(length(ids)==5L&&identical(as.integer(ids),12345:12349))
+check("done(12345)" %in% readLines(paste0(counter,".12347.args")))
+check("done(12346)" %in% readLines(paste0(counter,".12348.args")))
+final_args<-readLines(paste0(counter,".12349.args"))
+check(all(vapply(paste0("done(",12345:12348,")"),function(x)
+  any(grepl(x,final_args,fixed=TRUE)),logical(1))))
 # LSF -env receives literal argument bytes, so inner quotes would become part
 # of SCRIPTS_DIR and make the worker path invalid on the execution host.
 args_first<-readLines(paste0(counter,".12345.args"))
@@ -216,7 +239,7 @@ env_pos<-match("-env",args_first)
 check(!is.na(env_pos)&&env_pos<length(args_first))
 env_arg<-args_first[env_pos+1L]
 check(identical(env_arg,paste0("all,CONFIG=",p$config,",SCRIPTS_DIR=",root,
-  ",POE_SAMPLE=shared,POE_SITE_FILE=",host$site)))
+  ",POE_SAMPLE=",reg$sample[1],",POE_SITE_FILE=",host$site)))
 env_pairs<-strsplit(sub("^all,","",env_arg),",",fixed=TRUE)[[1]]
 env_values<-setNames(sub("^[^=]*=","",env_pairs),sub("=.*$","",env_pairs))
 check(identical(env_values[["SCRIPTS_DIR"]],root)&&
@@ -225,10 +248,10 @@ check(run_shell(plan,okay=FALSE)$rc!=0L) # one-shot plan cannot duplicate a subm
 text<-capture.output(reg<-submit_graph(c,root,"reference",TRUE))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))
 out<-run_shell(plan)
-args_second<-readLines(paste0(counter,".12347.args"))
-check("done(12346)" %in% args_second)
-args_third<-readLines(paste0(counter,".12348.args"))
-check("done(12347)" %in% args_third)
+args_second<-readLines(paste0(counter,".12351.args"))
+check("done(12350)" %in% args_second)
+args_third<-readLines(paste0(counter,".12352.args"))
+check("done(12351)" %in% args_third)
 writeLines(c("#!/bin/bash","printf 'invalid scheduler response\\n'"),fake)
 text<-capture.output(reg<-submit_graph(c,root,"retrieve",TRUE))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))

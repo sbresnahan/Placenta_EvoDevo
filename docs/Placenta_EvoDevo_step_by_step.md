@@ -130,9 +130,10 @@ totals 52,116,556,804 bytes. The tables already group runs into the four pools.
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-One job downloads RNA, the B73 RefGen_v4/AGPv4 genome, `F1maize.FINAL.gff`
-from Zenodo record 2611319, and ten raw AGPv4 chromosome VCFs.
-When it finishes:
+The submission creates eight SRA-run jobs, twelve reference-resource jobs
+(genome, `F1maize.FINAL.gff` from Zenodo record 2611319, and ten AGPv4
+chromosome VCFs), plus one final receipt job. At most two retrieval jobs run
+concurrently by default (`retrieval.max_parallel_jobs`). When all finish:
 
 ```bash
 less -S "$COHORT_DIR/resource_receipt.tsv"
@@ -140,7 +141,8 @@ ls -lh "$COHORT_DIR/raw/"
 ls -lh "$COHORT_DIR/reference/"
 ```
 
-Retrieval checks source MD5/bytes, gzip integrity, and FASTQ structure/mates.
+HTTPS resources are checksum-verified during download. SRA conversion writes
+size-only receipts and skips expensive post-conversion FASTQ scans.
 
 ## K3. Build the reference
 
@@ -228,8 +230,8 @@ B73 maternal SRR11509920/SRR11509919/SRR11509910 and W22 maternal
 SRR11509916/SRR11509915/SRR11509914. Compressed RNA totals 18,265,330,625 bytes.
 The supplied strand is `rf` and dosage is 2:1.
 
-One retrieval job downloads the configured RNA and B73v4 genome.
-When it finishes:
+Independent transfer jobs retrieve the configured RNA and B73v4 genome;
+a dependent final job writes the receipt. When they finish:
 
 ```bash
 less -S "$COHORT_DIR/resource_receipt.tsv"

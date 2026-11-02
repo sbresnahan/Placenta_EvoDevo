@@ -17,7 +17,7 @@ Relative paths resolve against the YAML's directory.
 | `parents`, `dosage` | Focal/alternate parents and maternal/paternal dosage |
 | `markers` | Adapter, source/sample identities, quality filters, proxy description |
 | `pilot` | Strand/throughput fragment counts and diagnostic thresholds |
-| `retrieval` | `method: https` (default) or `method: sra` for public Seadragon cohorts; `sra_threads` (default 1), retries and connection settings |
+| `retrieval` | `method: https` (default) or `method: sra` for public Seadragon cohorts; `sra_threads` (default 1), `max_parallel_jobs` (default 2), retries and connection settings |
 | `lsf` | Queue, numeric GB units, cores, memory/reservation and wall time per stage |
 | `models` | Depth/family/orientation/bootstrap settings and covariate names |
 | `fragments` | SE fragment mean/SD and measured/assumed origin |

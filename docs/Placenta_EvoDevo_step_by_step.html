@@ -517,14 +517,16 @@ plan.</p>
 group runs into the four pools.</p>
 <h2 id="k2-retrieve-the-inputs">K2. Retrieve the inputs</h2>
 <div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> retrieve <span class="at">--submit</span></span></code></pre></div>
-<p>One job downloads RNA, the B73 RefGen_v4/AGPv4 genome,
-<code>F1maize.FINAL.gff</code> from Zenodo record 2611319, and ten raw
-AGPv4 chromosome VCFs. When it finishes:</p>
+<p>The submission creates eight SRA-run jobs, twelve reference-resource
+jobs (genome, <code>F1maize.FINAL.gff</code> from Zenodo record 2611319,
+and ten AGPv4 chromosome VCFs), plus one final receipt job. At most two
+retrieval jobs run concurrently by default
+(<code>retrieval.max_parallel_jobs</code>). When all finish:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">less</span> <span class="at">-S</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/resource_receipt.tsv&quot;</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/raw/&quot;</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/&quot;</span></span></code></pre></div>
-<p>Retrieval checks source MD5/bytes, gzip integrity, and FASTQ
-structure/mates.</p>
+<p>HTTPS resources are checksum-verified during download. SRA conversion
+writes size-only receipts and skips expensive post-conversion FASTQ scans.</p>
 <h2 id="k3-build-the-reference">K3. Build the reference</h2>
 <div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> reference <span class="at">--submit</span></span></code></pre></div>
 <p>Three jobs build the transcript/promoter catalog, B73/Ki11 markers,
@@ -577,8 +579,8 @@ SRR11509920/SRR11509919/SRR11509910 and W22 maternal
 SRR11509916/SRR11509915/SRR11509914. Compressed RNA totals
 18,265,330,625 bytes. The supplied strand is <code>rf</code> and dosage
 is 2:1.</p>
-<p>One retrieval job downloads the configured RNA and B73v4 genome. When
-it finishes:</p>
+<p>Independent transfer jobs retrieve the configured RNA and B73v4
+genome; a dependent final job writes the receipt. When they finish:</p>
 <div class="sourceCode" id="cb18"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">less</span> <span class="at">-S</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/resource_receipt.tsv&quot;</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/genome.fa&quot;</span></span></code></pre></div>
 <h2 id="w2-supply-the-annotation-and-markers">W2. Supply the annotation

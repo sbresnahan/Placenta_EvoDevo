@@ -165,6 +165,7 @@ fragments:
 retrieval:
   method: sra  # NCBI SRA Toolkit; accepts the original ERR run accessions
   sra_threads: 4
+  max_parallel_jobs: 2  # Bounds simultaneous transfer jobs and SRA scratch usage
   attempts: 3
   timeout_seconds: 1800
   connect_timeout_seconds: 30

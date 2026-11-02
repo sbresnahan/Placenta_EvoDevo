@@ -13,7 +13,15 @@ graph_spec <- function(c,stage) {
   }
   if(stage=="retrieve") {
     if(c$profile!="public_cross")stop("Public retrieval is not a human-data access route")
-    add("retrieve","retrieve")
+    targets<-unique(host_retrieval_items(c)$target)
+    cap<-min(c$retrieval$max_parallel_jobs,length(targets))
+    for(i in seq_along(targets)) {
+      key<-paste0("retrieve_",targets[i])
+      deps<-if(i>cap)paste0("retrieve_",targets[i-cap]) else character()
+      add(key,"retrieve",targets[i],deps)
+    }
+    add("retrieve_finalize","retrieve","finalize",
+      deps=vapply(g,`[[`,character(1),"key"))
   } else if(stage=="reference") {
     add("reference","reference")
     if(c$profile=="public_cross") {

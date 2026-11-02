@@ -29,7 +29,8 @@ printf 'MOCK SRA\n' > "$dir/$run.sra"
 SCRIPT
 cat > "$fixture/mockbin/vdb-validate" <<'SCRIPT'
 #!/bin/bash
-[[ -s "$1" ]]
+echo 'Unexpected full SRA validation' >&2
+exit 78
 SCRIPT
 cat > "$fixture/mockbin/fasterq-dump" <<'SCRIPT'
 #!/bin/bash
@@ -60,6 +61,7 @@ bash "$root/bin/fetch_sra.sh" "${args[@]}"
 gzip -t "$dest1" "$dest2"
 [[ -s "$receipt" && "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 [[ "$(wc -l < "$receipt")" == 3 ]]
+[[ "$(awk -F '\t' 'NR==2 {print $5}' "$receipt")" == - ]]
 bash "$root/bin/fetch_sra.sh" "${args[@]}" # Valid receipt permits reuse.
 [[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 printf 'tampered' > "$dest1"
@@ -86,4 +88,4 @@ bash "$root/bin/fetch_sra.sh" ERR992 SE "$single" - "$MOCK_SRA_SCRATCH" 2 1 \
   "$single.sra.tsv" 123 0123456789abcdef0123456789abcdef 0 -
 gzip -t "$single"
 [[ ! -e "$fixture/raw with spaces/ERR992_2.fastq.gz" ]]
-echo 'PASS: offline SRA prefetch retries, exhaustion, scratch isolation, PE/SE splitting, receipt reuse and corruption rejection'
+echo 'PASS: offline SRA retries, exhaustion, scratch isolation, PE/SE splitting, receipt reuse and size mismatch rejection'

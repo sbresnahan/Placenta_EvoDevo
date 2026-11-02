@@ -98,6 +98,10 @@ read_config_v2 <- function(path,setup=FALSE) {
   positive(c$retrieval$sra_threads,"retrieval.sra_threads")
   if(c$retrieval$sra_threads!=floor(c$retrieval$sra_threads))
     stop("retrieval.sra_threads must be an integer")
+  if(is.null(c$retrieval$max_parallel_jobs))c$retrieval$max_parallel_jobs<-2L
+  positive(c$retrieval$max_parallel_jobs,"retrieval.max_parallel_jobs")
+  if(c$retrieval$max_parallel_jobs!=floor(c$retrieval$max_parallel_jobs))
+    stop("retrieval.max_parallel_jobs must be an integer")
   if(c$retrieval$method=="sra") {
     if(c$profile!="public_cross"||c$execution$backend!="seadragon")
       stop("SRA retrieval is available only for public Seadragon cohorts")

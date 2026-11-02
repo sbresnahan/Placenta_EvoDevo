@@ -299,8 +299,8 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     })),c$paths$metrics)
   } else if(stage=="models")worker_models(c,root)
   else if(stage=="retrieve") {
-    if(phase=="prepare")prepare_host_retrieval(c,root,job)
-    else finish_host_retrieval(c,job)
+    if(phase=="prepare")prepare_host_retrieval(c,root,job,sample)
+    else finish_host_retrieval(c,job,sample)
   } else stop("Unknown Seadragon stage: ",stage)
   invisible(TRUE)
 }

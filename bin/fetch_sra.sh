@@ -29,17 +29,18 @@ verify_exact() {
 
 receipt_valid() {
   [[ -f "$receipt" ]] || return 1
-  local mate path values bytes md5 n
+  local mate path values bytes transport n
   for mate in 1 2; do
     [[ "$mate" == 1 || "$layout" == PE ]] || continue
     path="$dest1"; [[ "$mate" == 1 ]] || path="$dest2"
     values="$(awk -F '\t' -v r="$run" -v m="$mate" -v p="$path" \
-      '$1==r && $2==m && $3==p {print $4, $5}' "$receipt")"
+      '$1==r && $2==m && $3==p {print $4, $6}' "$receipt")"
     n="$(awk -F '\t' -v r="$run" -v m="$mate" -v p="$path" \
       '$1==r && $2==m && $3==p {n++} END {print n+0}' "$receipt")"
     [[ "$n" == 1 ]] || return 1
-    read -r bytes md5 <<< "$values"
-    verify_exact "$path" "$bytes" "$md5" || return 1
+    read -r bytes transport <<< "$values"
+    [[ "$transport" == sra && "$bytes" =~ ^[1-9][0-9]*$ && -s "$path" ]] || return 1
+    [[ "$(stat -c %s -- "$path")" == "$bytes" ]] || return 1
   done
 }
 
@@ -50,7 +51,7 @@ if verify_exact "$dest1" "$ena_bytes1" "$ena_md51" &&
   exit 0
 fi
 if receipt_valid; then
-  echo "Reusing locally verified SRA-derived FASTQs: $run"
+  echo "Reusing receipt-confirmed SRA-derived FASTQs: $run"
   exit 0
 fi
 if [[ -e "$dest1" || ( "$layout" == PE && -e "$dest2" ) || -e "$receipt" ]]; then
@@ -61,7 +62,7 @@ fi
 # Site modules are available on LSF transfer hosts, not inside R.
 source "${POE_MODULE_INIT:-/etc/profile.d/modules.sh}"
 module load sratoolkit
-for tool in prefetch fasterq-dump vdb-validate gzip md5sum; do
+for tool in prefetch fasterq-dump gzip md5sum; do
   command -v "$tool" >/dev/null || { echo "Missing host tool: $tool" >&2; exit 1; }
 done
 
@@ -91,7 +92,6 @@ done
 sra="$cache/$run.sra"
 if [[ ! -f "$sra" && -f "$cache/$run/$run.sra" ]]; then sra="$cache/$run/$run.sra"; fi
 [[ -f "$sra" ]] || { echo "NCBI did not provide $sra" >&2; exit 1; }
-vdb-validate "$sra"
 fasterq-dump --split-files --threads "$threads" --temp "$temp/work" \
   --outdir "$temp/output" "$sra"
 
@@ -114,11 +114,18 @@ expected_count=1; [[ "$layout" == SE ]] || expected_count=2
   exit 1
 }
 
-gzip -n -c -- "$temp/output/${run}_1.fastq" > "$temp/output/1.fastq.gz"
-gzip -t -- "$temp/output/1.fastq.gz"
+compress_fastq() {
+  if command -v pigz >/dev/null 2>&1; then
+    pigz -n -p "$threads" -c -- "$1" > "$2"
+  else
+    gzip -n -c -- "$1" > "$2"
+  fi
+}
+echo "Compressing SRA FASTQ mate 1: $run"
+compress_fastq "$temp/output/${run}_1.fastq" "$temp/output/1.fastq.gz"
 if [[ "$layout" == PE ]]; then
-  gzip -n -c -- "$temp/output/${run}_2.fastq" > "$temp/output/2.fastq.gz"
-  gzip -t -- "$temp/output/2.fastq.gz"
+  echo "Compressing SRA FASTQ mate 2: $run"
+  compress_fastq "$temp/output/${run}_2.fastq" "$temp/output/2.fastq.gz"
 fi
 
 # File promotion is fail-closed; an interrupted run without a receipt is not
@@ -135,9 +142,8 @@ tmp_receipt="$(mktemp "${receipt}.XXXXXXXX")"
     [[ "$mate" == 1 || "$layout" == PE ]] || continue
     path="$dest1"; [[ "$mate" == 1 ]] || path="$dest2"
     bytes="$(stat -c %s -- "$path")"
-    hash="$(md5sum -- "$path")"
-    printf '%s\t%s\t%s\t%s\t%s\tsra\n' "$run" "$mate" "$path" "$bytes" "${hash:0:32}"
+    printf '%s\t%s\t%s\t%s\t-\tsra\n' "$run" "$mate" "$path" "$bytes"
   done
 } > "$tmp_receipt"
 mv -- "$tmp_receipt" "$receipt"
-echo "SRA-derived FASTQs staged: $run (expected fragments: $read_count; checked by R finish gate)"
+echo "SRA-derived FASTQs staged: $run (expected fragments: $read_count; no full FASTQ revalidation)"
