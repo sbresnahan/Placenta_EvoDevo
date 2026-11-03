@@ -216,19 +216,16 @@ prepare_host_retrieval(sra_c,root,one_sra_job,g[[1]]$sample)
 check(sum(grepl("bin/fetch_sra.sh",readLines(file.path(one_sra_job,"pre.sh")),fixed=TRUE))==1L)
 check(nrow(fread(file.path(one_sra_job,"retrieve_items.tsv")))==2L)
 changed<-cfg_path(c,"fastq",run=sources$run_id[1],mate=1)
-# Make the manifest checksum wrong without corrupting the gzip stream: this
-# isolates SRA receipt trust from the original ENA checksum.
-original_md5<-sources$md5_1[1L]
-sources[1L,md5_1:=paste0(if(substr(original_md5,1L,1L)=="0")"1" else "0",
-                           substr(original_md5,2L,32L))]
+# Legacy checksum metadata is ignored; file sizes and SRA receipts are used.
+sources[1L,md5_1:="not_used"]
 write_tsv(sources,c$paths$sources)
-check(!verify_file(changed,sources$bytes_1[1],sources$md5_1[1]))
+check(verify_file(changed,sources$bytes_1[1]))
 run<-sources$run_id[1]
 receipt_path<-sra_receipt(sra_c,run)
 record<-rbindlist(lapply(1:2,function(mate) {
   path<-cfg_path(c,"fastq",run=run,mate=mate)
   data.table(run_id=run,mate=as.character(mate),path=path,
-    bytes=as.character(file.info(path)$size),md5="-",transport="sra")
+    bytes=as.character(file.info(path)$size),transport="sra")
 }))
 write_tsv(record,receipt_path)
 check(verify_public_source(sra_c,sources[1],1L))

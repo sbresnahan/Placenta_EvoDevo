@@ -58,28 +58,28 @@ check(!range_ok(206L,header,9,10,20))
 check(!range_ok(206L,charToRaw("Content-Range: bytes 10-19/21"),10,10,20))
 check(range_ok(200L,raw(),0,20,20))
 empty<-file.path(temp,"empty");file.create(empty)
-check(!verify_file(empty,1,strrep("0",32)))
-dat<-file.path(temp,"checksum");writeLines("logical",dat)
-check(verify_file(dat,file.info(dat)$size,unname(tools::md5sum(dat))))
-check(!verify_file(dat,file.info(dat)$size+1,unname(tools::md5sum(dat))))
+check(!verify_file(empty,1))
+dat<-file.path(temp,"size");writeLines("logical",dat)
+check(verify_file(dat,file.info(dat)$size))
+check(!verify_file(dat,file.info(dat)$size+1))
 dest<-file.path(temp,"download");part<-file.path(temp,"partial");resp<-file.path(temp,"response")
-writeBin(charToRaw("abcdef"),dest);md5<-unname(tools::md5sum(dest));unlink(dest)
+writeBin(charToRaw("abcdef"),dest);unlink(dest)
 writeBin(charToRaw("abc"),part)
 download_cfg<-list(retrieval=list(attempts=1,timeout_seconds=1,connect_timeout_seconds=1,retry_seconds=0))
 transport206<-function(url,path,handle) {
   writeBin(charToRaw("def"),path)
   list(status_code=206L,headers=charToRaw("Content-Range: bytes 3-5/6\r\n"))
 }
-fetch_one("https://example.invalid/fixture",dest,part,resp,6,md5,download_cfg,transport206)
-check(verify_file(dest,6,md5))
+fetch_one("https://example.invalid/fixture",dest,part,resp,6,download_cfg,transport206)
+check(verify_file(dest,6))
 unlink(dest);writeBin(charToRaw("abc"),part)
 transport200<-function(url,path,handle) {
   writeBin(charToRaw("abcdef"),path);list(status_code=200L,headers=raw())
 }
-check(fails(fetch_one("https://example.invalid/fixture",dest,part,resp,6,md5,download_cfg,transport200)))
+check(fails(fetch_one("https://example.invalid/fixture",dest,part,resp,6,download_cfg,transport200)))
 check(file.info(part)$size==3&&!file.exists(dest))
 unlink(part)
-check(fails(fetch_one("https://example.invalid/fixture",dest,part,resp,6,strrep("0",32),
+check(fails(fetch_one("https://example.invalid/fixture",dest,part,resp,NA_real_,
   download_cfg,transport200)))
 # The first maize FASTQ exceeds the 32-bit CURLOPT_MAXFILESIZE limit.
 # Confirm curl handle setup reaches a mock transport for a >4 GiB file.
@@ -89,7 +89,7 @@ large_transport<-function(url,path,handle) {
   stop("Intentional offline transport failure")
 }
 check(fails(fetch_one("https://example.invalid/large",dest,part,resp,4359512380,
-  strrep("0",32),download_cfg,large_transport)))
+  download_cfg,large_transport)))
 check(large_seen)
 # FASTQ synchronization, nonrandom prefix and malformed/empty rejection.
 fq<-function(path,id,seq="AC") {con<-gzfile(path,"wt");writeLines(c(paste0("@",id),seq,"+",

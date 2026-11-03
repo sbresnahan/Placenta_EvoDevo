@@ -50,21 +50,22 @@ for the shared HPLRv2 GTF. Derived references stay in the cohort directory.
 
 | Table | Required content |
 |---|---|
-| Sources | Unique run ID, linked library ID, layout, mate URL/MD5/byte fields, read count |
+| Sources | Unique run ID, linked library ID, layout, mate URLs and byte sizes, read count |
 | Libraries | Unique sample/unit IDs, layout and explicit strand mode; human tables add `child_id` |
 | Units | Unique unit ID, biological `cluster_id`, maternal/paternal identities, stage, tissue |
-| Resources | ID, HTTPS URL, destination/partial/response paths, bytes/MD5, required flag, build; optional decompression destination |
+| Resources | ID, HTTPS URL, destination/partial/response paths, byte size (except CyVerse VCFs), required flag, build; optional decompression destination |
 | Marker sources | Unique source ID, path, build |
 | Trios | Child, mother, father, family IDs |
 | Covariates | Sample ID and configured covariate columns |
 
 Human source rows add actual `local_1`/`local_2` FASTQ paths.
 SRA mode uses existing SRR/ERR/DRR `run_id` accessions without renaming them.
-It creates FASTQs from NCBI SRA archives, so the manifest's ENA gzip MD5 and
-byte counts **do not apply** to those generated files. The host writes a
-per-run `.sra.tsv` checksum receipt and the R finish gate verifies generated
-checksums, mate consistency and manifest fragment counts. Existing ENA files
-are accepted only when their original manifest MD5/size match.
+It creates FASTQs from NCBI SRA archives, so the manifest's ENA gzip byte
+counts **do not apply** to those generated files. The host writes a
+per-run `.sra.tsv` size receipt and the R finish gate verifies recorded sizes,
+mate consistency and manifest fragment counts. Existing ENA files are
+accepted when their original manifest byte sizes match. Legacy MD5 columns
+may remain in manifests but are ignored.
 PE read counts include both mates. Multiple runs link to one primary library.
 Missing cluster IDs retain descriptive public results.
 

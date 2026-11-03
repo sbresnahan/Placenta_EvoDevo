@@ -56,12 +56,12 @@ dest2="$fixture/raw with spaces/ERR991_2.fastq.gz"
 receipt="$dest1.sra.tsv"
 export MOCK_PREFETCH_FAIL_RUN=ERR991 MOCK_PREFETCH_FAIL_COUNT=2
 args=(ERR991 PE "$dest1" "$dest2" "$MOCK_SRA_SCRATCH" 2 1 "$receipt" \
-  123 0123456789abcdef0123456789abcdef 123 0123456789abcdef0123456789abcdef 3 0)
+  123 123 3 0)
 bash "$root/bin/fetch_sra.sh" "${args[@]}"
 gzip -t "$dest1" "$dest2"
 [[ -s "$receipt" && "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 [[ "$(wc -l < "$receipt")" == 3 ]]
-[[ "$(awk -F '\t' 'NR==2 {print $5}' "$receipt")" == - ]]
+[[ "$(awk -F '\t' 'NR==2 {print $5}' "$receipt")" == sra ]]
 bash "$root/bin/fetch_sra.sh" "${args[@]}" # Valid receipt permits reuse.
 [[ "$(wc -l < "$MOCK_PREFETCH_COUNT")" == 3 ]]
 printf 'tampered' > "$dest1"
@@ -74,7 +74,7 @@ fi
 export MOCK_PREFETCH_FAIL_RUN=ERR993 MOCK_PREFETCH_FAIL_COUNT=9
 failed="$fixture/raw with spaces/ERR993_1.fastq.gz"
 if bash "$root/bin/fetch_sra.sh" ERR993 SE "$failed" - "$MOCK_SRA_SCRATCH" 2 1 \
-    "$failed.sra.tsv" 123 0123456789abcdef0123456789abcdef 0 - 2 0 \
+    "$failed.sra.tsv" 123 0 2 0 \
     > "$fixture/exhausted.log" 2>&1; then
   echo 'Exhausted prefetch retries incorrectly succeeded' >&2; exit 1
 fi
@@ -85,7 +85,7 @@ unset MOCK_PREFETCH_FAIL_RUN MOCK_PREFETCH_FAIL_COUNT
 
 single="$fixture/raw with spaces/ERR992_1.fastq.gz"
 bash "$root/bin/fetch_sra.sh" ERR992 SE "$single" - "$MOCK_SRA_SCRATCH" 2 1 \
-  "$single.sra.tsv" 123 0123456789abcdef0123456789abcdef 0 -
+  "$single.sra.tsv" 123 0
 gzip -t "$single"
 [[ ! -e "$fixture/raw with spaces/ERR992_2.fastq.gz" ]]
 echo 'PASS: offline SRA retries, exhaustion, scratch isolation, PE/SE splitting, receipt reuse and size mismatch rejection'

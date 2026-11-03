@@ -165,7 +165,7 @@ load_manifests <- function(c,require_files=FALSE) {
   for(k in intersect(c("bytes_1","bytes_2","read_count","base_count"),names(s)))
     set(s,j=k,value=as.numeric(s[[k]]))
   u<-fread(c$paths$units,na.strings=c("","NA"))
-  require_columns(s,c("run_id","sample_id","layout","url_1","url_2","md5_1","md5_2","bytes_1","bytes_2"))
+  require_columns(s,c("run_id","sample_id","layout","url_1","url_2","bytes_1","bytes_2"))
   require_columns(l,c("sample_id","unit_id","layout","strand_mode"))
   require_columns(u,c("unit_id","cluster_id","maternal_parent",
     "paternal_parent","stage","tissue"))

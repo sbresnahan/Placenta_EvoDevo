@@ -51,7 +51,7 @@ preflight_v2 <- function(c,root,execution=FALSE) {
 validate_inputs_v2 <- function(c,root,execution=FALSE) {
   m<-load_manifests(c)
   r<-fread(c$paths$resources)
-  require_columns(r,c("resource_id","url","destination","partial","response","bytes","md5","required","build"))
+  require_columns(r,c("resource_id","url","destination","partial","response","bytes","required","build"))
   assert_unique(r,"resource_id")
   if(c$profile=="human_trio")human_linkage(c,m)
   if(execution) {tool_gate(c);snapshot(c)}
@@ -115,7 +115,7 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
     if(!file.exists(a)||(!is.null(b)&&!file.exists(b)))stop("Raw FASTQ missing")
     if(c$profile=="public_cross")for(mate in seq_len(if(l$layout=="PE")2 else 1)) {
       if(!verify_public_source(c,s[i],mate))
-        stop("Public raw source size/checksum mismatch")
+        stop("Public raw source size mismatch")
     }
     if(is.finite(limit)) {
       if(n>=limit)break

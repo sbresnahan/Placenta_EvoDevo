@@ -2,14 +2,14 @@
 # Host-only NCBI SRA retrieval. Never run from the R container.
 set -eo pipefail
 umask 077
-[[ $# == 12 || $# == 14 ]] || {
-  echo 'Usage: fetch_sra.sh RUN LAYOUT DEST1 DEST2 SCRATCH THREADS READ_COUNT RECEIPT ENA_BYTES1 ENA_MD5_1 ENA_BYTES2 ENA_MD5_2 [ATTEMPTS RETRY_SECONDS]' >&2
+[[ $# == 10 || $# == 12 ]] || {
+  echo 'Usage: fetch_sra.sh RUN LAYOUT DEST1 DEST2 SCRATCH THREADS READ_COUNT RECEIPT ENA_BYTES1 ENA_BYTES2 [ATTEMPTS RETRY_SECONDS]' >&2
   exit 2
 }
 run="$1"; layout="$2"; dest1="$3"; dest2="$4"; scratch="$5"
 threads="$6"; read_count="$7"; receipt="$8"
-ena_bytes1="$9"; ena_md51="${10}"; ena_bytes2="${11}"; ena_md52="${12}"
-attempts="${13-3}"; retry_seconds="${14-5}"
+ena_bytes1="$9"; ena_bytes2="${10}"
+attempts="${11-3}"; retry_seconds="${12-5}"
 [[ "$run" =~ ^(SRR|ERR|DRR)[0-9]+$ && "$layout" =~ ^(SE|PE)$ &&
    "$threads" =~ ^[1-9][0-9]*$ && "$read_count" =~ ^[1-9][0-9]*$ &&
    "$dest1" == /* && "$scratch" == /* && "$receipt" == /* &&
@@ -19,12 +19,10 @@ attempts="${13-3}"; retry_seconds="${14-5}"
 }
 [[ "$layout" == PE && "$dest2" == /* || "$layout" == SE && "$dest2" == - ]] || exit 2
 
-verify_exact() {
-  local path="$1" bytes="$2" md5="$3" actual
-  [[ -f "$path" && "$bytes" =~ ^[1-9][0-9]*$ && "$md5" =~ ^[0-9a-f]{32}$ ]] || return 1
-  [[ "$(stat -c %s -- "$path")" == "$bytes" ]] || return 1
-  actual="$(md5sum -- "$path")"
-  [[ "${actual:0:32}" == "$md5" ]]
+verify_ena_size() {
+  local path="$1" bytes="$2"
+  [[ -f "$path" && "$bytes" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "$(stat -c %s -- "$path")" == "$bytes" ]]
 }
 
 receipt_valid() {
@@ -34,7 +32,7 @@ receipt_valid() {
     [[ "$mate" == 1 || "$layout" == PE ]] || continue
     path="$dest1"; [[ "$mate" == 1 ]] || path="$dest2"
     values="$(awk -F '\t' -v r="$run" -v m="$mate" -v p="$path" \
-      '$1==r && $2==m && $3==p {print $4, $6}' "$receipt")"
+      '$1==r && $2==m && $3==p {print $4, ($6=="sra" ? $6 : $5)}' "$receipt")"
     n="$(awk -F '\t' -v r="$run" -v m="$mate" -v p="$path" \
       '$1==r && $2==m && $3==p {n++} END {print n+0}' "$receipt")"
     [[ "$n" == 1 ]] || return 1
@@ -45,9 +43,9 @@ receipt_valid() {
 }
 
 # A prior verified ENA transfer is also acceptable. Never overwrite it.
-if verify_exact "$dest1" "$ena_bytes1" "$ena_md51" &&
-   { [[ "$layout" == SE ]] || verify_exact "$dest2" "$ena_bytes2" "$ena_md52"; }; then
-  echo "Reusing ENA-verified FASTQs: $run"
+if verify_ena_size "$dest1" "$ena_bytes1" &&
+   { [[ "$layout" == SE ]] || verify_ena_size "$dest2" "$ena_bytes2"; }; then
+  echo "Reusing ENA-sized FASTQs: $run"
   exit 0
 fi
 if receipt_valid; then
@@ -62,7 +60,7 @@ fi
 # Site modules are available on LSF transfer hosts, not inside R.
 source "${POE_MODULE_INIT:-/etc/profile.d/modules.sh}"
 module load sratoolkit
-for tool in prefetch fasterq-dump gzip md5sum; do
+for tool in prefetch fasterq-dump gzip; do
   command -v "$tool" >/dev/null || { echo "Missing host tool: $tool" >&2; exit 1; }
 done
 
@@ -137,12 +135,12 @@ if [[ "$layout" == PE ]]; then mv -n -- "$temp/output/2.fastq.gz" "$dest2"; fi
 [[ "$layout" == SE || ! -e "$temp/output/2.fastq.gz" ]] || { echo 'Destination appeared during SRA promotion' >&2; exit 1; }
 tmp_receipt="$(mktemp "${receipt}.XXXXXXXX")"
 {
-  printf 'run_id\tmate\tpath\tbytes\tmd5\ttransport\n'
+  printf 'run_id\tmate\tpath\tbytes\ttransport\n'
   for mate in 1 2; do
     [[ "$mate" == 1 || "$layout" == PE ]] || continue
     path="$dest1"; [[ "$mate" == 1 ]] || path="$dest2"
     bytes="$(stat -c %s -- "$path")"
-    printf '%s\t%s\t%s\t%s\t-\tsra\n' "$run" "$mate" "$path" "$bytes"
+    printf '%s\t%s\t%s\t%s\tsra\n' "$run" "$mate" "$path" "$bytes"
   done
 } > "$tmp_receipt"
 mv -- "$tmp_receipt" "$receipt"

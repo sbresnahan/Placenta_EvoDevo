@@ -9,7 +9,7 @@ completion records, model eligibility, host/R separation, scheduler interfaces,
 and aggregate validation. Host-integration fixtures use mocked Ornaments,
 bcftools, personalizer, Singularity, and LSF commands.
 
-Runtime validation includes actual file access, MD5/byte and FASTQ integrity,
+Runtime validation includes actual file access, byte-size and FASTQ integrity,
 reference/genotype compatibility, count schemas, pilot strand diagnostics,
 model eligibility, and aggregate-column/cell thresholds.
 

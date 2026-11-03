@@ -517,16 +517,18 @@ plan.</p>
 group runs into the four pools.</p>
 <h2 id="k2-retrieve-the-inputs">K2. Retrieve the inputs</h2>
 <div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> retrieve <span class="at">--submit</span></span></code></pre></div>
-<p>The submission creates eight SRA-run jobs, twelve reference-resource
+<p>The submission creates eight SRA-run jobs, thirteen reference-resource
 jobs (genome, <code>F1maize.FINAL.gff</code> from Zenodo record 2611319,
-and ten AGPv4 chromosome VCFs), plus one final receipt job. At most two
+ten AGPv3 chromosome VCFs, and an AGPv3-to-AGPv4 liftover chain), plus one final receipt job. At most two
 retrieval jobs run concurrently by default
 (<code>retrieval.max_parallel_jobs</code>). When all finish:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">less</span> <span class="at">-S</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/resource_receipt.tsv&quot;</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/raw/&quot;</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/&quot;</span></span></code></pre></div>
-<p>HTTPS resources are checksum-verified during download. SRA conversion
-writes size-only receipts and skips expensive post-conversion FASTQ scans.</p>
+<p>HTTPS resources are checked against expected byte sizes during download.
+CyVerse VCFs instead undergo gzip-integrity checks and can be staged in
+<code>reference/cyverse_downloads/</code> under their original filenames.
+SRA conversion writes size-only receipts and skips expensive post-conversion FASTQ scans.</p>
 <h2 id="k3-build-the-reference">K3. Build the reference</h2>
 <div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">bin/submit_pipeline.sh</span> <span class="st">&quot;</span><span class="va">$CONFIG</span><span class="st">&quot;</span> reference <span class="at">--submit</span></span></code></pre></div>
 <p>Three jobs build the transcript/promoter catalog, B73/Ki11 markers,
@@ -659,7 +661,7 @@ the GRCm38 reference and joint MGP source</h2>
 <code>https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz</code>.
 The marker-source row uses the local VCF path and build
 <code>GRCm38</code>. Alternatively, enter the publisher&#39;s actual
-bytes/MD5 and <code>required=TRUE</code> in the resources table to
+byte size and <code>required=TRUE</code> in the resources table to
 download this source during retrieval.</p>
 <p>The actual focal parent is <code>C57BL_6J_Babr</code>; markers use
 the <code>REFERENCE_C57BL_6J</code> proxy and <code>CAST_EiJ</code>.
@@ -726,7 +728,7 @@ the GRCm38 reference and joint MGP source</h2>
 <code>https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz</code>.
 Use build <code>GRCm38</code> and the local VCF path in the
 marker-source table. For public acquisition of this VCF, fill its actual
-publisher bytes/MD5 and set <code>required=TRUE</code> in the resources
+publisher byte size and set <code>required=TRUE</code> in the resources
 table.</p>
 <p>The configured MGP samples are <code>FVB_NJ</code> and
 <code>CAST_EiJ</code>, using called <code>FI=1</code> parental evidence.
@@ -788,7 +790,7 @@ actual local RNA, genotype, sample, trio, and covariate records.</p>
 <tr>
 <td>Sources</td>
 <td>One row per run/lane group; <code>run_id</code>,
-<code>sample_id</code>, layout, local FASTQ mate paths, bytes/MD5, and
+<code>sample_id</code>, layout, local FASTQ mate paths, byte sizes, and
 full-file read count</td>
 </tr>
 <tr>

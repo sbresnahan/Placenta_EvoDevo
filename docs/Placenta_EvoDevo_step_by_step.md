@@ -130,9 +130,10 @@ totals 52,116,556,804 bytes. The tables already group runs into the four pools.
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-The submission creates eight SRA-run jobs, twelve reference-resource jobs
-(genome, `F1maize.FINAL.gff` from Zenodo record 2611319, and ten AGPv4
-chromosome VCFs), plus one final receipt job. At most two retrieval jobs run
+The submission creates eight SRA-run jobs, thirteen reference-resource jobs
+(genome, `F1maize.FINAL.gff` from Zenodo record 2611319, ten AGPv3
+chromosome VCFs, and an AGPv3-to-AGPv4 liftover chain), plus one final receipt job.
+At most two retrieval jobs run
 concurrently by default (`retrieval.max_parallel_jobs`). When all finish:
 
 ```bash
@@ -141,8 +142,10 @@ ls -lh "$COHORT_DIR/raw/"
 ls -lh "$COHORT_DIR/reference/"
 ```
 
-HTTPS resources are checksum-verified during download. SRA conversion writes
-size-only receipts and skips expensive post-conversion FASTQ scans.
+HTTPS resources are checked against expected byte sizes during download.
+CyVerse VCFs instead undergo gzip-integrity checks and can be staged in
+`reference/cyverse_downloads/` under their original filenames. SRA conversion
+writes size-only receipts and skips expensive post-conversion FASTQ scans.
 
 ## K3. Build the reference
 
@@ -371,7 +374,7 @@ nano "$COHORT_DIR/manifests/mouse_Babr_CAST_units.tsv"
 The joint source is
 `https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`.
 The marker-source row uses the local VCF path and build `GRCm38`.
-Alternatively, enter the publisher's actual bytes/MD5 and `required=TRUE`
+Alternatively, enter the publisher's actual byte size and `required=TRUE`
 in the resources table to download this source during retrieval.
 
 The actual focal parent is `C57BL_6J_Babr`; markers use the
@@ -483,7 +486,7 @@ nano "$COHORT_DIR/manifests/mouse_FVB_CAST_E12_units.tsv"
 The joint source is
 `https://ftp.ebi.ac.uk/pub/databases/mousegenomes/REL-1505-SNPs_Indels/mgp.v5.merged.snps_all.dbSNP142.vcf.gz`.
 Use build `GRCm38` and the local VCF path in the marker-source table.
-For public acquisition of this VCF, fill its actual publisher bytes/MD5
+For public acquisition of this VCF, fill its actual publisher byte size
 and set `required=TRUE` in the resources table.
 
 The configured MGP samples are `FVB_NJ` and `CAST_EiJ`, using called `FI=1`
@@ -579,7 +582,7 @@ nano "$CONFIG"
 
 | Table | Contents |
 |---|---|
-| Sources | One row per run/lane group; `run_id`, `sample_id`, layout, local FASTQ mate paths, bytes/MD5, and full-file read count |
+| Sources | One row per run/lane group; `run_id`, `sample_id`, layout, local FASTQ mate paths, byte sizes, and full-file read count |
 | Libraries | `sample_id`, `unit_id`, `child_id`, `layout`, `strand_mode` |
 | Units | `unit_id`, `cluster_id`, maternal/paternal IDs, stage, tissue |
 | Trios | `child_id`, `mother_id`, `father_id`, `family_id` |

@@ -10,8 +10,6 @@ while (($#)); do
   esac
 done
 [[ -n "$output" && -n "$url" ]] || exit 11
-if [[ "$url" == */MD5.txt ]]; then
-  cp -- "${MOCK_CYVERSE_DIR:?}/MD5.txt" "$output"
-else
-  cp -- "${MOCK_CYVERSE_DIR:?}/merged_flt_c1.imputed.vcf.gz" "$output"
-fi
+[[ "$url" != */MD5.txt ]] || { echo 'Unexpected checksum-catalog request' >&2; exit 12; }
+[[ -z "${MOCK_CYVERSE_COUNTER:-}" ]] || printf '%s\n' "$url" >> "$MOCK_CYVERSE_COUNTER"
+cp -- "${MOCK_CYVERSE_DIR:?}/merged_flt_c1.imputed.vcf.gz" "$output"

@@ -134,18 +134,17 @@ make_profile_fixture <- function(root,dir,host,human=FALSE) {
     maternal_parent=if(human)"typed_mother" else c(x$parents$focal,x$parents$alternate),
     paternal_parent=if(human)"typed_father" else c(x$parents$alternate,x$parents$focal),
     stage="FIXTURE",tissue="FIXTURE")
-  source<-data.table(run_id=samples,sample_id=samples,layout="PE",url_1="",url_2="",md5_1="",md5_2="",
+  source<-data.table(run_id=samples,sample_id=samples,layout="PE",url_1="",url_2="",
     bytes_1=0,bytes_2=0,read_count=6)
   for(i in 1:2)for(k in 1:2) {
     p<-file.path(dir,"raw",paste0(samples[i],"_",k,".gz"));dir.create(dirname(p),recursive=TRUE,showWarnings=FALSE)
     con<-gzfile(p,"wt");writeLines(unlist(lapply(1:3,function(j)c(paste0("@fixture",j,"/",k),"AAAA","+","!!!!"))),con);close(con)
-    source[i,(paste0("md5_",k)):=unname(tools::md5sum(p))]
     source[i,(paste0("bytes_",k)):=file.info(p)$size]
     source[i,(paste0("local_",k)):=p]
   }
   write_tsv(source,x$paths$sources);write_tsv(libs,x$paths$libraries);write_tsv(units,x$paths$units)
   resource<-data.table(resource_id=character(),url=character(),destination=character(),partial=character(),
-    response=character(),bytes=numeric(),md5=character(),required=logical(),build=character())
+    response=character(),bytes=numeric(),required=logical(),build=character())
   write_tsv(resource,x$paths$resources)
   markers<-data.table(chrom="chrT",genomic_pos=c(2L,62L),ref="A",alt="G",focal_index=0L,alternate_index=1L)
   mp<-file.path(dir,"fixture_markers.tsv");write_tsv(markers,mp)

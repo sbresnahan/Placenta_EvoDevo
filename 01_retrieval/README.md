@@ -8,8 +8,8 @@ Prepares a host-only `HOST_PLAN` script; run the printed script with `bash` to
 submit one transfer job per SRA run (both mates), or per HTTPS file, followed
 by a final receipt job dependent on all acquisitions. The default concurrency
 cap is `retrieval.max_parallel_jobs: 2` to limit simultaneous scratch use;
-raise it only after checking available storage. HTTPS files retain verified
-byte sizes/MD5 during transfer. SRA conversion requires successful commands,
+raise it only after checking available storage. HTTPS files are checked against
+expected byte sizes during transfer. SRA conversion requires successful commands,
 nonempty expected mate files and a size-only local receipt, without a second
 pass through the FASTQs. The final job checks file presence and sizes and
 writes `resource_receipt.tsv` without rereading entire FASTQs.
@@ -33,10 +33,12 @@ Failed `prefetch` calls retry up to `retrieval.attempts` times with increasing
 delays based on `retrieval.retry_seconds`; cached SRA data is preserved between
 attempts and subsequent submissions.
 Its output is gzip-compressed into the original `{run}_{mate}.fastq.gz` paths.
-Reference resources still use verified HTTPS downloads. No R process retrieves
-data or submits LSF jobs.
+Reference resources use HTTPS downloads with byte-size checks, except CyVerse
+VCFs, which use gzip-integrity checks and can be staged in the cohort's
+`reference/cyverse_downloads/` directory under their original filenames.
+No R process retrieves data or submits LSF jobs.
 
-SRA-derived compressed files will not have ENA's original gzip MD5/size.
+SRA-derived compressed files will not have ENA's original compressed byte size.
 The worker records generated FASTQ sizes in a per-run `.sra.tsv` receipt and
 does not perform MD5, gzip-integrity or full FASTQ-content scans afterward.
 Existing legacy per-run receipts are accepted by file size; this trades away

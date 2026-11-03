@@ -19,13 +19,13 @@ prefix = "https://data.cyverse.org/dav-anon/iplant/projects/commons_repo/curated
 for chrom in range(1, 11):
     row = next(x for x in resources if x["resource_id"] == f"hmp321_imputed_agpv3_chr{chrom}")
     assert row["url"] == f"{prefix}/merged_flt_c{chrom}.imputed.vcf.gz"
-    assert row["checksum_url"] == f"{prefix}/MD5.txt"
-    assert row["build"] == "AGPv3" and row["method"] == "cyverse_md5"
-    assert row["md5"] == "NA" and row["bytes"] == "NA"
+    # Legacy manifest values remain supported, but no catalog is consulted.
+    assert row["build"] == "AGPv3" and row["method"] in {"cyverse", "cyverse_md5"}
+    assert row["bytes"] == "NA"
     source = next(x for x in markers if x["source_id"] == row["resource_id"])
     assert source["path"] == row["destination"] and source["build"] == "AGPv3"
     assert source["processed_path"].endswith(f"hmp321_imputed_agpv4_chr{chrom}.markers.tsv")
 chain = next(x for x in resources if x["resource_id"] == "AGPv3_to_B73_RefGen_v4_chain")
-assert chain["bytes"] == "5950740" and chain["md5"] == "51c5eafdccc3d17a8555e899a7dd5e2a"
+assert chain["bytes"] == "5950740"
 assert chain["method"] == "https"
-print("PASS: CyVerse 10 chromosome URLs, publisher MD5 workflow, AGPv3 markers and pinned chain")
+print("PASS: CyVerse 10 chromosome URLs, AGPv3 markers, and sized chain")
