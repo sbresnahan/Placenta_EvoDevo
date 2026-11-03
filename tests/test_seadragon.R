@@ -2,6 +2,10 @@
 # No biological observations. Quantifier, bcftools, container and scheduler are MOCKS.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(file.path(dirname(f),".."),mustWork=TRUE)
+test_args<-commandArgs(trailingOnly=TRUE)
+if(length(test_args)>1L||(length(test_args)==1L&&test_args[1]!="--retrieval-only"))
+  stop("Usage: test_seadragon.R [--retrieval-only]")
+retrieval_only<-length(test_args)==1L
 source(file.path(root,"R/library_paths.R"))
 for(k in c("common","workflow","config","parental","models","exports","acquisition","public",
            "reference","pipeline","stages","scheduler","seadragon","lsf"))
@@ -23,6 +27,7 @@ run_shell<-function(file,args=character(),okay=TRUE) {
   if(okay&&rc!=0L)stop("Worker failed: ",file,"\n",paste(out,collapse="\n"))
   list(rc=rc,out=out)
 }
+if(!retrieval_only) {
 allfiles<-list.files(root,recursive=TRUE,full.names=TRUE)
 shell<-allfiles[grepl("\\.(sh|lsf)$|/bin/",allfiles)]
 for(p in shell)check(system2("bash",c("-n",shQuote(p)))==0L)
@@ -36,11 +41,14 @@ testplan<-write_plan(q,d)
 out<-run_shell(testplan)
 check(identical(out$out,"literal ; $HOME ' quoted"))
 check(!file.exists(file.path(d,"quoted")))
+}
 # Scope one tiny public and human profile, two libraries each.
-profiles<-lapply(c(FALSE,TRUE),function(h)make_profile_fixture(root,
+profiles<-lapply(if(retrieval_only)FALSE else c(FALSE,TRUE),function(h)make_profile_fixture(root,
   file.path(d,if(h)"human" else "public"),host,h))
+if(!retrieval_only) {
 for(p in profiles) {
   c<-p$c;Sys.setenv(CONFIG=p$config,POE_SAMPLE="shared")
+  message("[mock integration] ",c$cohort_id,": preflight and inventory")
   check(fails(native_gate(c)))
   out<-run_shell(file.path(root,"00_setup/preflight.sh"),c(p$config,"--execute"))
   check(file.exists(c$paths$native_inventory))
@@ -62,6 +70,7 @@ for(p in profiles) {
   check(grepl("done(900001) && done(900002)",reg$command[3],fixed=TRUE))
   check(all(grepl("-M' '8",reg$command,fixed=TRUE)))
   check(fails(submit_graph(c,root,"pilot",FALSE,"12;bad")))
+  message("[mock integration] ",c$cohort_id,": reference and indexing")
   for(action in c("reference",if(c$profile=="public_cross")c("markers","index"))) {
     Sys.setenv(POE_SAMPLE="shared")
     out<-run_shell(file.path(root,lsf_scripts[[action]]))
@@ -75,6 +84,7 @@ for(p in profiles) {
     typed<-fread(cfg_path(c,"child_query",sample=p$samples[1]),header=FALSE)
     check(ncol(typed)==7L&&typed$V6[1]=="0/0"&&typed$V7[1]=="1/1")
   }
+  message("[mock integration] ",c$cohort_id,": pilot workers")
   for(s in p$samples) {
     Sys.setenv(POE_SAMPLE=s)
     # Manual scale worker cannot bypass the missing report authorization.
@@ -91,6 +101,7 @@ for(p in profiles) {
   check(nrow(report)==8L&&all(report$elapsed_seconds==1))
   request_scale(c,root)
   check(!fails(scale_gate(c,root,load_manifests(c))))
+  message("[mock integration] ",c$cohort_id,": quantification and models")
   Sys.setenv(POE_SAMPLE=p$samples[1],POE_FIXTURE_FAIL="yes")
   out<-run_shell(file.path(root,lsf_scripts[["quantify"]]),okay=FALSE)
   check(out$rc!=0L)
@@ -132,8 +143,10 @@ for(p in profiles) {
   unlink(output)
   check(fails(completed_counts(c,root,load_manifests(c))))
 }
+}
 # Preparation must never perform network I/O inside R. Stage fixture FASTQs
 # directly to exercise the finish/receipt gate without contacting a remote URL.
+message("[mock integration] retrieval plans and receipts")
 p<-profiles[[1]];c<-p$c
 sources<-fread(c$paths$sources)
 # fread infers entirely blank URL fields as logical. Replace those columns
@@ -153,10 +166,17 @@ check(length(targets)==4L)
 g_https<-graph_spec(c,"retrieve")
 check(length(g_https)==5L && g_https[[5]]$sample=="finalize")
 check(identical(g_https[[3]]$deps,g_https[[1]]$key)) # two concurrent lanes
+if(retrieval_only) {
+  invisible(capture.output(dry<-submit_graph(c,root,"retrieve",FALSE)))
+  check(nrow(dry)==5L&&all(dry$state=="dry_run"))
+  check(any(grepl("done(900001)",dry$command,fixed=TRUE)))
+}
 one_job<-file.path(d,"one FASTQ retrieval plan");dir.create(one_job)
 prepare_host_retrieval(c,root,one_job,targets[1])
 one_plan<-readLines(file.path(one_job,"pre.sh"))
 check(sum(grepl("bin/fetch_verified.sh",one_plan,fixed=TRUE))==1L)
+selected<-fread(file.path(one_job,"retrieve_items.tsv"))
+check(nrow(selected)==1L&&identical(selected$target,targets[1]))
 check(!any(grepl("gzip.*-t",one_plan)))
 final_job<-file.path(d,"final receipt plan");dir.create(final_job)
 prepare_host_retrieval(c,root,final_job,"finalize")
@@ -164,7 +184,9 @@ check(!any(grepl("fetch_",readLines(file.path(final_job,"pre.sh")),fixed=TRUE)))
 for(i in seq_len(nrow(sources)))for(mate in 1:2) {
   dest<-cfg_path(c,"fastq",run=sources$run_id[i],mate=mate)
   ensure_parent(dest)
-  check(file.copy(sources[[paste0("local_",mate)]][i],dest,overwrite=TRUE))
+  src<-sources[[paste0("local_",mate)]][i]
+  if(!identical(src,dest))check(file.copy(src,dest,overwrite=TRUE))
+  check(file.exists(dest)&&file.info(dest)$size>0)
 }
 finish_host_retrieval(c,retrieve_job)
 check(nrow(fread(c$paths$resource_receipt))==4L)
@@ -189,10 +211,18 @@ check(!any(grepl("bin/fetch_verified.sh",sra_plan,fixed=TRUE)))
 check(all(grepl("'3' '5'",sra_plan[grepl("bin/fetch_sra.sh",sra_plan,fixed=TRUE)],fixed=TRUE)))
 g<-graph_spec(sra_c,"retrieve")
 check(length(g)==3L && g[[3]]$sample=="finalize" && length(g[[3]]$deps)==2L)
+one_sra_job<-file.path(d,"one SRA retrieval plan");dir.create(one_sra_job)
+prepare_host_retrieval(sra_c,root,one_sra_job,g[[1]]$sample)
+check(sum(grepl("bin/fetch_sra.sh",readLines(file.path(one_sra_job,"pre.sh")),fixed=TRUE))==1L)
+check(nrow(fread(file.path(one_sra_job,"retrieve_items.tsv")))==2L)
 changed<-cfg_path(c,"fastq",run=sources$run_id[1],mate=1)
-con<-file(changed,"r+b");seek(con,where=4);writeBin(as.raw(1L),con);close(con)
+# Make the manifest checksum wrong without corrupting the gzip stream: this
+# isolates SRA receipt trust from the original ENA checksum.
+original_md5<-sources$md5_1[1L]
+sources[1L,md5_1:=paste0(if(substr(original_md5,1L,1L)=="0")"1" else "0",
+                           substr(original_md5,2L,32L))]
+write_tsv(sources,c$paths$sources)
 check(!verify_file(changed,sources$bytes_1[1],sources$md5_1[1]))
-check(system2("gzip",c("-t",shQuote(changed)))==0L)
 run<-sources$run_id[1]
 receipt_path<-sra_receipt(sra_c,run)
 record<-rbindlist(lapply(1:2,function(mate) {
@@ -211,6 +241,8 @@ check(all(fread(c$paths$resource_receipt)$method=="sra"))
 check(nrow(fread(c$paths$resource_receipt))==4L)
 write_tsv(original_sources,c$paths$sources)
 # Test scheduler success/failure with a dedicated executable mock; NO bsub installed/called.
+if(!retrieval_only) {
+message("[mock integration] offline scheduler submission plans")
 p<-profiles[[1]];c<-p$c
 fake<-file.path(d,"fake_bsub")
 counter<-file.path(d,"scheduler_counter")
@@ -265,7 +297,9 @@ Sys.sleep(1) # ensure a distinct single-use plan filename under the same PID
 text<-capture.output(reg<-submit_graph(c,root,"retrieve",TRUE))
 plan<-sub("^HOST_PLAN=","",grep("^HOST_PLAN=",text,value=TRUE))
 check(run_shell(plan,okay=FALSE)$rc!=0L)
+}
 restore()
 unlink(d,recursive=TRUE)
-cat("PASS:",n,"Seadragon shell/host-boundary/fan-out/mock integration assertions\n")
+cat("PASS:",n,if(retrieval_only)"retrieval-only fan-out/receipt assertions\n" else
+    "Seadragon shell/host-boundary/fan-out/mock integration assertions\n")
 cat("All native counts, resource metrics, bcftools operations, scheduler and container behavior above are MOCK fixtures.\n")

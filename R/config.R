@@ -66,6 +66,8 @@ read_config_v2 <- function(path,setup=FALSE) {
   c$execution$image<-resolve_value(c$execution$image,dirname(path),unlist(c$environment_allowlist))
   if(!is.null(c$reference$genome_source))
     c$reference$genome_source<-resolve_value(c$reference$genome_source,dirname(path),unlist(c$environment_allowlist))
+  if(!is.null(c$markers$liftover_chain))
+    c$markers$liftover_chain<-resolve_value(c$markers$liftover_chain,dirname(path),unlist(c$environment_allowlist))
   if(identical(c$execution$backend,"seadragon")) {
     for(k in c("native_inventory","catalog_receipt","marker_receipt","job_registry"))
       if(is.null(c$paths[[k]]))stop("Missing Seadragon path: ",k)
@@ -128,6 +130,10 @@ read_config_v2 <- function(path,setup=FALSE) {
     if(c$markers$mode=="panzea" &&
        (c$markers$min_depth<5||c$markers$min_allele_fraction<.9||
         c$markers$min_allele_fraction>1))stop("Panzea depth/allele-fraction gates cannot be relaxed")
+    if(!is.null(c$markers$imputed_min_gq)&&
+       (!is.numeric(c$markers$imputed_min_gq)||length(c$markers$imputed_min_gq)!=1L||
+        !is.finite(c$markers$imputed_min_gq)||c$markers$imputed_min_gq<0))
+      stop("markers.imputed_min_gq must be nonnegative")
     if(isTRUE(c$markers$proxy))scalar_text(c$markers$proxy_reason,"markers.proxy_reason")
     if(isTRUE(c$markers$proxy)&&c$parents$focal=="C57BL_6J_Babr"&&
        c$markers$mode=="mgp"&&c$markers$focal_sample!="REFERENCE_C57BL_6J")

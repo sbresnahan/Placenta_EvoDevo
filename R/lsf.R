@@ -46,6 +46,7 @@ graph_spec <- function(c,stage) {
 }
 stage_resource <- function(c,action) {
   key<-if(action %in% c("quantify","assign","collect-quantification"))"scale" else
+    if(action=="markers"&&!is.null(c$lsf$stages$markers))"markers" else
     if(action %in% c("markers","child","index"))"reference" else
     if(action=="collect-pilot")"pilot" else action
   r<-c$lsf$stages[[key]]

@@ -4,7 +4,8 @@
 bin/submit_pipeline.sh "$CONFIG" retrieve --submit
 ```
 
-Submits one transfer job per SRA run (both mates), or per HTTPS file, followed
+Prepares a host-only `HOST_PLAN` script; run the printed script with `bash` to
+submit one transfer job per SRA run (both mates), or per HTTPS file, followed
 by a final receipt job dependent on all acquisitions. The default concurrency
 cap is `retrieval.max_parallel_jobs: 2` to limit simultaneous scratch use;
 raise it only after checking available storage. HTTPS files retain verified
@@ -12,6 +13,11 @@ byte sizes/MD5 during transfer. SRA conversion requires successful commands,
 nonempty expected mate files and a size-only local receipt, without a second
 pass through the FASTQs. The final job checks file presence and sizes and
 writes `resource_receipt.tsv` without rereading entire FASTQs.
+
+For a quick offline check of retrieval fan-out and receipts from inside the R
+container, run `bin/Rscript_sif tests/test_seadragon.R --retrieval-only`. This
+skips the lengthy host-worker and scheduler-submission integration fixtures;
+run the full `tests/test_seadragon.R` separately before production submission.
 
 ### NCBI SRA alternative on Seadragon
 

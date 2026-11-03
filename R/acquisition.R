@@ -164,18 +164,28 @@ host_retrieval_items <- function(c) {
   require_columns(r,c("resource_id","url","destination","partial","response","bytes","md5","required","build"))
   assert_unique(r,"resource_id")
   for(i in which(r$required)) {
+    resource_method<-if("method" %in% names(r)&&!is.na(r$method[i]))r$method[i] else "https"
+    checksum_url<-if("checksum_url" %in% names(r))r$checksum_url[i] else NA_character_
     unzip<-if("decompress_to" %in% names(r)&&!is.na(r$decompress_to[i])&&nzchar(r$decompress_to[i]))
       resolve_value(r$decompress_to[i],dirname(attr(c,"file")),unlist(c$environment_allowlist)) else NA_character_
     rows[[length(rows)+1L]]<-data.table(id=r$resource_id[i],mate=NA_integer_,
       url=r$url[i],destination=r$destination[i],partial=r$partial[i],
       bytes=as.numeric(r$bytes[i]),md5=r$md5[i],decompress_to=unzip,
-      method="https",read_count=NA_real_,sra_receipt=NA_character_)
+      method=resource_method,checksum_url=checksum_url,
+      read_count=NA_real_,sra_receipt=NA_character_)
   }
-  items<-rbindlist(rows)
-  if(anyNA(items[,.(id,url,destination,partial,bytes,md5)])||
+  items<-rbindlist(rows,fill=TRUE)
+  cyverse<-items$method=="cyverse_md5"
+  pinned<-!cyverse
+  if(anyNA(items[,.(id,url,destination,partial,method)])||
      any(!grepl("^https://",items$url))||
-     any(!is.finite(items$bytes)|items$bytes<=0|items$bytes!=floor(items$bytes)|items$bytes>2^53)||
-     any(!grepl("^[0-9a-f]{32}$",items$md5))||anyDuplicated(items$destination))
+     any(!is.finite(items$bytes[pinned])|items$bytes[pinned]<=0|
+       items$bytes[pinned]!=floor(items$bytes[pinned])|items$bytes[pinned]>2^53)||
+     any(is.na(items$md5[pinned])|!grepl("^[0-9a-f]{32}$",items$md5[pinned]))||
+     anyDuplicated(items$destination)||
+     any(cyverse & (!grepl("^https://data[.]cyverse[.]org/dav-anon/",items$url)|
+       is.na(items$checksum_url)|items$checksum_url!=paste0(dirname(items$url),"/MD5.txt")|
+       !grepl("[.]vcf[.]gz$",items$url))))
     stop("Unsafe, duplicated or unverified public acquisition entry")
   sra<-items[method=="sra"]
   if(nrow(sra)&&(any(!grepl("^(SRR|ERR|DRR)[0-9]+$",sra$id))||
@@ -190,8 +200,11 @@ host_retrieval_items <- function(c) {
 prepare_host_retrieval <- function(c,root,job,target="shared") {
   items<-host_retrieval_items(c)
   if(!target %in% c("shared","finalize")) {
-    items<-items[items$target==target]
-    if(!nrow(items))stop("Unknown retrieval target: ",target)
+    # Resolve the function argument before entering data.table's column scope:
+    # `items[target == target]` would otherwise select every resource.
+    selection<-which(items[["target"]]==target)
+    if(!length(selection))stop("Unknown retrieval target: ",target)
+    items<-items[selection]
   }
   write_tsv(items,file.path(job,"retrieve_items.tsv"))
   lines<-character()
@@ -212,6 +225,11 @@ prepare_host_retrieval <- function(c,root,job,target="shared") {
         if(nrow(second))second$md5 else "-",
         format(c$retrieval$attempts,scientific=FALSE,trim=TRUE),
         format(c$retrieval$retry_seconds,scientific=FALSE,trim=TRUE))))
+    } else if(item$method=="cyverse_md5") {
+      lines<-c(lines,plan_line(file.path(root,"bin/fetch_cyverse_md5.sh"),
+        c(c$tools$curl,item$url,item$destination,item$partial,item$checksum_url,
+          c$retrieval$attempts,c$retrieval$timeout_seconds,
+          c$retrieval$connect_timeout_seconds,c$retrieval$retry_seconds)))
     } else {
       lines<-c(lines,plan_line(file.path(root,"bin/fetch_verified.sh"),
         c(c$tools$curl,item$url,item$destination,item$partial,
@@ -235,6 +253,15 @@ finish_host_retrieval <- function(c,job,target="shared") {
     valid<-if(item$method=="sra") {
       s<-m$sources[run_id==item$id]
       nrow(s)==1L&&verify_public_source(c,s,item$mate)
+    } else if(item$method=="cyverse_md5") {
+      receipt<-paste0(item$destination,".cyverse.tsv")
+      d<-tryCatch(fread(receipt,colClasses="character"),error=function(e)NULL)
+      if(is.null(d)||!all(c("path","bytes","md5","url","method") %in% names(d))||nrow(d)!=1L)
+        FALSE
+      else if(d$path!=item$destination||d$url!=item$url||d$method!="cyverse_md5"||
+        !grepl("^[1-9][0-9]*$",d$bytes)||!grepl("^[0-9a-f]{32}$",d$md5))FALSE
+      else if(!file.exists(item$destination)||file.info(item$destination)$size!=as.numeric(d$bytes))FALSE
+      else {items$bytes[i]<-as.numeric(d$bytes);items$md5[i]<-d$md5;TRUE}
     } else file.exists(item$destination)&&file.info(item$destination)$size==item$bytes
     if(!valid)
       stop("Host retrieval missing/invalid: ",basename(item$destination))

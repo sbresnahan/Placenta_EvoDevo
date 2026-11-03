@@ -195,10 +195,36 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
     }
   } else if(stage=="markers") {
     if(c$profile!="public_cross")stop("Public markers stage cannot run on human trios")
-    stage_begin(c$paths$marker_receipt)
-    catalog_gate(c,root);v<-prepare_markers(c);v[,gt:="0/1"]
-    tx_variant_map(v,fread(c$paths$exons),c,c$paths$tx_vcf,c$paths$tx_marker_map,c$cohort_id)
-    stage_finish(c$paths$marker_receipt,marker_outputs(c))
+    if(phase=="prepare") {
+      stage_begin(c$paths$marker_receipt)
+      catalog_gate(c,root)
+      sources<-resolve_manifest_paths(fread(c$paths$marker_sources),c("path","processed_path"),c)
+      require_columns(sources,c("source_id","path","build"))
+      lines<-character()
+      if(any(sources$build=="AGPv3")) {
+        if(c$reference$build!="B73_RefGen_v4"||is.null(c$markers$liftover_chain))
+          stop("AGPv3 marker sources require an explicit AGPv3-to-v4 chain")
+        if(!file.exists(c$markers$liftover_chain))stop("Missing AGPv3-to-AGPv4 chain")
+        if(!"processed_path" %in% names(sources))stop("Missing processed_path in AGPv3 marker manifest")
+        for(i in which(sources$build=="AGPv3")) {
+          if(is.na(sources$processed_path[i])||!nzchar(sources$processed_path[i]))
+            stop("Missing processed_path for ",sources$source_id[i])
+          ensure_parent(sources$processed_path[i])
+          args<-c(file.path(root,"bin/liftover_cyverse_markers.py"),
+            "--source",sources$path[i],"--chain",c$markers$liftover_chain,
+            "--output",sources$processed_path[i],"--audit",paste0(sources$processed_path[i],".audit.tsv"),
+            "--focal",c$markers$focal_sample,"--alternate",c$markers$alternate_sample,
+            "--min-gq",if(is.null(c$markers$imputed_min_gq))20 else c$markers$imputed_min_gq)
+          for(duplicate in unlist(c$markers$duplicate_samples))args<-c(args,"--duplicate",duplicate)
+          lines<-c(lines,plan_line(c$tools$python,args))
+        }
+      }
+      write_plan(lines,job,"pre")
+    } else if(phase=="finish") {
+      catalog_gate(c,root);v<-prepare_markers(c);v[,gt:="0/1"]
+      tx_variant_map(v,fread(c$paths$exons),c,c$paths$tx_vcf,c$paths$tx_marker_map,c$cohort_id)
+      stage_finish(c$paths$marker_receipt,marker_outputs(c))
+    }
   } else if(stage=="child") {
     if(c$profile!="human_trio")stop("Child stage requires human trio profile")
     reference_gate(c,root);sample_manifest(c,sample)

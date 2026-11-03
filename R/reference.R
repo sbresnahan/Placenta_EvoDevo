@@ -102,15 +102,24 @@ vcf_markers <- function(path,c) {
   v
 }
 prepare_markers <- function(c) {
-  s<-resolve_manifest_paths(fread(c$paths$marker_sources),"path",c)
+  s<-resolve_manifest_paths(fread(c$paths$marker_sources),c("path","processed_path"),c)
   require_columns(s,c("source_id","path","build"));assert_unique(s,"source_id")
-  if(!nrow(s)||any(s$build!=c$reference$build))stop("Marker/reference build mismatch")
+  lifted<-s$build=="AGPv3" & c$reference$build=="B73_RefGen_v4"
+  if(!nrow(s)||any(!lifted & s$build!=c$reference$build))stop("Marker/reference build mismatch")
+  if(any(lifted)&&(!"processed_path" %in% names(s)||
+     anyNA(s$processed_path[lifted])||any(!nzchar(s$processed_path[lifted]))))
+    stop("AGPv3 marker VCFs need an AGPv4 processed_path and host-only liftover")
   for(i in seq_len(nrow(s))) {
     if(!file.exists(s$path[i])||file.info(s$path[i])$size<=0)
       stop("Marker source missing or empty: ",s$source_id[i])
+    if(lifted[i]&&(!file.exists(s$processed_path[i])||file.info(s$processed_path[i])$size<=0))
+      stop("AGPv3 marker liftover not finished: ",s$source_id[i])
   }
-  v<-if(c$markers$mode=="prepared")rbindlist(lapply(s$path,fread)) else
-    rbindlist(lapply(s$path,vcf_markers,c=c))
+  v<-rbindlist(lapply(seq_len(nrow(s)),function(i) {
+    if(lifted[i])fread(s$processed_path[i])
+    else if(c$markers$mode=="prepared")fread(s$path[i])
+    else vcf_markers(s$path[i],c)
+  }))
   v<-validate_marker_table(v,c)
   setorder(v,chrom,genomic_pos);write_tsv(v,c$paths$markers);v
 }

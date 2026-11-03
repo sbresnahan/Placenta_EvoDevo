@@ -141,6 +141,10 @@ reference:
     chr10: '10'
 markers:
   mode: panzea
+  # CyVerse hmp321_imputed is AGPv3; stream parental markers through the
+  # official Ensembl chain on the native host, then check REF on AGPv4 in R.
+  liftover_chain: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/maize_B73_Ki11/reference/AGPv3_to_B73_RefGen_v4.chain.gz
+  imputed_min_gq: 20  # Apply when GQ is present; imputed genotypes have no raw AD.
   source_type: external_lines_not_original_experimental_parents
   focal_sample: B73
   alternate_sample: Ki11
@@ -180,6 +184,12 @@ lsf:
       wall_time: '03:00'
       reservation_value: 8.0
       queue: short
+    markers:
+      memory_value: 8.0
+      cpus: 2
+      wall_time: '12:00'  # Stream and lift ten compressed imputed VCFs on the host.
+      reservation_value: 8.0
+      queue: medium
     pilot:
       memory_value: 8.0
       cpus: 2
