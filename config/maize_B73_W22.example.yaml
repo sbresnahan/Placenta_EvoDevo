@@ -128,12 +128,28 @@ dosage:
   rationale: normal_triploid_endosperm_only
 reference:
   build: B73_RefGen_v4
-  contig_aliases: []
+  contig_aliases:
+    chr1: '1'
+    chr2: '2'
+    chr3: '3'
+    chr4: '4'
+    chr5: '5'
+    chr6: '6'
+    chr7: '7'
+    chr8: '8'
+    chr9: '9'
+    chr10: '10'
 markers:
-  mode: prepared
+  mode: panzea
+  # Reuse the AGPv3 HapMap3 VCFs and AGPv3-to-B73v4 chain acquired for
+  # maize_B73_Ki11; only the B73/W22 marker outputs are cohort-specific.
+  liftover_chain: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/maize_B73_Ki11/reference/AGPv3_to_B73_RefGen_v4.chain.gz
+  imputed_min_gq: 20
   source_type: external_lines_not_original_experimental_parents
   focal_sample: B73
   alternate_sample: W22
+  # The B73/W22 VCF sample columns are confirmed. Duplicate-line columns
+  # must be verified before enabling the optional concordance filter.
   duplicate_samples: []
   min_depth: 5.0
   min_allele_fraction: 0.9

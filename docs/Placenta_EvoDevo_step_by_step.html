@@ -283,8 +283,8 @@ models</a></li>
 <ul>
 <li><a href="#w1-select-the-cohort-and-retrieve-rnagenome" id="toc-w1-select-the-cohort-and-retrieve-rnagenome">W1. Select the
 cohort and retrieve RNA/genome</a></li>
-<li><a href="#w2-supply-the-annotation-and-markers" id="toc-w2-supply-the-annotation-and-markers">W2. Supply the annotation
-and markers</a></li>
+<li><a href="#w2-supply-the-annotation-and-reuse-the-hapmap3-genotypes" id="toc-w2-supply-the-annotation-and-reuse-the-hapmap3-genotypes">W2. Supply the annotation
+and reuse the HapMap3 genotypes</a></li>
 <li><a href="#w3-build-the-reference" id="toc-w3-build-the-reference">W3. Build the reference</a></li>
 <li><a href="#w4-run-the-pilot" id="toc-w4-run-the-pilot">W4. Run the
 pilot</a></li>
@@ -585,21 +585,38 @@ is 2:1.</p>
 genome; a dependent final job writes the receipt. When they finish:</p>
 <div class="sourceCode" id="cb18"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">less</span> <span class="at">-S</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/resource_receipt.tsv&quot;</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-lh</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/genome.fa&quot;</span></span></code></pre></div>
-<h2 id="w2-supply-the-annotation-and-markers">W2. Supply the annotation
-and markers</h2>
+<h2 id="w2-supply-the-annotation-and-reuse-the-hapmap3-genotypes">W2. Supply the annotation
+and reuse the HapMap3 genotypes</h2>
 <p>Provide a B73 RefGen_v4 annotation with transcript/exon
 relationships:</p>
 <div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;B73 RefGen_v4 annotation filename: &quot;</span> <span class="va">ANNOTATION_INPUT</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> <span class="at">-n</span> <span class="at">--</span> <span class="st">&quot;</span><span class="va">$ANNOTATION_INPUT</span><span class="st">&quot;</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/source_annotation.gtf&quot;</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="bu">read</span> <span class="at">-r</span> <span class="at">-p</span> <span class="st">&quot;B73/W22 prepared marker table filename: &quot;</span> <span class="va">MARKER_FILE</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="fu">nano</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/manifests/maize_B73_W22_marker_sources.tsv&quot;</span></span></code></pre></div>
-<p>The marker table uses one-based positions and columns:</p>
-<pre class="text"><code>chrom   genomic_pos ref alt focal_index alternate_index</code></pre>
-<p>REF/ALT are single-base A/C/G/T alleles. Focal B73 and alternate W22
-have opposite homozygous indices, with 0=REF and 1=ALT. In
-<code>marker_sources.tsv</code>, enter the source ID, absolute
-marker-table path, and build <code>B73_RefGen_v4</code>. The configured
-adapter is <code>prepared</code>.</p>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> <span class="at">-n</span> <span class="at">--</span> <span class="st">&quot;</span><span class="va">$ANNOTATION_INPUT</span><span class="st">&quot;</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/reference/source_annotation.gtf&quot;</span></span></code></pre></div>
+<p>The B73/Ki11 acquisition already downloaded ten AGPv3 HapMap3
+imputed VCFs containing B73 and W22 and the official AGPv3-to-B73v4
+liftover chain. <strong>Do not download these genotype files again.</strong>
+The B73/W22 marker-source manifest references the original VCFs read-only,
+and writes its own processed B73/W22 marker tables under
+<code>maize_B73_W22/reference/</code>.</p>
+<p>Verify those shared inputs before submitting the B73/W22 reference stage:</p>
+<pre class="bash"><code>KI11_REF="$DATA_ROOT/maize_B73_Ki11/reference"
+for CHR in {1..10}; do
+  test -s "$KI11_REF/hmp321_imputed_agpv3_chr${CHR}.vcf.gz" || \
+    echo "MISSING: HapMap3 chromosome $CHR"
+done
+test -s "$KI11_REF/AGPv3_to_B73_RefGen_v4.chain.gz" || \
+  echo "MISSING: AGPv3-to-B73v4 chain"
+zgrep -m 1 '^#CHROM' "$KI11_REF/hmp321_imputed_agpv3_chr1.vcf.gz" \
+  | tr '\t' '\n' | grep -E '^(B73|W22)$'</code></pre>
+<p>The configured <code>panzea</code> adapter filters opposite homozygous
+B73/W22 SNPs, enforces GQ where available, lifts them to B73 RefGen_v4,
+and checks REF alleles against the B73 genome. The new marker tables use
+one-based positions and columns <code>chrom</code>,
+<code>genomic_pos</code>, <code>ref</code>, <code>alt</code>,
+<code>focal_index</code>, <code>alternate_index</code> (0=REF, 1=ALT).
+Existing B73/Ki11 marker tables are not reused.</p>
+<p>If you already created <code>maize_B73_W22.private.yaml</code> or a
+working copy of the marker manifest, refresh their marker settings only:
+the <code>use_cohort</code> helper does not overwrite private files.</p>
 <p>Sample settings are in:</p>
 <div class="sourceCode" id="cb21"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nano</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/manifests/maize_B73_W22_libraries.tsv&quot;</span></span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">nano</span> <span class="st">&quot;</span><span class="va">$COHORT_DIR</span><span class="st">/manifests/maize_B73_W22_units.tsv&quot;</span></span></code></pre></div>

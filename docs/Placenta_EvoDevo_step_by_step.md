@@ -241,27 +241,45 @@ less -S "$COHORT_DIR/resource_receipt.tsv"
 ls -lh "$COHORT_DIR/reference/genome.fa"
 ```
 
-## W2. Supply the annotation and markers
+## W2. Supply the annotation and reuse the HapMap3 genotypes
 
 Provide a B73 RefGen_v4 annotation with transcript/exon relationships:
 
 ```bash
 read -r -p "B73 RefGen_v4 annotation filename: " ANNOTATION_INPUT
 cp -n -- "$ANNOTATION_INPUT" "$COHORT_DIR/reference/source_annotation.gtf"
-read -r -p "B73/W22 prepared marker table filename: " MARKER_FILE
-nano "$COHORT_DIR/manifests/maize_B73_W22_marker_sources.tsv"
 ```
 
-The marker table uses one-based positions and columns:
+The B73/Ki11 acquisition already downloaded ten AGPv3 HapMap3 imputed VCFs
+containing B73 and W22 and the official AGPv3-to-B73v4 liftover chain. **Do not
+download these genotype files again.** The B73/W22 marker-source manifest
+references the original VCFs read-only, and writes its own processed B73/W22
+marker tables under `maize_B73_W22/reference/`.
 
-```text
-chrom	genomic_pos	ref	alt	focal_index	alternate_index
+Verify those shared inputs before submitting the B73/W22 reference stage:
+
+```bash
+KI11_REF="$DATA_ROOT/maize_B73_Ki11/reference"
+for CHR in {1..10}; do
+  test -s "$KI11_REF/hmp321_imputed_agpv3_chr${CHR}.vcf.gz" || \
+    echo "MISSING: HapMap3 chromosome $CHR"
+done
+test -s "$KI11_REF/AGPv3_to_B73_RefGen_v4.chain.gz" || \
+  echo "MISSING: AGPv3-to-B73v4 chain"
+zgrep -m 1 '^#CHROM' "$KI11_REF/hmp321_imputed_agpv3_chr1.vcf.gz" \
+  | tr '\t' '\n' | grep -E '^(B73|W22)$'
 ```
 
-REF/ALT are single-base A/C/G/T alleles. Focal B73 and alternate W22 have
-opposite homozygous indices, with 0=REF and 1=ALT.
-In `marker_sources.tsv`, enter the source ID, absolute marker-table path,
-and build `B73_RefGen_v4`. The configured adapter is `prepared`.
+The configured `panzea` adapter filters opposite homozygous B73/W22 SNPs,
+enforces GQ where available, lifts them to B73 RefGen_v4, and checks the
+resulting REF alleles against the B73 genome. The new B73/W22 marker tables
+use one-based positions and `chrom`, `genomic_pos`, `ref`, `alt`,
+`focal_index`, `alternate_index` columns (0=REF, 1=ALT). B73/Ki11's existing
+marker tables are **not** reused because they compare different parents.
+
+If you already created `maize_B73_W22.private.yaml` or a working copy of the
+marker manifest before this update, refresh their **marker settings only**:
+the `use_cohort` helper intentionally does not overwrite private files.
 
 Sample settings are in:
 

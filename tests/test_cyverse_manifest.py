@@ -28,4 +28,30 @@ for chrom in range(1, 11):
 chain = next(x for x in resources if x["resource_id"] == "AGPv3_to_B73_RefGen_v4_chain")
 assert chain["bytes"] == "5950740"
 assert chain["method"] == "https"
-print("PASS: CyVerse 10 chromosome URLs, AGPv3 markers, and sized chain")
+
+# B73/W22 reuses the exact Ki11 VCF inputs and chain, but produces its own
+# parent-specific marker outputs. No CyVerse genotype fetch is configured.
+w22 = read(root / "manifests/maize_B73_W22_marker_sources.tsv")
+w22_resources = read(root / "manifests/maize_B73_W22_resources.tsv")
+assert len(w22) == 10, len(w22)
+assert not any("hmp321" in row["resource_id"] for row in w22_resources)
+for chrom in range(1, 11):
+    name = f"hmp321_imputed_agpv3_chr{chrom}"
+    ki11 = next(row for row in markers if row["source_id"] == name)
+    source = next(row for row in w22 if row["source_id"] == name)
+    assert source["path"] == ki11["path"]
+    assert source["build"] == "AGPv3"
+    assert source["processed_path"] != ki11["processed_path"]
+    assert source["processed_path"].endswith(
+        f"maize_B73_W22/reference/hmp321_imputed_agpv4_chr{chrom}.markers.tsv"
+    )
+
+ki11_config = (root / "config/maize_B73_Ki11.example.yaml").read_text()
+w22_config = (root / "config/maize_B73_W22.example.yaml").read_text()
+ki11_chain = next(line.strip() for line in ki11_config.splitlines()
+                  if line.strip().startswith("liftover_chain:"))
+assert ki11_chain in w22_config
+assert "markers:\n  mode: panzea" in w22_config
+assert "alternate_sample: W22" in w22_config
+assert "duplicate_samples: []" in w22_config
+print("PASS: CyVerse 10 chromosome URLs, shared B73/W22 HapMap3 markers, and chain")
