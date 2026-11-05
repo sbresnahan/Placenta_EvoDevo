@@ -189,7 +189,18 @@ assign_sample <- function(c,m,sample,mode="complete") {
     hs<-human_linkage(c,m)[sample_id==sample];family<-hs$family_id
     anchors<-fread(cfg_path(c,"child_query",sample=sample),header=FALSE,
       col.names=c("chrom","genomic_pos","ref","alt","child_gt","mother_gt","father_gt"))
-    x<-orient_counts(x,anchors)
+    phase_cfg<-phase_origin_settings(c)
+    if(phase_cfg$enabled) {
+      origin<-infer_chromosome_origin(anchors,phase_cfg)
+      path<-phase_summary_path(c,sample)
+      write_tsv(origin,path) # private per-trio QC; never part of public export
+      # SNP-wise orientation needs only the transcript-overlapping subset.
+      # Whole-genome input is retained only for full-chromosome voting.
+      positions<-unique(x[!is.na(genomic_pos),.(chrom,genomic_pos,ref,alt)])
+      data.table::setkeyv(anchors,c("chrom","genomic_pos","ref","alt"))
+      anchors<-anchors[positions,on=.(chrom,genomic_pos,ref,alt),nomatch=0L]
+      x<-orient_counts_chromosome(x,anchors,origin)
+    } else x<-orient_counts(x,anchors)
   }
   # Cross-gene overlapping exons cannot provide a unique gene anchor.
   x[,gene_id:=tx$gene_id[match(transcript_id,tx$transcript_id)]]
@@ -202,12 +213,14 @@ assign_sample <- function(c,m,sample,mode="complete") {
   x[bad,`:=`(maternal_count=NA_real_,paternal_count=NA_real_,ref_maternal=NA,
     parent_status="other_gene_overlap")]
   gene<-x[,.(maternal_count=if(anyNA(maternal_count))NA_real_ else sum(maternal_count),
-    paternal_count=if(anyNA(paternal_count))NA_real_ else sum(paternal_count)),
+    paternal_count=if(anyNA(paternal_count))NA_real_ else sum(paternal_count),
+    ref_maternal=if(anyNA(ref_maternal)||uniqueN(ref_maternal)!=1L)NA else ref_maternal[1]),
     by=.(gene_id,locus_id)]
   x[,gene_id:=NULL]
   event<-event_locus_counts(x[transcript_id %in% map$transcript_id],map,sample,family)
   for(z in c("gene","event")) {
-    d<-get(z);d[,`:=`(unit_id=l$unit_id,marker_proxy=isTRUE(c$markers$proxy),
+    d<-get(z);d[,`:=`(sample_id=sample,family_id=family,
+      unit_id=l$unit_id,marker_proxy=isTRUE(c$markers$proxy),
       evidence_tier="model_based_expected_counts_not_joint_molecules")]
     write_tsv(d,p(paste0(z,"_counts")))
   }

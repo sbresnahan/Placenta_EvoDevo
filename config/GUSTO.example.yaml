@@ -2,6 +2,16 @@ schema_version: 2
 profile: human_trio
 species: human
 cohort_id: GUSTO
+phase_origin:
+  # Enable only if typed_vcf has consistently phased fetal GT (0|1 / 1|0)
+  # across each chromosome; review private per-child *.phase_origin.tsv QC.
+  # Phased, imputed trio variants are suitable subject to phase/trio QC.
+  enabled: true
+  min_informative: 20
+  min_agreement: 0.95
+  window_bp: 5000000
+  min_window_votes: 5
+  min_covered_windows: 3
 environment_allowlist: POE_SITE_ROOT
 paths:
   genome_fai: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/GUSTO/reference/genome.fa.fai
@@ -184,6 +194,12 @@ lsf:
       wall_time: '03:00'
       reservation_value: 8.0
       queue: short
+    additional:
+      memory_value: 16.0
+      cpus: 2
+      wall_time: '12:00'
+      reservation_value: 16.0
+      queue: medium
     retrieve:
       memory_value: 4.0
       reservation_value: 4.0

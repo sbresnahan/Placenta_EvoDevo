@@ -10,7 +10,7 @@ job_command <- function(c,root,stage) {
 submit_stage <- function(c,root,stage,submit=FALSE,dependency="none") {
   if(identical(c$execution$backend,"seadragon"))
     return(submit_graph(c,root,stage,submit,dependency))
-  if(!stage %in% c("reference","pilot","scale","models"))stop("Invalid scheduler stage")
+  if(!stage %in% c("reference","pilot","scale","models","additional"))stop("Invalid scheduler stage")
   if(!grepl("^(none|[0-9]+)$",dependency))stop("Numeric LSF dependency required")
   id<-paste0(format(Sys.time(),"%Y%m%dT%H%M%S"),"_",Sys.getpid())
   p<-function(k)cfg_path(c,k,stage=stage,job=id)
@@ -18,7 +18,9 @@ submit_stage <- function(c,root,stage,submit=FALSE,dependency="none") {
   lines<-c("#!/bin/bash","set -eo pipefail","umask 077",
     paste0("export R_LIBS_USER=",shQuote(c$tools$r_library)),job_command(c,root,stage))
   writeLines(lines,script)
-  r<-c$lsf$stages[[stage]]
+  key<-if(stage=="additional"&&!is.null(c$lsf$stages$additional))"additional" else
+    if(stage=="additional")"models" else stage
+  r<-c$lsf$stages[[key]]
   args<-c("-q",c$lsf$queue,"-n",r$cpus,"-W",r$wall_time,"-M",r$memory_value,
     "-R",paste0("rusage[mem=",r$memory_value,"]"),"-J",paste(c$cohort_id,stage,id,sep="_"),
     "-oo",p("job_stdout"),"-eo",p("job_stderr"))

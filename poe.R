@@ -9,8 +9,8 @@ if(length(a)<2)stop("Usage: Rscript poe.R CONFIG STAGE [--submit] [--execute] [-
 source(file.path(root,"R/config.R"))
 stage<-a[2];c<-read_config_v2(a[1],setup=stage=="preflight");flags<-a[-c(1,2)]
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
-for(module in c("common","workflow","parental","models","exports","acquisition",
-                 "public","reference","pipeline","stages","scheduler","seadragon","lsf"))
+for(module in c("common","workflow","parental","phase_origin","models","exports","acquisition",
+                 "public","reference","pipeline","stages","additional","scheduler","seadragon","lsf"))
   source(file.path(root,"R",paste0(module,".R")))
 allowed<-c("--submit","--execute","--after")
 value<-function(flag) {
@@ -36,7 +36,7 @@ tryCatch({
         if(is.null(value("--after")))"none" else value("--after"))
     } else if(!"--execute" %in% flags)cat("DRY RUN ONLY: retrieve requires --execute\n")
     else {snapshot(c);retrieve_inputs(c)}
-  } else if(stage %in% c("reference","pilot","scale","models")) {
+  } else if(stage %in% c("reference","pilot","scale","models","additional")) {
     validate_inputs_v2(c,root)
     if(stage=="scale"&&"--submit" %in% flags)request_scale(c,root)
     submit_stage(c,root,stage,"--submit" %in% flags,
@@ -47,12 +47,18 @@ tryCatch({
     suppressPackageStartupMessages(library(GenomicRanges))
     source(file.path(root,"R/annotation.R"))
     action<-sub("^worker-","",stage)
-    if(!action %in% c("reference","pilot","scale","models"))stop("Unknown worker stage")
+    if(!action %in% c("reference","pilot","scale","models","additional"))stop("Unknown worker stage")
     get(paste0("worker_",action))(c,root)
   } else if(stage=="review")review_v2(c)
   else if(stage=="export")export_v2(c)
   else if(stage=="status") {
     status_v2(c,root)
+  } else if(stage=="additional-status") {
+    paths<-additional_paths(c)
+    ok<-stage_valid(additional_receipt(c),paths)
+    print(data.table(stage="additional_v1",state=if(ok)"complete" else
+      if(file.exists(additional_receipt(c)))"incomplete" else "not_requested",
+      output_dir=additional_dir(c)))
   } else stop("Unknown stage")
 },error=function(e) {
   if(!stage %in% c("preflight","export"))write_tsv(data.table(stage=stage,

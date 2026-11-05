@@ -68,6 +68,18 @@ read_config_v2 <- function(path,setup=FALSE) {
     c$reference$genome_source<-resolve_value(c$reference$genome_source,dirname(path),unlist(c$environment_allowlist))
   if(!is.null(c$markers$liftover_chain))
     c$markers$liftover_chain<-resolve_value(c$markers$liftover_chain,dirname(path),unlist(c$environment_allowlist))
+  if(!is.null(c$additional_analysis$te_rmsk))
+    c$additional_analysis$te_rmsk<-resolve_value(c$additional_analysis$te_rmsk,
+      dirname(path),unlist(c$environment_allowlist))
+  if(c$profile=="human_trio"&&isTRUE(c$phase_origin$enabled)) {
+    q<-c$phase_origin
+    for(k in c("min_informative","window_bp","min_window_votes","min_covered_windows"))
+      if(!is.null(q[[k]]))positive(q[[k]],paste0("phase_origin.",k))
+    if(!is.null(q$min_agreement)&&(!is.numeric(q$min_agreement)||
+      length(q$min_agreement)!=1L||!is.finite(q$min_agreement)||
+      q$min_agreement<=0.5||q$min_agreement>1))
+      stop("phase_origin.min_agreement must be >0.5 and <=1")
+  }
   if(identical(c$execution$backend,"seadragon")) {
     for(k in c("native_inventory","catalog_receipt","marker_receipt","job_registry"))
       if(is.null(c$paths[[k]]))stop("Missing Seadragon path: ",k)

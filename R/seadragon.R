@@ -324,6 +324,7 @@ runtime_action <- function(c,root,stage,phase,sample,job) {
       readRDS(cfg_path(c,"quant_receipt",sample=s,mode="complete",strand=l$strand_mode))$metrics
     })),c$paths$metrics)
   } else if(stage=="models")worker_models(c,root)
+  else if(stage=="additional")worker_additional(c,root)
   else if(stage=="retrieve") {
     if(phase=="prepare")prepare_host_retrieval(c,root,job,sample)
     else finish_host_retrieval(c,job,sample)

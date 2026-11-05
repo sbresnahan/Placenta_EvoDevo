@@ -4,11 +4,11 @@ f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]
 root<-normalizePath(dirname(f),mustWork=TRUE)
 source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
-if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models [--submit] [--after JOB]")
+if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models|additional [--submit] [--after JOB]")
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
-for(k in c("common","workflow","parental","models","exports","acquisition","public","reference",
-           "pipeline","stages","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
+for(k in c("common","workflow","parental","phase_origin","models","exports","acquisition","public","reference",
+           "pipeline","stages","additional","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
 flags<-a[-c(1,2)]
 if(anyDuplicated(flags[startsWith(flags,"--")]))stop("Duplicate flag")
 take<-function(k) {

@@ -8,6 +8,10 @@ tissues, and human GUSTO placenta using Ornaments.
 Follow the [step-by-step walkthrough](docs/Placenta_EvoDevo_step_by_step.md):
 set project paths, select a cohort, check tools, and submit the first stage.
 
+For the additive, non-destructive reanalysis of existing maize results, GUSTO
+chromosome-origin phasing, and cross-cohort comparisons, use the
+[revised runbook](docs/REVISED_RUNBOOK.md).
+
 Scripts: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts`
 
 Data: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>`
@@ -31,11 +35,16 @@ Data: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>`
 | [Ornaments](04_ornaments/README.md) | Build indices, run pilots, quantify RNA |
 | [Assignment](05_parental_expression/README.md) | Orient maternal/paternal expression |
 | [Models](06_promoter_models/README.md) | Fit eligible gene/promoter comparisons |
+| [Additional analyses](docs/REVISED_RUNBOOK.md) | Separate TSS/donor questions, relaxed reciprocal callability, optional TE tests and GUSTO gene POE; frozen primary results unchanged |
 | [Export](07_exports/README.md) | Write optional human aggregates |
 
 Stage commands use `bin/submit_pipeline.sh "$CONFIG" STAGE --submit`.
 Omitting `--submit` prints a plan. Results include completion status, QC tables,
 pilot metrics, and model estimates.
+
+`STAGE=additional` requires a completed primary `models` receipt and creates
+`data/<cohort>/additional_v1/` without changing primary results or receipts.
+Use `bin/Rscript_sif poe.R "$CONFIG" additional-status` to verify completion.
 
 Settings are described in the [schema](config/SCHEMA.md).
 See [operations](docs/OPERATIONS.md) for logs/status,

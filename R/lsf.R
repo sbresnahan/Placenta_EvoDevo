@@ -5,7 +5,8 @@ lsf_scripts <- c(retrieve="01_retrieval/01_retrieve_public.lsf",
  pilot="04_ornaments/02_run_pilot.lsf",quantify="04_ornaments/03_quantify_library.lsf",
  `collect-pilot`="04_ornaments/10_collect_pilot.lsf",
  `collect-quantification`="04_ornaments/11_collect_quantification.lsf",
- assign="05_parental_expression/01_assign_parents.lsf",models="06_promoter_models/01_run_models.lsf")
+ assign="05_parental_expression/01_assign_parents.lsf",models="06_promoter_models/01_run_models.lsf",
+ additional="07_additional_analysis/01_run_additional.lsf")
 graph_spec <- function(c,stage) {
   m<-load_manifests(c);g<-list()
   add<-function(key,action,sample="shared",deps=character()) {
@@ -41,6 +42,7 @@ graph_spec <- function(c,stage) {
     add("collect-quantification","collect-quantification",
       deps=vapply(g[vapply(g,function(x)x$action=="assign",logical(1))],`[[`,character(1),"key"))
   } else if(stage=="models")add("models","models")
+  else if(stage=="additional")add("additional","additional")
   else stop("Unknown submission stage")
   g
 }
@@ -49,6 +51,7 @@ stage_resource <- function(c,action) {
     if(action=="markers"&&!is.null(c$lsf$stages$markers))"markers" else
     if(action %in% c("markers","child","index"))"reference" else
     if(action=="collect-pilot")"pilot" else action
+  if(action=="additional")key<-if(!is.null(c$lsf$stages$additional))"additional" else "models"
   r<-c$lsf$stages[[key]]
   if(is.null(r))stop("Missing resources for ",action)
   if(is.null(r$reservation_value))r$reservation_value<-r$memory_value
@@ -66,6 +69,9 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none") {
     validate_inputs_v2(c,root,execution=TRUE)
     if(stage=="pilot")reference_gate(c,root)
     if(stage %in% c("scale","models"))scale_gate(c,root,load_manifests(c))
+    if(stage=="additional"&&!stage_valid(c$paths$model_receipt,
+      unlist(c$paths[c("model_gene","model_promoter","model_pairs")])))
+      stop("Frozen model outputs must be complete before additional --submit")
   }
   id<-paste0(format(Sys.time(),"%Y%m%dT%H%M%OS6"),"_",Sys.getpid(),"_",basename(tempfile("r")))
   id<-gsub("[^A-Za-z0-9_.-]","_",id)
