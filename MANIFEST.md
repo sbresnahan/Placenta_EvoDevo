@@ -33,8 +33,7 @@ See the [module map](README.md#project-stages).
 
 - `config/`: cohort examples, site settings and [schema](config/SCHEMA.md).
 - `manifests/`: public run/library/unit tables, resource tables, human schemas.
-- `docs/`: [walkthrough](docs/Placenta_EvoDevo_step_by_step.md), setup, operations,
-  software-check coverage and inventories.
+- `docs/`: [walkthrough](docs/Placenta_EvoDevo_step_by_step.md), runbooks and operations.
 - `tests/`: setup and per-cohort input tests ([README](tests/README.md)).
 - `evidence/`: dataset catalog and [scientific resource review](evidence/review.md).
 - `LICENSE`, [attribution](ATTRIBUTION.md): software/data credits and terms.

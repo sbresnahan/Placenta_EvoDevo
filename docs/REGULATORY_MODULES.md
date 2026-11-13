@@ -102,6 +102,71 @@ not resolved arbitrarily. Gene-level links are explicitly gene context, not
 validation of a TSS phenotype. Peak manifests require a TRUE/FALSE
 `selection_used` flag to expose annotation reuse, including CAGE selection.
 
+### GUSTO: PANTRY placenta cis-QTL inputs
+
+`bin/prepare_gusto_qtl_context.py` turns the PANTRY tensorQTL results into the
+QTL tables, manifest and phenotype crosswalk above. Per ancestry (EAS, EUR) and
+modality (`alt_TSS`, `isoforms`, `expression`) it keeps every significant
+permutation lead (`qval < 0.05` in `*_top.tsv`) and every conditionally
+independent signal (`*_independent_top.tsv`), from both grouped and ungrouped
+runs where PANTRY has both, de-duplicated by phenotype and variant. `chrom` and
+`pos` are parsed from PANTRY's `CHROM:POS:REF:ALT` variant IDs; effects are not
+flipped. The crosswalk uses GUSTO's own `event_map`:
+
+| Outcome | Rule |
+|---|---|
+| event, verified | the PANTRY transcript (alt_TSS representative or isoform) is a GUSTO transcript of the same gene; linked to its 50 bp TSS event |
+| gene, verified | otherwise the PANTRY gene matches a GUSTO gene exactly, or by unversioned Ensembl ID when unique (`mapping_basis` records which) |
+| ambiguous / unmapped | the unversioned ID matches several GUSTO genes / none |
+
+PANTRY's novel `HPLRT_*` transcripts are not GUSTO ESPRESSO transcripts, so
+their phenotypes fall back to gene context.
+
+```bash
+use_cohort GUSTO
+QTL_DIR="$COHORT_DIR/private/qtl_context_v1"     # must not exist yet
+python3 bin/prepare_gusto_qtl_context.py \
+  --pantry-dir /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results \
+  --event-map "$(grep -m1 '^  event_map:' "$CONFIG" | awk '{print $2}')" \
+  --out-dir "$QTL_DIR"
+```
+
+It prints rows, phenotypes and mapping outcome per table (also in
+`summary.tsv`). Then set, under `regulatory.human_context` in the private YAML:
+
+```yaml
+  human_context:
+    require_qtl: true
+    qtl_tables: <QTL_DIR>/qtl_inputs.tsv
+    phenotype_map: <QTL_DIR>/phenotype_map.tsv
+```
+
+and submit `human-context` after `te-tss` completes. `--qval`, `--ancestries`
+and `--modalities` change the selection; write each variant to a new
+`--out-dir`.
+
+### GUSTO: ENCODE placenta cCREs as chromatin inputs
+
+ENCODE annotation ENCSR057ORE (cCREs in placenta, female embryo 113 days,
+GRCh38; DNase-seq, H3K27ac, H3K4me3) is distributed as a bigBed that lists
+every registry cCRE with its activity group in this tissue.
+`bin/prepare_encode_ccre_beds.py` reads the bigBed directly, drops `Low-DNase`
+(inactive in this tissue) and writes one BED per active group (`PLS`, `pELS`,
+`dELS`, `DNase-H3K4me3`, `DNase-only`) plus a `beds` manifest, so each group
+is reported as its own evidence type alongside the hTSC CUT&Tag peaks.
+
+```bash
+use_cohort GUSTO
+ENC="$COHORT_DIR/reference/regulatory_resources/encode"
+# ENCFF603ENH.bigBed from the ENCODE portal (md5 b719530058318231d99fa45c8ed05264)
+md5sum "$ENC/ENCFF603ENH.bigBed"
+python3 bin/prepare_encode_ccre_beds.py --bigbed "$ENC/ENCFF603ENH.bigBed" \
+  --accession ENCSR057ORE --out-dir "$ENC/ENCSR057ORE_v1"
+```
+
+Then add `beds: <ENC>/ENCSR057ORE_v1/beds_manifest.tsv` under
+`regulatory.human_context`.
+
 ## Fish repeat discovery is separately runnable
 
 `fish-repeats` runs BuildDatabase/RepeatModeler (discovery) and then
