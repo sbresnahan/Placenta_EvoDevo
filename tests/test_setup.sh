@@ -38,7 +38,7 @@ if [[ -f "$POE_R_SIF" ]]; then ok r_image "$POE_R_SIF"; else bad r_image "missin
 if [[ -d "$POE_R_LIBRARY" ]]; then ok r_library "$POE_R_LIBRARY"; else bad r_library "missing: $POE_R_LIBRARY"; r_ok=0; fi
 if (( r_ok )); then
   if out="$("$ROOT/bin/Rscript_sif" -e '
-      pk <- c("data.table","yaml","curl","digest","survival","GenomicRanges","IRanges",
+      pk <- c("data.table","yaml","curl","digest","GenomicRanges","IRanges",
               "S4Vectors","Rsamtools","Biostrings")
       miss <- pk[!vapply(pk, requireNamespace, logical(1), quietly = TRUE)]
       if (getRversion() < "4.3.1") stop("R >= 4.3.1 required; found ", getRversion())

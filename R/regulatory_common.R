@@ -86,6 +86,7 @@ reg_receipt_path <- function(z, stage) file.path(z$output_dir, paste0(stage, ".r
 reg_valid <- function(z, stage) {
   parents <- switch(stage, `fish-discovery` = "regulatory-resources",
     `fish-masking` = "fish-discovery", `te-tss` = "regulatory-resources",
+    `te-genes` = "te-tss",
     `human-context` = "te-tss", character())
   if (length(parents) && !all(vapply(parents, function(s) reg_valid(z, s), logical(1))))
     return(FALSE)
@@ -124,7 +125,8 @@ reg_finish <- function(z, stage, outputs) {
     version = z$version), p)
 }
 reg_status <- function(z) {
-  rbindlist(lapply(c("regulatory-resources", "fish-discovery", "fish-masking", "te-tss", "human-context"), function(s) {
+  rbindlist(lapply(c("regulatory-resources", "fish-discovery", "fish-masking", "te-tss", "te-genes",
+      "human-context"), function(s) {
     p <- reg_receipt_path(z, s)
     r <- if (file.exists(p)) tryCatch(readRDS(p), error = function(e) NULL) else NULL
     data.table(stage = s, state = if (is.null(r)) "not_run" else

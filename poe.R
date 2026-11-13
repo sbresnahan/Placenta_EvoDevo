@@ -6,7 +6,7 @@ root<-normalizePath(dirname(f),mustWork=TRUE)
 source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)<2)stop("Usage: Rscript poe.R CONFIG STAGE [--submit] [--execute] [--after JOB] [--resume] [--sample ID]")
-if(a[2] %in% c("regulatory-resources","fish-repeats","te-tss","human-context","regulatory-status")) {
+if(a[2] %in% c("regulatory-resources","fish-repeats","te-tss","te-genes","human-context","regulatory-status")) {
   source(file.path(root,"R/regulatory_cli.R"))
   reg_main(a,root)
   quit(status=0L)

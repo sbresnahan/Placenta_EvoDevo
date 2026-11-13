@@ -28,6 +28,8 @@ bin/submit_pipeline.sh "$CONFIG" regulatory-resources
 bin/submit_pipeline.sh "$CONFIG" regulatory-resources --submit
 # After successful resource completion and frozen primary models:
 bin/submit_pipeline.sh "$CONFIG" te-tss --submit
+# Between-gene complement to #1; after te-tss (GUSTO also needs additional_v1):
+bin/submit_pipeline.sh "$CONFIG" te-genes --submit
 # Human only; after te-tss completes:
 bin/submit_pipeline.sh "$CONFIG" human-context --submit
 bin/Rscript_sif poe_regulatory.R "$CONFIG" regulatory-status
@@ -255,6 +257,52 @@ Outputs: `transcript_TE_annotation.tsv`, `event_TE_annotation.tsv`,
 `TE_annotation_coverage.tsv`, `te_tss_event_pairs.tsv`,
 `te_tss_gene_summary.tsv`, `te_tss_cohort_summary.tsv`,
 `te_tss_provenance.tsv`. Empty/untestable results remain auditable.
+
+### #1b: between-gene comparison (`te-genes`)
+
+Complements the within-gene pairs with all genes that have a gene-level POE
+estimate: do genes with at least one multi-exon transcript TSS inside a TE
+differ from genes whose TSSs are all outside TEs and unknown repeats? Genes
+with only unknown-repeat TSSs are excluded. Gene POE comes from the frozen
+primary `model_gene.tsv` (public crosses; log2, dosage-adjusted) or
+`additional_v1/gene_POE.tsv` (GUSTO; ln, adjusted for cis and covariates), using
+`eligible_conditional_inference` rows only.
+
+Between genes, expression, informativeness, gene structure and genomic
+neighbourhood can confound the contrast, so they are adjusted explicitly:
+
+| Confounder | Covariate |
+|---|---|
+| Depth / precision | log total allelic depth, log SE, number of units or families |
+| SNP informativeness | log number of loci with depth >= `regulatory.min_depth` |
+| Gene structure | log number of 50-bp TSS events, log number of transcripts, log gene span |
+| Neighbourhood | TE bp fraction within ±100 kb of the gene; promoter GC (±1 kb of the 5'-most TSS) |
+
+Noise inflates |b|, so magnitude uses b^2 - SE^2 (unbiased for the true squared
+POE) and the signed contrast uses b; significance calls are never the outcome.
+A logistic propensity model on these covariates defines common support
+(overlapping propensity range) and ten strata on the TE genes' propensity
+quantiles; non-TE genes are weighted by the TE:non-TE ratio in their stratum
+(average effect in TE genes). `te_genes_balance.tsv` reports standardized mean
+differences before and after weighting; any |SMD| > 0.1 is flagged in the status.
+
+Uncertainty: genes in the same region are not independent, so the bootstrap
+resamples 2 Mb genomic blocks and refits the propensity model each time
+(`regulatory.bootstrap` replicates; normal-theory p and percentile CI). A
+within-stratum permutation of TE labels gives a second p-value. A placebo
+circularly shifts the TE track along each chromosome (keeping TE clustering and
+density, breaking the TSS–TE link), recomputes exposure and the full analysis,
+and reports how often a shifted track gives an effect at least as large.
+
+Outputs: `te_genes_result.tsv` (one row: contrasts, CIs, three p-values,
+counts, status), `te_genes_balance.tsv`, `te_genes_gene_table.tsv` (per-gene
+exposure, estimate, covariates, propensity, stratum, weight),
+`te_genes_placebo.tsv`, `te_genes_provenance.tsv`. Optional settings under
+`regulatory.te_genes`: `min_genes_per_group` (5), `propensity_strata` (10),
+`block_bp` (2e6), `te_density_flank_bp` (1e5), `gc_flank_bp` (1000),
+`permutations` (2000), `placebo_shifts` (200), `min_shift_bp` (1e6).
+Interpretation: a within-cohort, between-gene association conditional on the
+measured covariates; unmeasured differences (for example gene age) remain.
 
 ### #5: human evidence integration, not causal inference
 

@@ -6,7 +6,6 @@ additional_paths <- function(cfg) {
   c(genes=file.path(d,"gene_POE.tsv"),
     structural=file.path(d,"separated_TSS_donor_POE.tsv"),
     annotation=file.path(d,"event_TE_annotation.tsv"),
-    te=file.path(d,"TE_comparison.tsv"),
     provenance=file.path(d,"analysis_provenance.tsv"))
 }
 additional_receipt <- function(cfg)file.path(cfg$paths$receipts,"additional_v1.rds")
@@ -362,28 +361,6 @@ additional_te_annotation <- function(cfg,settings) {
     annotation_status="repeatmasker_reference_build_operator_verified"),by=event_id]
 }
 
-additional_te_comparison <- function(structural,annotations,settings) {
-  output<-data.table(status="not_tested_missing_annotation_or_matched_sets")
-  if(!nrow(structural)||all(annotations$tss_te_label=="not_assessed"))return(output)
-  # Promoter/TE question: never pool first-donor-conditional comparisons.
-  structural<-structural[effect_type=="TSS_conditional_on_first_donor"]
-  if(!nrow(structural))return(output)
-  a<-annotations[,.(event_a=event_id,te_a=tss_te_label)]
-  b<-annotations[,.(event_b=event_id,te_b=tss_te_label)]
-  p<-merge(merge(structural,a,by="event_a",all.x=TRUE),b,by="event_b",all.x=TRUE)
-  p[,pair_type:=fifelse((te_a=="TE"&te_b=="nonTE")|
-    (te_b=="TE"&te_a=="nonTE"),"TE_nonTE",
-    fifelse(te_a=="nonTE"&te_b=="nonTE","nonTE_nonTE","other"))]
-  p<-p[status=="eligible_conditional_inference"&
-    pair_type %in% c("TE_nonTE","nonTE_nonTE")&is.finite(estimate)]
-  if(!nrow(p))return(output)
-  setorder(p,gene_id,-n_units,event_a,event_b)
-  p<-p[,.SD[1],by=gene_id]
-  p[,`:=`(discordant=!is.na(q_value)&q_value<=.05,
-    n_units=as.numeric(n_units),tss_distance_bp=as.numeric(tss_distance_bp))]
-  out<-matched_te_model(p,c("n_units","tss_distance_bp"),min_genes=30L)
-  out$summary
-}
 
 worker_additional <- function(cfg,root) {
   settings<-additional_settings(cfg);additional_validate(cfg,settings)
@@ -412,9 +389,8 @@ worker_additional <- function(cfg,root) {
       fread(cfg$paths$events),cfg,settings)
   }
   labels<-additional_te_annotation(cfg,settings)
-  te<-additional_te_comparison(pairs,labels,settings)
   write_tsv(genes,paths[["genes"]]);write_tsv(pairs,paths[["structural"]])
-  write_tsv(labels,paths[["annotation"]]);write_tsv(te,paths[["te"]])
+  write_tsv(labels,paths[["annotation"]])
   write_tsv(data.table(cohort_id=cfg$cohort_id,species=cfg$species,
     stage=if(uniqueN(m$units$stage)>1L)"mixed_stage40_stage45_unadjusted" else m$units$stage[1],
     tissue=m$units$tissue[1],

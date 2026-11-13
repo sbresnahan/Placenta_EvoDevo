@@ -11,7 +11,7 @@ Applies to repository revision **after applying the supplied patch**, on MD Ande
 | Q3. Does the *first-donor choice* change parental imbalance, conditional on nearby TSS? | Maize, mouse | Same file with `first_donor_conditional_on_TSS` | Different first donor within 50 bp TSS matching; not a purely isolated splicing perturbation. |
 | Q4. Is there gene-level parent-of-origin imbalance beyond cis orientation? | GUSTO | New `additional_v1/gene_POE.tsv` | Trio-specific chromosome parental assignment; adjusts for cis allele and configured covariates; one child/family and one fixed SNP/gene. Private analysis. |
 | Q5. Do two transcript events differ in their parental expression? | GUSTO | Frozen baseline `model_promoter.tsv` | HC3/within-family bootstrap model conditional on cis orientation. GUSTO event pairs still follow the old structural definition; no new GUSTO two-event refit is implied. |
-| Q6. Do TSS-overlapping TEs associate with altered transcript parental imbalance? | Cohorts with matching repeat annotation | New `event_TE_annotation.tsv`, `TE_comparison.tsv` | Annotation and matched contrasts run only with a verified build-matched UCSC RepeatMasker table; otherwise explicitly `not_assessed`. Exploratory, not causal. |
+| Q6. Do TSS-overlapping TEs associate with altered transcript parental imbalance? | Cohorts with matching repeat annotation | New `event_TE_annotation.tsv`; the between-gene TE contrast is now `te-genes` (`additional_v2/te_genes_result.tsv`, see `REGULATORY_MODULES.md` #1b) | Annotation and matched contrasts run only with a verified build-matched UCSC RepeatMasker table; otherwise explicitly `not_assessed`. Exploratory, not causal. |
 | Q7. Are gene-level effects shared across cohorts/species? | All with comparable aggregates | `within_stratum_meta.tsv`, `directional_conservation.tsv` | Fixed-effect meta **only within same species × tissue × developmental stage and independent biological samples**. Cross-species direction comparison is descriptive, with curated one-to-one orthologs. |
 
 The additive stage is **more permissive** than the original two-event/full-callability gate: default ≥10 expected counts per event/locus per unit, ≥2 independent reciprocal units **in each direction**, same-locus comparison for structural contrasts, up to 50 structurally supported candidate pairs per gene/type screened for callability and the top 10 selected by callable unit count (never effect size). The result records `direct_coordinate_both`, `nominal_p_lt_0_05`, BH `q_value`, 90% CI equivalence to a 1.25-fold margin, and explicit ineligibility states. This **does not** establish read-level molecule phasing, independent transcription starts, or statistical replication with small n. `p < 0.05` is nominal, not FDR control; lack of significance is not proof of equivalence.
@@ -87,7 +87,6 @@ bin/Rscript_sif poe.R "$CONFIG" additional-status
 ls -lh "$COHORT_DIR/additional_v1/"
 less -S "$COHORT_DIR/additional_v1/gene_POE.tsv"
 less -S "$COHORT_DIR/additional_v1/separated_TSS_donor_POE.tsv"
-less -S "$COHORT_DIR/additional_v1/TE_comparison.tsv"
 ```
 
 Expect **`additional_v1 complete`**. Inspect full status and direct-coordinate support, and report nominal p < 0.05 separately from `q_value <= 0.05`. No 29-file retrieval recheck and no new HapMap3 download is needed for this step.

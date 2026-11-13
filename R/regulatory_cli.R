@@ -1,4 +1,4 @@
-reg_actions <- c("regulatory-resources", "fish-repeats", "te-tss",
+reg_actions <- c("regulatory-resources", "fish-repeats", "te-tss", "te-genes",
   "human-context", "regulatory-status")
 
 reg_lsf_resource <- function(cfg, action, z) {
@@ -94,7 +94,7 @@ reg_main <- function(args, root) {
       "models", "exports", "acquisition", "public", "reference", "pipeline", "stages",
       "additional", "scheduler", "seadragon", "lsf", "annotation",
       "regulatory_common", "regulatory_resources", "regulatory_fish",
-      "regulatory_te", "regulatory_context"))
+      "regulatory_te", "regulatory_te_genes", "regulatory_context"))
     source(file.path(root, "R", paste0(module, ".R")), local = .GlobalEnv)
   cfg <- read_config_v2(args[1])
   if (dir.exists(cfg$tools$r_library)) .libPaths(cfg$tools$r_library, include.site = FALSE)
@@ -129,6 +129,7 @@ reg_main <- function(args, root) {
         "\n", sep = "")
     else reg_fish_finish(cfg, z, root, phase)
   } else if (action == "worker-te-tss") reg_te_worker(cfg, z, root)
+  else if (action == "worker-te-genes") reg_te_genes_worker(cfg, z, root)
   else if (action == "worker-human-context") reg_context_worker(cfg, z, root)
   else stop("Unknown regulatory action")
 }

@@ -65,7 +65,7 @@ and separately scheduled fish repeat discovery/masking; existing results are unc
 ## Results archive
 
 To hand results to a reporting or research workflow, bundle every cohort's
-primary models, QC, `additional_v1`, hypothesis #1 (`te-tss`) and hypothesis #5
+primary models, QC, `additional_v1`, hypothesis #1 (`te-tss`, `te-genes`) and hypothesis #5
 (`human-context`) outputs with the method docs:
 
 ```bash
