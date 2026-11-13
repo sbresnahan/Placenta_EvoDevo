@@ -1,0 +1,6 @@
+/results/
+.DS_Store
+.Rhistory
+# Cohort-specific configurations and preserved backups may contain private paths.
+/config/*.private.yaml
+/config/*.private.yaml.bak.*

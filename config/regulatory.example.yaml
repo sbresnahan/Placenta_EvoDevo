@@ -1,0 +1,21 @@
+# OPTIONAL FRAGMENT: merge into a fully configured schema-2 cohort YAML.
+# Do not pass this fragment alone as CONFIG.
+# Uses existing cohort output/cache/scratch settings; no invented site paths.
+regulatory:
+  bootstrap: 2000
+  seed: 1147
+  min_depth: 10
+  max_pairs_per_gene: 10
+  fish:
+    runtime: container
+    # Path and versions reported by Sean from Seadragon; not a proposed download.
+    image: /risapps/apptainer/repo/tetools/20240523/tetools-202405023.sif
+    executable: apptainer
+    seed: 1147
+    cpus: 4  # Must equal or be below the approved LSF CPU allocation (>=4).
+  human_context:
+    require_qtl: true
+# Human paths must be provided from actual authorized local inputs.
+# Fish cohort config generator also populates editable starting allocations for
+# lsf.stages.fish_repeats in the full cohort YAML.
+# Review queue policy and measure resource usage before production submission.

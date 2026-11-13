@@ -1,0 +1,200 @@
+# LSF workers are the Seadragon submission interface.
+lsf_scripts <- c(retrieve="01_retrieval/01_retrieve_public.lsf",
+ reference="02_reference/01_prepare_reference.lsf",markers="03_genotypes/01_prepare_markers.lsf",
+ child="03_genotypes/02_prepare_child.lsf",index="04_ornaments/01_build_index.lsf",
+ pilot="04_ornaments/02_run_pilot.lsf",quantify="04_ornaments/03_quantify_library.lsf",
+ `collect-pilot`="04_ornaments/10_collect_pilot.lsf",
+ `collect-quantification`="04_ornaments/11_collect_quantification.lsf",
+ assign="05_parental_expression/01_assign_parents.lsf",models="06_promoter_models/01_run_models.lsf",
+ additional="07_additional_analysis/01_run_additional.lsf")
+graph_spec <- function(c,stage,resume=FALSE,sample=NULL,resources_only=FALSE) {
+  m<-if(stage=="retrieve")NULL else load_manifests(c);g<-list()
+  add<-function(key,action,sample="shared",deps=character()) {
+    g[[length(g)+1L]]<<-list(key=key,action=action,sample=sample,deps=deps)
+  }
+  if(resume && !stage %in% c("reference","pilot"))
+    stop("--resume is available only for reference or pilot")
+  if(!is.null(sample) && (!resume || stage!="reference"))
+    stop("--sample requires reference --resume")
+  if(stage=="retrieve") {
+    if(c$profile!="public_cross")stop("Public retrieval is not a human-data access route")
+    targets<-unique(host_retrieval_items(c,resources_only=resources_only)$target)
+    if(!length(targets))stop("No required retrieval items")
+    cap<-min(c$retrieval$max_parallel_jobs,length(targets))
+    for(i in seq_along(targets)) {
+      key<-paste0("retrieve_",targets[i])
+      deps<-if(i>cap)paste0("retrieve_",targets[i-cap]) else character()
+      add(key,"retrieve",targets[i],deps)
+    }
+    add("retrieve_finalize","retrieve",
+      if(resources_only)"resources_finalize" else "finalize",
+      deps=vapply(g,`[[`,character(1),"key"))
+  } else if(stage=="reference") {
+    if(resume) {
+      if(c$profile!="human_trio")stop("reference --resume is for human child/index jobs only")
+      selected<-as.character(m$libraries$sample_id)
+      if(!is.null(sample)) {
+        if(length(sample)!=1L || is.na(sample) || !sample %in% selected)
+          stop("--sample must match one human library sample_id")
+        selected<-sample
+      }
+      for(s in selected) {
+        index_outputs<-vapply(c("child_fasta","child_index"),
+          function(k)cfg_path(c,k,sample=s),character(1))
+        if(stage_valid(cfg_path(c,"human_receipt",sample=s),index_outputs))next
+        child_needed<-!stage_valid(cfg_path(c,"child_receipt",sample=s),child_outputs(c,s))
+        child_key<-paste0("child_",s)
+        if(child_needed)add(child_key,"child",s)
+        add(paste0("index_",s),"index",s,if(child_needed)child_key else character())
+      }
+    } else {
+      if(!is.null(sample))stop("--sample requires reference --resume")
+      add("reference","reference")
+      if(c$profile=="public_cross") {
+        add("markers","markers",deps="reference");add("index","index",deps="markers")
+      } else for(s in m$libraries$sample_id) {
+        add(paste0("child_",s),"child",s,"reference")
+        add(paste0("index_",s),"index",s,paste0("child_",s))
+      }
+    }
+  } else if(stage=="pilot") {
+    # Resume only missing/incomplete individual pilots; always run a new collector
+    # unless the active manifest's aggregate pilot receipt is already complete.
+    if(!resume || !stage_valid(c$paths$pilot_receipt,c$paths$pilot_report)) {
+      for(s in m$libraries$sample_id) {
+        if(resume && stage_valid(library_pilot_receipt(c,s),library_pilot_report(c,s)))next
+        add(paste0("pilot_",s),"pilot",s)
+      }
+      add("collect-pilot","collect-pilot",deps=vapply(g,`[[`,character(1),"key"))
+    }
+  } else if(stage=="scale") {
+    for(s in m$libraries$sample_id) {
+      add(paste0("quantify_",s),"quantify",s)
+      add(paste0("assign_",s),"assign",s,paste0("quantify_",s))
+    }
+    add("collect-quantification","collect-quantification",
+      deps=vapply(g[vapply(g,function(x)x$action=="assign",logical(1))],`[[`,character(1),"key"))
+  } else if(stage=="models")add("models","models")
+  else if(stage=="additional")add("additional","additional")
+  else stop("Unknown submission stage")
+  g
+}
+stage_resource <- function(c,action) {
+  key<-if(action %in% c("quantify","assign","collect-quantification"))"scale" else
+    if(action=="markers"&&!is.null(c$lsf$stages$markers))"markers" else
+    if(action %in% c("markers","child","index"))"reference" else
+    if(action=="collect-pilot")"pilot" else action
+  if(action=="additional")key<-if(!is.null(c$lsf$stages$additional))"additional" else "models"
+  r<-c$lsf$stages[[key]]
+  if(is.null(r))stop("Missing resources for ",action)
+  if(is.null(r$reservation_value))r$reservation_value<-r$memory_value
+  if(is.null(r$queue))r$queue<-c$lsf$queue
+  for(k in c("memory_value","reservation_value","cpus"))positive(r[[k]],paste(action,k))
+  if(!grepl("^[A-Za-z0-9_.-]+$",r$queue)||!grepl("^[0-9]+:[0-5][0-9]$",r$wall_time))
+    stop("Unsafe LSF resource value")
+  if(action %in% c("pilot","quantify")&&r$cpus<c$ornaments$threads)stop("LSF CPUs below Ornaments threads")
+  r
+}
+submit_graph <- function(c,root,stage,submit=FALSE,dependency="none",resume=FALSE,sample=NULL,
+                         resources_only=FALSE) {
+  if(!grepl("^(none|[0-9]+)$",dependency))stop("Numeric LSF dependency required")
+  if(resources_only && stage!="retrieve")stop("Resource-only mode requires retrieve")
+  if(resume && stage=="reference")reference_gate(c,root)
+  g<-graph_spec(c,stage,resume=resume,sample=sample,resources_only=resources_only)
+  if(resume && !length(g)) {
+    cat("All selected receipts are complete; no jobs to submit.\n")
+    if(submit)cat("HOST_NOOP=1\n")
+    return(invisible(data.table::data.table()))
+  }
+  if(submit) {
+    if(stage %in% c("models","additional")&&c$profile=="public_cross") {
+      u<-load_manifests(c)$units
+      if(uniqueN(u$stage)>1L && !fish_forced_five(c,u))
+        stop("Mixed-stage fish cohort requires explicit five-F1 forced pooling policy")
+    }
+    validate_inputs_v2(c,root,execution=TRUE,resources_only=resources_only)
+    if(stage=="pilot")reference_gate(c,root)
+    if(stage %in% c("scale","models"))scale_gate(c,root,load_manifests(c))
+    if(stage=="additional"&&!stage_valid(c$paths$model_receipt,
+      unlist(c$paths[c("model_gene","model_promoter","model_pairs")])))
+      stop("Frozen model outputs must be complete before additional --submit")
+  }
+  id<-paste0(format(Sys.time(),"%Y%m%dT%H%M%OS6"),"_",Sys.getpid(),"_",basename(tempfile("r")))
+  id<-gsub("[^A-Za-z0-9_.-]","_",id)
+  registry<-sub("\\.tsv$",paste0("_",id,".tsv"),c$paths$job_registry)
+  if(identical(registry,c$paths$job_registry))registry<-paste0(registry,"_",id,".tsv")
+  jobs<-character();rows<-list();hostlines<-character()
+  hostplan<-paste0(registry,".host.sh");submitted<-paste0(registry,".submitted.tsv")
+  if(submit) {
+    ensure_parent(hostplan)
+    hostlines<-c("#!/bin/bash","set -eo pipefail","umask 077",
+      paste("export SCRIPTS_DIR=",shQuote(root),sep=""),
+      paste("export POE_SITE_FILE=",shQuote(c$execution$site_file),sep=""),
+      paste("mkdir",shQuote(paste0(hostplan,".started"))),
+      "declare -A jobs seen",
+      "rows=$'node_key\\taction\\tsample\\tjob_id\\tdepends_on\\tstate\\n'")
+  }
+  for(i in seq_along(g)) {
+    node<-g[[i]];r<-stage_resource(c,node$action)
+    script<-file.path(root,lsf_scripts[[node$action]])
+    if(!file.exists(script))stop("Missing LSF worker: ",script)
+    deps<-unname(jobs[node$deps])
+    if(!length(node$deps)&&dependency!="none")deps<-dependency
+    jobname<-paste(c$cohort_id,node$action,node$sample,id,sep="_")
+    if(nchar(jobname)>180)stop("LSF job name too long")
+    logs<-file.path(c$paths$logs,"lsf");dir.create(logs,recursive=TRUE,showWarnings=FALSE)
+    # LSF -env parses comma separators; reject rather than misparse values.
+    env<-c(CONFIG=attr(c,"file"),SCRIPTS_DIR=root,POE_SAMPLE=node$sample,
+      POE_SITE_FILE=c$execution$site_file)
+    if(any(grepl("[,\r\n\"']",env)))stop("Path cannot be represented safely in LSF -env")
+    # -env is already shell-quoted below. Adding quotes around individual
+    # values passes literal quote characters into the LSF job environment.
+    envarg<-paste0("all,",paste(paste0(names(env),"=",env),collapse=","))
+    args<-c("-q",r$queue,"-n",r$cpus,"-M",r$memory_value,
+      "-R",paste0("rusage[mem=",r$reservation_value,"]"),"-W",r$wall_time,
+      "-J",jobname,"-o",file.path(logs,paste0(jobname,".%J.out")),
+      "-e",file.path(logs,paste0(jobname,".%J.err")),"-env",envarg)
+    baseargs<-args
+    # Retrieval lanes throttle concurrency, but a failed transfer must release
+    # its lane so that unrelated FASTQs are still attempted. The final receipt
+    # retains strict done() dependencies on every retrieval node.
+    dep_condition<-if(stage=="retrieve"&&length(node$deps)>0L&&!node$sample %in% c("finalize","resources_finalize"))"ended" else "done"
+    if(length(deps))args<-c(args,"-w",paste(paste0(dep_condition,"(",deps,")"),collapse=" && "))
+    command<-paste(shQuote(c$tools$bsub),paste(vapply(as.character(args),shQuote,character(1)),collapse=" "),
+      "<",shQuote(script))
+    jid<-as.character(900000L+i) # dry-run/planning labels ONLY; never scheduler results
+    if(!submit) {
+      cat("DRY RUN ONLY:",command,"\n")
+    } else {
+      dep_expr<-if(length(node$deps))paste(paste0(dep_condition,"(${jobs[",node$deps,"]})"),collapse=" && ") else
+        if(dependency!="none")paste0("done(",dependency,")") else ""
+      hostcommand<-paste(shQuote(c$tools$bsub),
+        paste(vapply(as.character(baseargs),shQuote,character(1)),collapse=" "),
+        if(nzchar(dep_expr))paste0('-w "',dep_expr,'"') else "",
+        "<",shQuote(script))
+      hostlines<-c(hostlines,
+        paste0("if ! output=$(",hostcommand,"); then printf 'LSF submission failed; inspect already submitted jobs\\n' >&2; exit 1; fi"),
+        'if [[ "$output" =~ Job\\ \\<([0-9]+)\\> ]]; then jid="${BASH_REMATCH[1]}"; else printf "Missing numeric LSF ID; inspect scheduler before retrying\\n" >&2; exit 1; fi',
+        '[[ -z "${seen[$jid]:-}" ]] || { printf "Duplicate scheduler ID\\n" >&2; exit 1; }',
+        'seen[$jid]=yes',paste0('jobs[',node$key,']="$jid"'),
+        paste0("rows+=$(printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s' ",shQuote(node$key)," ",
+          shQuote(node$action)," ",shQuote(node$sample),' "$jid" "',dep_expr,'" submitted)'),
+        "rows+=$'\\n'",
+        paste0('printf "%s" "$rows" > ',shQuote(paste0(submitted,".tmp"))),
+        paste("mv -f",shQuote(paste0(submitted,".tmp")),shQuote(submitted)),
+        paste0('printf "Submitted %s as %s\\n" ',shQuote(node$key),' "$jid"'))
+    }
+    jobs[node$key]<-jid
+    rows[[i]]<-data.table(node_key=node$key,action=node$action,sample=node$sample,
+      job_id=paste0(if(submit)"HOST_PLANNED_" else "DRYRUN_",jid),depends_on=paste(deps,collapse=","),
+      script=lsf_scripts[[node$action]],state=if(submit)"host_planned" else "dry_run",command=command)
+    write_tsv(rbindlist(rows),registry)
+  }
+  cat("Job registry:",registry,"\n")
+  if(submit) {
+    writeLines(hostlines,hostplan)
+    cat("Prepared host-only submission plan; R has not called bsub.\n")
+    cat("HOST_PLAN=",hostplan,"\n",sep="")
+  }
+  invisible(rbindlist(rows))
+}
