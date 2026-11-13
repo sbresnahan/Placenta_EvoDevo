@@ -162,8 +162,11 @@ reg_hits <- function(query, subject) {
   reg_intervals(query); reg_intervals(subject)
   empty <- data.table(query = integer(), subject = integer())
   if (!nrow(query) || !nrow(subject)) return(empty)
-  q <- copy(query[, .(chrom, start, end)])[, query := .I]
-  s <- copy(subject[, .(chrom, start, end)])[, subject := .I]
+  # fread reads all-numeric contig names (maize 1..10) as integer; join on text.
+  q <- copy(query[, .(chrom = as.character(chrom), start = as.numeric(start),
+    end = as.numeric(end))])[, query := .I]
+  s <- copy(subject[, .(chrom = as.character(chrom), start = as.numeric(start),
+    end = as.numeric(end))])[, subject := .I]
   setkey(s, chrom, start, end)
   h <- foverlaps(q, s, nomatch = 0L)
   unique(h[, .(query, subject)])
