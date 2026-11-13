@@ -191,7 +191,7 @@ quant_sample <- function(c,root,m,sample,mode="complete",strand=NULL,limit=Inf) 
   ensure_parent(rec);stage_finish(rec,outputs)
   r<-readRDS(rec);r$metrics<-metrics;saveRDS(r,rec);metrics
 }
-assign_sample <- function(c,m,sample,mode="complete") {
+assign_sample <- function(c,m,sample,mode="complete",return_transcripts=FALSE) {
   l<-m$libraries[sample_id==sample];strand<-l$strand_mode
   p<-function(k)cfg_path(c,k,sample=sample,mode=mode,strand=strand)
   x<-read_ornament_counts(p("allele_counts"),c$ornaments$semantics)
@@ -240,6 +240,9 @@ assign_sample <- function(c,m,sample,mode="complete") {
     x$gene_id[valid[S4Vectors::queryHits(h)]]!=ex$gene_id[S4Vectors::subjectHits(h)]]])
   x[bad,`:=`(maternal_count=NA_real_,paternal_count=NA_real_,ref_maternal=NA,
     parent_status="other_gene_overlap")]
+  # New baseline stage consumes transcript-SNP records before event aggregation.
+  # Returning here preserves every legacy gene/event output and receipt.
+  if (isTRUE(return_transcripts)) return(x)
   gene<-x[,.(maternal_count=if(anyNA(maternal_count))NA_real_ else sum(maternal_count),
     paternal_count=if(anyNA(paternal_count))NA_real_ else sum(paternal_count),
     ref_maternal=if(anyNA(ref_maternal)||uniqueN(ref_maternal)!=1L)NA else ref_maternal[1]),

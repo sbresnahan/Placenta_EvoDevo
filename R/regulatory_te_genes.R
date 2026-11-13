@@ -173,7 +173,7 @@ reg_te_genes_balance <- function(d, covs, w) {
   }))
 }
 
-reg_te_genes_inputs <- function(cfg, z, root, s) {
+reg_te_genes_inputs <- function(cfg, z, root, s, baseline = NULL) {
   contigs <- fread(file = cfg$paths$genome_fai, header = FALSE, select = 1:2,
     col.names = c("chrom", "length"))
   contigs[, chrom := as.character(chrom)]
@@ -202,7 +202,14 @@ reg_te_genes_inputs <- function(cfg, z, root, s) {
     is_te = is_te %in% TRUE, is_unknown = is_unknown %in% TRUE)]
   te_u <- reg_union(r[r$is_te])
 
-  if (cfg$profile == "human_trio") {
+  if (!is.null(baseline)) {
+    bs <- baseline$s
+    nb_require(bs, "combine")
+    poe <- nb_estimable(reg_read(nb_path(bs, "gene_POE.tsv")))
+    poe[, `:=`(gene_id = feature_id, estimate = beta_adjusted, n_units = n_samples)]
+    scale <- "ln_paternal_maternal_dosage_adjusted_all_SNP_NB"
+    source_table <- "baseline_nb_v1/gene_POE.tsv"
+  } else if (cfg$profile == "human_trio") {
     if (!stage_valid(additional_receipt(cfg), additional_paths(cfg)))
       stop("te-genes for human cohorts needs additional_v1/gene_POE.tsv: run the additional stage first")
     poe <- reg_read(additional_paths(cfg)[["genes"]])
@@ -217,15 +224,24 @@ reg_te_genes_inputs <- function(cfg, z, root, s) {
     scale <- "log2_maternal_paternal_dosage_adjusted"
     source_table <- "model_gene.tsv"
   }
-  poe <- poe[poe$status == "eligible_conditional_inference" & is.finite(poe$estimate) &
+  poe_flags <- if (!is.null(baseline)) poe[, .(gene_id, not_strictly_POE, independence_verified)] else NULL
+  poe <- poe[(if (is.null(baseline)) poe$status == "eligible_conditional_inference" else
+      poe$status %in% c("eligible_NB", "exploratory_NB")) & is.finite(poe$estimate) &
     is.finite(poe$se) & poe$se > 0, .(gene_id, estimate, se, n_units = as.numeric(n_units))]
   assert_unique(poe, "gene_id", "Gene POE")
+  if (!is.null(poe_flags)) poe <- merge(poe, poe_flags, by = "gene_id", all.x = TRUE)
 
-  counts <- completed_counts(cfg, root, load_manifests(cfg))$gene
-  require_columns(counts, c("gene_id", "locus_id", "maternal_count", "paternal_count"), "Gene counts")
-  counts[, depth := maternal_count + paternal_count]
-  dep <- counts[is.finite(depth), .(total_depth = sum(depth),
-    n_informative_loci = uniqueN(locus_id[depth >= z$min_depth])), by = gene_id]
+  if (is.null(baseline)) {
+    counts <- completed_counts(cfg, root, load_manifests(cfg))$gene
+    require_columns(counts, c("gene_id", "locus_id", "maternal_count", "paternal_count"), "Gene counts")
+    counts[, depth := maternal_count + paternal_count]
+    dep <- counts[is.finite(depth), .(total_depth = sum(depth),
+      n_informative_loci = uniqueN(locus_id[depth >= z$min_depth])), by = gene_id]
+  } else {
+    dep <- reg_read(nb_path(baseline$s, "gene_inventory.tsv.gz"))[, .(
+      total_depth = sum(total_counts), n_informative_loci = sum(n_samples_observed > 0)),
+      by = .(gene_id = feature_id)]
+  }
 
   len <- contigs$length[match(genes$chrom, contigs$chrom)]
   win <- data.table(chrom = genes$chrom, start = pmax(1, genes$start - s$flank_bp),
@@ -253,6 +269,11 @@ reg_te_genes_worker <- function(cfg, z, root) {
   if (!reg_begin(z, "te-genes", outputs)) return(invisible(TRUE))
   set.seed(z$seed)
   inp <- reg_te_genes_inputs(cfg, z, root, s)
+  reg_te_genes_run(cfg, z, inp, s, outputs)
+  reg_finish(z, "te-genes", outputs)
+}
+reg_te_genes_run <- function(cfg, z, inp, s, outputs) {
+  set.seed(z$seed)
   covs <- TE_GENES_COVARIATES
   rep_u <- reg_union(inp$repeats[inp$repeats$is_te | inp$repeats$is_unknown])
   exposure <- reg_gene_exposure(inp$tss, inp$te_u, rep_u)
@@ -268,6 +289,10 @@ reg_te_genes_worker <- function(cfg, z, root) {
     n_unknown_repeat_genes_excluded = sum(g$exposure == "unknown_repeat"),
     n_incomplete_covariates_excluded = inp$dropped_incomplete,
     status = "insufficient_genes_per_group")
+  if ("not_strictly_POE" %in% names(g))
+    result[, `:=`(n_not_strictly_POE = sum(g$not_strictly_POE %in% TRUE),
+      n_independence_unverified = sum(!g$independence_verified),
+      cross_flag_policy = "retained_main_analysis_separate_sensitivity")]
   balance <- data.table(covariate = character(), smd_before = numeric(), smd_after = numeric())
   placebo <- data.table(draw = integer(), n_TE_genes = integer(),
     magnitude_difference = numeric(), signed_difference = numeric())
@@ -337,10 +362,10 @@ reg_te_genes_worker <- function(cfg, z, root) {
       inp$source_table))
   out_cols <- c("gene_id", "chrom", "start", "end", "exposure", "estimate", "se",
     "magnitude_unbiased", covs, "propensity", "stratum", "weight", "block")
+  out_cols <- c(out_cols, intersect(c("not_strictly_POE", "independence_verified"), names(A)))
   reg_write(A[, out_cols, with = FALSE], outputs[1])
   reg_write(balance, outputs[2])
   reg_write(result, outputs[3])
   reg_write(placebo, outputs[4])
   reg_write(provenance, outputs[5])
-  reg_finish(z, "te-genes", outputs)
 }

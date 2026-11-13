@@ -18,6 +18,8 @@ source(file.path(root, "R/library_paths.R"))
 
 usage <- "Usage: bin/Rscript_sif bin/export_results.R --out FILE.tar.gz [--force] CONFIG [CONFIG ...]"
 args <- commandArgs(trailingOnly = TRUE)
+baseline_mode <- "--baseline-nb" %in% args
+args <- args[args != "--baseline-nb"]
 force <- "--force" %in% args
 args <- args[args != "--force"]
 k <- match("--out", args)
@@ -193,6 +195,18 @@ cohort_summary <- function(cfg) {
   data.table(setting = names(kv), value = vapply(kv, function(v) paste(v, collapse = ";"), ""))
 }
 
+# New analysis has its own strict, allowlisted archive. --force must never
+# manufacture completeness or mix old sentinel results with NB results.
+if (baseline_mode) {
+  if (force) stop("--baseline-nb does not accept --force; complete the new stages first")
+  suppressPackageStartupMessages(library(GenomicRanges))
+  for (module in c("parental", "phase_origin", "gusto", "models", "acquisition", "public",
+      "reference", "pipeline", "stages", "annotation", "regulatory_resources",
+      "regulatory_te_genes", "regulatory_context", "baseline_nb", "baseline_te", "baseline_handoff"))
+    source(file.path(root, "R", paste0(module, ".R")))
+  nb_export(configs, out, root)
+  quit(status = 0)
+}
 # Pass 1: read every config and decide what can be exported.
 cohorts <- lapply(configs, function(path) {
   cfg <- read_config_v2(path)
