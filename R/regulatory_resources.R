@@ -118,12 +118,8 @@ reg_resource_defaults <- function(cfg, z) {
     base <- paste0("https://hgdownload.soe.ucsc.edu/goldenPath/", build, "/database/")
     d <- rbind(row("repeats", paste0(base, "rmsk.txt.gz"), "rmsk"),
       row("rmsk_schema", paste0(base, "rmsk.sql"), "sql"))
-    if (cfg$species == "human") {
-      base <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE200nnn/GSE200761/suppl/"
-      for (mark in c("H3K27ac", "H3K4me1", "H3K4me3"))
-        d <- rbind(d, row(paste0("hTSC_", mark),
-          paste0(base, "GSE200761_hTSC_CutTag_", mark, "_peaks.bed.gz"), "bed"))
-    }
+    # Human chromatin peaks are not downloaded: supply them via
+    # regulatory.human_context.beds (e.g. ENCODE placenta cCREs).
   } else if (cfg$species == "maize") {
     if (!z$build %in% c("B73_RefGen_v4", "Zm-B73-REFERENCE-GRAMENE-4.0"))
       stop("Native maize defaults require B73v4")

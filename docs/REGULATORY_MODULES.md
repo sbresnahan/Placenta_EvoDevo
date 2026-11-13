@@ -53,8 +53,9 @@ cis-orientation and covariate linkage; full-reference repeat insertions.
 The modules do not rerun RNA retrieval, assignment or quantification.
 
 Species defaults download UCSC hg38/mm10 `rmsk.txt.gz` and its schema, or the
-native B73v4 TE GFF3. Human resources additionally download the three **human
-hTSC** GSE200761 CUT&Tag peak sets (H3K27ac/H3K4me1/H3K4me3), not mTSC peaks.
+native B73v4 TE GFF3. Human chromatin peaks are not downloaded; supply them
+through `regulatory.human_context.beds` (GUSTO uses the ENCODE placenta cCREs,
+below).
 Fish defaults download only the RefSeq GCF_027474105.1 FASTA/assembly report.
 The existing cluster image is reused; no image or repeat-classification
 database is downloaded or installed automatically.
@@ -106,21 +107,24 @@ validation of a TSS phenotype. Peak manifests require a TRUE/FALSE
 
 `bin/prepare_gusto_qtl_context.py` turns the PANTRY tensorQTL results into the
 QTL tables, manifest and phenotype crosswalk above. Per ancestry (EAS, EUR) and
-modality (`alt_TSS`, `isoforms`, `expression`) it keeps every significant
+modality it keeps every significant
 permutation lead (`qval < 0.05` in `*_top.tsv`) and every conditionally
 independent signal (`*_independent_top.tsv`), from both grouped and ungrouped
 runs where PANTRY has both, de-duplicated by phenotype and variant. `chrom` and
 `pos` are parsed from PANTRY's `CHROM:POS:REF:ALT` variant IDs; effects are not
-flipped. The crosswalk uses GUSTO's own `event_map`:
+flipped. All nine PANTRY modalities are supported; `combined` is excluded
+because it pools the others. The crosswalk uses GUSTO's own `event_map`:
 
-| Outcome | Rule |
+| Modalities | Link rule |
 |---|---|
-| event, verified | the PANTRY transcript (alt_TSS representative or isoform) is a GUSTO transcript of the same gene; linked to its 50 bp TSS event |
-| gene, verified | otherwise the PANTRY gene matches a GUSTO gene exactly, or by unversioned Ensembl ID when unique (`mapping_basis` records which) |
-| ambiguous / unmapped | the unversioned ID matches several GUSTO genes / none |
+| `alt_TSS`, `isoforms`, `isoform_expression` | TSS event when the PANTRY transcript is a GUSTO transcript of the same gene; otherwise gene context |
+| `expression`, `stability`, `alt_polyA`, `splicing`, `intron_retention`, `RNA_editing` | gene context only; these phenotypes describe a gene, 3′ end, intron or editing site, not a TSS |
 
-PANTRY's novel `HPLRT_*` transcripts are not GUSTO ESPRESSO transcripts, so
-their phenotypes fall back to gene context.
+Genes match exactly, or by unversioned Ensembl ID when that match is unique;
+several matches are `ambiguous`, none `unmapped`. `mapping_basis` records the
+rule used for every phenotype. PANTRY's novel `HPLRT_*` transcripts and
+`HPLRG_*` genes are not GUSTO ESPRESSO IDs, so they fall back to gene context
+or remain unmapped.
 
 ```bash
 use_cohort GUSTO
@@ -153,7 +157,7 @@ every registry cCRE with its activity group in this tissue.
 `bin/prepare_encode_ccre_beds.py` reads the bigBed directly, drops `Low-DNase`
 (inactive in this tissue) and writes one BED per active group (`PLS`, `pELS`,
 `dELS`, `DNase-H3K4me3`, `DNase-only`) plus a `beds` manifest, so each group
-is reported as its own evidence type alongside the hTSC CUT&Tag peaks.
+is reported as its own evidence type. These are the only peak inputs.
 
 ```bash
 use_cohort GUSTO

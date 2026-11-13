@@ -62,5 +62,22 @@ For opt-in hypothesis #1 (same-first-donor TE/non-TE TSS POE magnitude) and #5
 (human cis-QTL/chromatin context), see the [regulatory modules runbook](docs/REGULATORY_MODULES.md).
 These use separate `additional_v2` outputs, species-specific resource retrieval,
 and separately scheduled fish repeat discovery/masking; existing results are unchanged.
+## Results archive
+
+To hand results to a reporting or research workflow, bundle every cohort's
+primary models, QC, `additional_v1`, hypothesis #1 (`te-tss`) and hypothesis #5
+(`human-context`) outputs with the method docs:
+
+```bash
+mkdir -p "$DATA_ROOT/exports"
+bin/Rscript_sif bin/export_results.R --out "$DATA_ROOT/exports/results_$(date +%Y%m%d).tar.gz" \
+  --force config/*.private.yaml
+```
+
+Without `--force` it stops if any applicable part is incomplete; with `--force`
+it skips those parts (e.g. fish `te-tss` while repeat discovery runs) and lists
+them in the archive's `README.md` and `AVAILABILITY.tsv`. Human tables are
+aggregate-only: GUSTO tables with sample/family/parent identifiers are withheld.
+
 See [operations](docs/OPERATIONS.md) for logs/status and
 [attribution](ATTRIBUTION.md) for software/data credits.

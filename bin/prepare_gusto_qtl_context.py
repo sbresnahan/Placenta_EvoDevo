@@ -15,13 +15,18 @@ chrom and pos are parsed from PANTRY's CHROM:POS:REF:ALT variant IDs; effects
 are not flipped and REF/ALT roles are not reinterpreted.
 
 Phenotype map, in order of preference (GUSTO IDs come from its event_map):
-  event  verified   PANTRY transcript (alt_TSS representative or isoform) is a
-                    GUSTO transcript of the same gene; mapped to its TSS event
+  event  verified   TSS-linked modalities only (alt_TSS, isoforms,
+                    isoform_expression): the PANTRY transcript is a GUSTO
+                    transcript of the same gene; mapped to its TSS event
   gene   verified   otherwise, the PANTRY gene ID matches a GUSTO gene exactly,
                     or by unversioned Ensembl ID when that match is unique
   -      ambiguous  unversioned gene ID matches several GUSTO genes
   -      unmapped   no GUSTO gene
-Gene-level rows are gene context only, not validation of a TSS phenotype.
+Gene-only modalities (expression, stability, alt_polyA, splicing,
+intron_retention, RNA_editing) are never linked to a TSS event: their
+phenotypes describe a gene, 3' end, intron or site, not a TSS. Gene-level rows
+are gene context only, not validation of a TSS phenotype. PANTRY "combined"
+pools the other modalities and is not supported, to avoid double counting.
 
 Python 3.6+, standard library only. Never overwrites an existing --out-dir.
 """
@@ -33,12 +38,20 @@ from collections import Counter, OrderedDict, defaultdict
 from pathlib import Path
 
 VARIANT = re.compile(r"^([^:]+):([0-9]+):([^:]+):([^:]+)$")
-# Per modality: PANTRY run variants in priority order (first kept on duplicates).
-RUNS = {
-    "alt_TSS": ("ungrouped_cisqtl", "cisqtl"),
-    "isoforms": ("ungrouped_cisqtl", "cisqtl"),
-    "expression": ("cisqtl",),
-}
+# Per modality: PANTRY run variants in priority order (first kept on duplicates;
+# at least one must exist), and whether phenotypes may link to a TSS event.
+BOTH = ("ungrouped_cisqtl", "cisqtl")
+MODALITIES = OrderedDict([
+    ("alt_TSS", (BOTH, "tss")),
+    ("isoforms", (BOTH, "tss")),
+    ("isoform_expression", (BOTH, "tss")),
+    ("expression", (BOTH, "gene")),
+    ("stability", (BOTH, "gene")),
+    ("alt_polyA", (BOTH, "gene")),
+    ("splicing", (BOTH, "gene")),
+    ("intron_retention", (BOTH, "gene")),
+    ("RNA_editing", (BOTH, "gene")),
+])
 KEEP = ("pval_nominal", "slope", "slope_se", "af", "ma_samples", "start_distance",
         "pval_beta", "qval", "rank")
 
@@ -52,22 +65,28 @@ def read_tsv(path):
 
 
 def transcript_of(modality, phenotype):
-    """PANTRY transcript ID embedded in an alt_TSS or isoform phenotype ID."""
-    if modality == "expression":
+    """PANTRY transcript for TSS-linked modalities; None for gene-only ones."""
+    if MODALITIES[modality][1] != "tss":
         return None
     if "__" not in phenotype:
         raise ValueError("Unexpected {} phenotype ID: {}".format(modality, phenotype))
     rest = phenotype.split("__", 1)[1]
-    if modality == "isoforms":
+    if modality != "alt_TSS":
         return rest
-    for key in ("_upstream_", "_downstream_"):
-        if key in rest:
-            return rest.split(key, 1)[1]
-    raise ValueError("alt_TSS phenotype lacks _upstream_/_downstream_: " + phenotype)
+    if "_upstream_" not in rest:
+        raise ValueError("alt_TSS phenotype lacks _upstream_: " + phenotype)
+    return rest.split("_upstream_", 1)[1]
 
 
 def gene_of(modality, phenotype):
-    return phenotype if modality == "expression" else phenotype.split("__", 1)[0]
+    """Gene ID: the whole phenotype (expression, stability) or the GENE__ prefix.
+
+    Novel PANTRY genes (HPLRG_*) are kept; they simply map to no GUSTO gene.
+    """
+    gene = phenotype.split("__", 1)[0]
+    if not gene:
+        raise ValueError("Unexpected {} phenotype ID: {}".format(modality, phenotype))
+    return gene
 
 
 def unversioned(identifier):
@@ -77,14 +96,16 @@ def unversioned(identifier):
 def collect(pantry, ancestry, modality, qval):
     """Significant leads plus independent signals, keyed by (phenotype, variant)."""
     kept = OrderedDict()
-    for run in RUNS[modality]:
+    runs = MODALITIES[modality][0]
+    found = [r for r in runs if (pantry / "{}_{}_{}_top.tsv".format(ancestry, modality, r)).exists()]
+    if not found:
+        raise FileNotFoundError("No PANTRY {}_{}_*_top.tsv in {}".format(ancestry, modality, pantry))
+    for run in found:
         for kind in ("independent_top", "top"):
             name = "{}_{}_{}_{}.tsv".format(ancestry, modality, run, kind)
             path = pantry / name
             if not path.exists():
-                if run == RUNS[modality][0]:
-                    raise FileNotFoundError(path)
-                continue
+                raise FileNotFoundError(path)
             for row in read_tsv(path):
                 if kind == "top":
                     if "qval" not in row:
@@ -142,14 +163,16 @@ def map_phenotype(modality, phenotype, gusto):
             unversioned(tx_gene[transcript]) == unversioned(gene)):
         return (tx_gene[transcript], tx_event[transcript], "event", "verified",
                 "transcript_TSS_event")
+    # TSS-linked phenotype whose transcript is not a GUSTO transcript of the gene.
+    note = "transcript_not_in_GUSTO;" if transcript else ""
     if gene in genes:
-        return gene, "", "gene", "verified", "gene_id_exact"
+        return gene, "", "gene", "verified", note + "gene_id_exact"
     stable = by_stable.get(unversioned(gene), set())
     if len(stable) == 1:
-        return next(iter(stable)), "", "gene", "verified", "gene_stable_id_version_differs"
+        return next(iter(stable)), "", "gene", "verified", note + "gene_stable_id_version_differs"
     if len(stable) > 1:
-        return "", "", "gene", "ambiguous", "gene_stable_id_multiple"
-    return "", "", "gene", "unmapped", "gene_absent_from_GUSTO"
+        return "", "", "gene", "ambiguous", note + "gene_stable_id_multiple"
+    return "", "", "gene", "unmapped", note + "gene_absent_from_GUSTO"
 
 
 def write_tsv(path, rows, fields):
@@ -169,19 +192,23 @@ def main(argv=None):
     p.add_argument("--qval", type=float, default=0.05, help="top-lead FDR cutoff (default 0.05)")
     p.add_argument("--window", type=int, default=50, help="TSS event window used by te-tss (default 50)")
     p.add_argument("--ancestries", default="EAS,EUR")
-    p.add_argument("--modalities", default="alt_TSS,isoforms,expression")
+    p.add_argument("--modalities", default=",".join(MODALITIES),
+                   help="comma-separated (default: all nine supported)")
     a = p.parse_args(argv)
     modalities = a.modalities.split(",")
     for m in modalities:
-        if m not in RUNS:
-            p.error("Unsupported modality {}; choose from {}".format(m, ",".join(RUNS)))
+        if m not in MODALITIES:
+            p.error("Unsupported modality {}; choose from {}".format(m, ",".join(MODALITIES)))
     if a.out_dir.exists():
         p.error("Refusing to overwrite existing --out-dir: {}".format(a.out_dir))
     if not 0 < a.qval <= 1:
         p.error("--qval must be in (0, 1]")
 
     gusto = load_gusto(a.event_map, a.window)
-    out = a.out_dir.resolve()
+    final = a.out_dir.resolve()
+    out = final.with_name(final.name + ".partial")
+    if out.exists():
+        p.error("Remove the incomplete previous attempt first: {}".format(out))
     (out / "qtl").mkdir(parents=True)
     manifest, summary, phenotypes = [], [], OrderedDict()
     for ancestry in a.ancestries.split(","):
@@ -193,7 +220,8 @@ def main(argv=None):
             path = out / "qtl" / "{}_{}_lead.tsv".format(ancestry, modality)
             write_tsv(path, rows, list(rows[0].keys()))
             manifest.append(OrderedDict([
-                ("input_id", input_id), ("path", str(path)), ("build", "GRCh38"),
+                ("input_id", input_id),
+                ("path", str(final / "qtl" / path.name)), ("build", "GRCh38"),
                 ("kind", "lead"), ("coordinate_system", "one_based"), ("ancestry", ancestry)]))
             outcome = Counter()
             for phenotype in OrderedDict.fromkeys(r["phenotype_id"] for r in rows):
@@ -205,6 +233,7 @@ def main(argv=None):
                         ("gene_id", gene or "NA"), ("event_id", event or "NA"),
                         ("mapping_level", level), ("mapping_status", status),
                         ("mapping_basis", basis),
+                        ("link_rule", MODALITIES[modality][1]),
                         ("pantry_transcript_id", transcript_of(modality, phenotype) or "NA")])
                 m = phenotypes[key]
                 outcome[m["mapping_status"] if m["mapping_status"] != "verified"
@@ -219,13 +248,14 @@ def main(argv=None):
     pmap = list(phenotypes.values())
     write_tsv(out / "phenotype_map.tsv", pmap, list(pmap[0].keys()))
     write_tsv(out / "summary.tsv", summary, list(summary[0].keys()))
+    out.rename(final)
     width = max(len(s["input_id"]) for s in summary)
     print("{:<{w}}  rows  phen  event  gene  ambig  unmapped".format("input_id", w=width))
     for s in summary:
         print("{:<{w}}  {n_rows:>4}  {n_phenotypes:>4}  {verified_event:>5}  {verified_gene:>4}"
               "  {ambiguous:>5}  {unmapped:>8}".format(s["input_id"], w=width, **s))
-    print("\nqtl_tables:    {}\nphenotype_map: {}".format(out / "qtl_inputs.tsv",
-                                                        out / "phenotype_map.tsv"))
+    print("\nqtl_tables:    {}\nphenotype_map: {}".format(final / "qtl_inputs.tsv",
+                                                        final / "phenotype_map.tsv"))
     return 0
 
 

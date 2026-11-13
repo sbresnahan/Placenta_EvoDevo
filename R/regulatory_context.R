@@ -173,11 +173,9 @@ reg_context_worker <- function(cfg, z, root) {
   map_path <- if (!is.null(z$human_context$phenotype_map))
     reg_path(z$human_context$phenotype_map, cfg) else NULL
   if (!is.null(qspec) && is.null(map_path)) stop("QTL integration requires phenotype_map")
-  res <- reg_read(file.path(z$output_dir, "resource_manifest.tsv"))
-  auto <- res[grepl("^hTSC_", resource_id),
-    .(input_id = resource_id, path, build, evidence_type = resource_id,
-      selection_used = FALSE)]
-  beds <- rbindlist(list(beds, auto[!input_id %in% beds$input_id]), fill = TRUE)
+  # Peaks come only from the configured beds manifest (no automatic downloads).
+  if (is.null(beds)) beds <- data.table(input_id = character(), path = character(),
+    build = character(), evidence_type = character(), selection_used = logical())
   if (nrow(beds)) {
     require_columns(beds, c("evidence_type", "selection_used"))
     if (!is.logical(beds$selection_used) || anyNA(beds$selection_used))
