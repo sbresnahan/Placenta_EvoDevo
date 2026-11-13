@@ -5,3 +5,4 @@
 /config/*.private.yaml
 /config/*.private.yaml.bak.*
 __pycache__/
+/reports/

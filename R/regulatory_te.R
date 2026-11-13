@@ -72,7 +72,12 @@ reg_annotate_events <- function(tx, event_map, repeats, seqinfo, aliases = NULL,
 reg_te_pairs <- function(events, labels) {
   require_columns(events, c("window", "event_id", "gene_id", "first_donor",
     "tss_min", "distinguishing_bp"))
-  e <- copy(events[window == 50L & distinguishing_bp > 0])
+  # Same-first-donor TSS events have nested first exons: the downstream event's
+  # first exon lies inside the upstream one, so it never has distinguishing
+  # sequence. Requiring distinguishing_bp > 0 for both events therefore excluded
+  # every pair. Distinguishing sequence is kept as support_* and
+  # direct_coordinate_both; counts are Ornaments allocations (model_scope).
+  e <- copy(events[window == 50L])
   assert_unique(e, "event_id", "50bp event catalog")
   e <- merge(e, labels[, .(event_id, tss_te_label, chrom, strand)],
     by = "event_id", all.x = TRUE, suffixes = c("_catalog", ""))

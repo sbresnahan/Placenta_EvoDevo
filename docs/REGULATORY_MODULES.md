@@ -223,8 +223,12 @@ Exact transcript TSS bases determine TE membership; first-exon and ±500/100 bp
 strand-aware windows are separate descriptive annotations. Mixed or unknown
 events do not become pure TE/nonTE events. Pairs have the same gene,
 chromosome, strand and known first donor; distinct 50-bp events must be >50 bp
-apart with nonzero distinguishing sequence. Single-exon/unknown donors are
-not silently matched.
+apart. Because same-donor TSSs have nested first exons, the downstream event
+has no distinguishing sequence of its own; its counts are Ornaments
+allocations. Each pair records `support_te`/`support_nonTE` (distinguishing
+bp) and `direct_coordinate_both`, which is TRUE only when both events' loci
+fall in distinguishing sequence. Single-exon/unknown donors are not silently
+matched.
 
 Use a single shared callable locus, selected only by biological-unit coverage
 and depth. One representative per family is kept. The two event responses are
