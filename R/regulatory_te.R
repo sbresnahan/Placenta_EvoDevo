@@ -254,7 +254,10 @@ reg_analyze_pairs <- function(pairs, event_counts, gene_counts, units, cov, cfg,
   by_event <- split(event_counts, event_counts$event_id)
   ans <- lapply(seq_len(nrow(pairs)), function(i) {
     p <- pairs[i]
-    counts <- rbindlist(by_event[c(p$event_te, p$event_nonTE)], fill = TRUE)
+    # Prepend the empty schema so pairs whose events have no allelic counts
+    # still carry the columns (a pair with no counts is scored, not an error).
+    counts <- rbindlist(c(list(event_counts[0]), by_event[c(p$event_te, p$event_nonTE)]),
+      fill = TRUE)
     reg_one_te_pair(p, counts, gene_counts, units, cov, cfg, z)
   })
   x <- rbindlist(ans, fill = TRUE)
