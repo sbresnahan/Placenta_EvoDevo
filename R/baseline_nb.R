@@ -146,7 +146,7 @@ nb_metadata <- function(cfg, s, m) {
     if (anyNA(meta$cross)) stop("Unrecognized reciprocal parents")
     meta[, independence_verified := !is.na(cluster_id) & nzchar(cluster_id)]
     # IDs below are computational sample blocks, explicitly NOT verified biological clusters.
-    meta[!independence_verified, cluster_id := paste0("unverified_unit:", unit_id)]
+    meta[!(independence_verified), cluster_id := paste0("unverified_unit:", unit_id)]
   }
   if (file.exists(s$metadata)) {
     cov <- reg_read(s$metadata)

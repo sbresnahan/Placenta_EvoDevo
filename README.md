@@ -22,7 +22,7 @@ Data: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>`
 | maize_B73_W22 | Six PE endosperm pools, 14 DAP |
 | mouse_Babr_CAST | Five SE extraembryonic ectoderm units, E7.5 |
 | mouse_FVB_CAST_E12 | Four PE female placenta units, E12.5 |
-| fish_Pprolifica_AB | *Poeciliopsis prolifica* Line A × Line B; reciprocal placental RNA, sample curation pending |
+| fish_Pprolifica_AB | *Poeciliopsis prolifica* Line A × Line B; reciprocal placental RNA |
 | GUSTO | Local placenta RNA, phased transcriptomic genotypes and precomputed chromosome parental-origin labels |
 
 The fish profile includes the GEO/SRA study, Dryad fixed-SNP resources, RefSeq
