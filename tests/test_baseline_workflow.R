@@ -49,6 +49,21 @@ cfg <- list(profile = "human_trio", cohort_id = "SOFTWARE_FIXTURE_NOT_BIOLOGY", 
   environment_allowlist = character())
 configfile <- file.path(home, "fixture.yaml")
 yaml::write_yaml(list(software_fixture = TRUE), configfile); attr(cfg, "file") <- configfile
+# Hypothesis #5 fixture: one lead cis-QTL variant at chr1:12, inside the fixture TE
+# (chr1:8-15) that overlaps fixture_txA's TSS (10); fixture_txB's TSS (100) is non-TE.
+qtl_dir <- file.path(home, "qtl"); dir.create(qtl_dir)
+nb_write(data.table(modality = "alt_TSS", phenotype_id = "fixture_txA_pheno",
+  variant_id = "chr1:12:A:G", chrom = "chr1", pos = 12L, slope = 0.5, slope_se = 0.1),
+  file.path(qtl_dir, "fixture_lead.tsv"))
+nb_write(data.table(input_id = "fixture_lead", path = file.path(qtl_dir, "fixture_lead.tsv"),
+  build = "hg38", kind = "lead", ancestry = "fixture", coordinate_system = "one_based"),
+  file.path(qtl_dir, "qtl_inputs.tsv"))
+nb_write(data.table(modality = "alt_TSS", phenotype_id = "fixture_txA_pheno",
+  gene_id = "fixture_gene", event_id = "fixture_event1", mapping_level = "event",
+  mapping_status = "verified"), file.path(qtl_dir, "phenotype_map.tsv"))
+cfg$regulatory$human_context <- list(require_qtl = TRUE,
+  qtl_tables = file.path(qtl_dir, "qtl_inputs.tsv"),
+  phenotype_map = file.path(qtl_dir, "phenotype_map.tsv"))
 s <- list(output_dir = file.path(home, "baseline_nb_v1"), batches_gene = 2L, batches_transcript = 3L,
   min_snps = 3L, min_samples = 15L, min_total_counts = 50, min_per_cross = 2L,
   bootstrap = 2L, bootstrap_chunk = 1L, seed = 1147L, metadata = paths$covariates, max_dense_gb = 1)
@@ -104,7 +119,22 @@ check("class and individual contrast exported", nrow(reg_read(nb_path(s, "within
 nb_between_genes(cfg, s, root)
 check("too few exposure genes reported explicitly",
   reg_read(nb_path(s, "between_genes", "te_genes_result.tsv"))$status == "insufficient_genes_per_group")
-nb_context(cfg, s, root); nb_report_ready(cfg, s, root)
+noqtl <- cfg; noqtl$regulatory$human_context$qtl_tables <- NULL
+gate <- tryCatch({nb_context(noqtl, s, root); "ran"}, error = function(e) conditionMessage(e))
+check("require_qtl blocks human context without QTL tables", grepl("require_qtl", gate))
+nb_context(cfg, s, root)
+ctx <- reg_read(nb_path(s, "context", "human_transcript_context.tsv"))
+check("QTL variant inside the TSS TE insertion is counted",
+  ctx[transcript_id == "fixture_txA"]$n_qtl_variants_in_TSS_TE == 1)
+check("assessed non-TE TSS records zero, not missing",
+  ctx[transcript_id == "fixture_txB"]$n_qtl_variants_in_TSS_TE == 0)
+check("verified event link counted", ctx[transcript_id == "fixture_txA"]$n_event_qtl_links == 1)
+check("lead-only QTL leaves max PIP missing", is.na(ctx[transcript_id == "fixture_txA"]$max_event_link_pip))
+qlinks <- reg_read(nb_path(s, "context", "human_qtl_links.tsv.gz"))
+check("link flags TE-insertion overlap but not exact TSS",
+  isTRUE(qlinks$variant_overlaps_TSS_TE[1]) && identical(qlinks$variant_at_transcript_TSS[1], FALSE))
+check("context provenance written", file.exists(nb_path(s, "context", "human_context_provenance.tsv")))
+nb_report_ready(cfg, s, root)
 archive <- file.path(home, "software_fixture_results.tar.gz")
 nb_export(configfile, archive, root)
 listing <- utils::untar(archive, list = TRUE)

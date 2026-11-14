@@ -23,6 +23,16 @@ nb_context <- function(cfg, s, root) {
   z <- reg_settings(cfg)
   qspec <- reg_context_manifest(cfg, z, "qtl_tables")
   beds <- reg_context_manifest(cfg, z, "beds")
+  # Same gate as the legacy human-context worker: peaks cannot stand in for cis-QTL.
+  required <- reg_default(z$human_context$require_qtl, TRUE)
+  if (isTRUE(required) && (is.null(qspec) || !nrow(qspec)))
+    stop("context blocked: regulatory.human_context.require_qtl is TRUE but no qtl_tables ",
+      "are configured; supply qtl_tables and a verified phenotype_map")
+  # .fai has no header.
+  target <- fread(cfg$paths$genome_fai, header = FALSE, select = 1)[[1]]
+  aliases <- if (!is.null(z$contig_aliases)) reg_read(z$contig_aliases) else NULL
+  repeat_path <- nb_repeat_path(cfg)
+  repeats <- if (file.exists(repeat_path)) reg_read(repeat_path) else NULL
   tx <- reg_read(nb_path(s, "transcript_TE_annotation.tsv"))
   results <- reg_read(nb_path(s, "transcript_POE.tsv"))
   map <- reg_read(cfg$paths$event_map)[window == 50, .(transcript_id, event_id, gene_id)]
@@ -43,27 +53,69 @@ nb_context <- function(cfg, s, root) {
       sub("\\.[0-9]+$", "", transcript_id)]
     links[, POE_context_scope := fifelse(exact_transcript_phenotype,
       "matching_transcript_ID", "event_or_gene_mapping_not_transcript_validation")]
+    # Hypothesis #5 TE term: is a lead/PIP variant inside the TE insertion that
+    # overlaps THIS transcript's TSS? Reuse the legacy event-level routine with the
+    # transcript as the unit (event_id temporarily carries transcript_id).
+    if (!is.null(repeats) && nrow(links)) {
+      setnames(links, "event_id", "context_event_id")
+      links[, event_id := transcript_id]
+      links <- reg_context_variant_links(links,
+        mapped_tx[, .(chrom, tss, event_id = transcript_id)], repeats, target, aliases)
+      links[, event_id := context_event_id][, context_event_id := NULL]
+      if ("variant_at_event_TSS" %in% names(links))
+        setnames(links, "variant_at_event_TSS", "variant_at_transcript_TSS")
+    }
   }
-  # .fai has no header.
-  target <- fread(cfg$paths$genome_fai, header = FALSE, select = 1)[[1]]
-  aliases <- if (!is.null(z$contig_aliases)) reg_read(z$contig_aliases) else NULL
+  for (v in c("variant_at_transcript_TSS", "variant_overlaps_TSS_TE"))
+    if (!v %in% names(links)) links[, (v) := as.logical(NA)]
+  if (!"pip_all" %in% names(links)) links[, pip_all := NA_real_]
+  if (!"variant_id" %in% names(links)) links[, variant_id := NA_character_]
+  if (!"input_id" %in% names(links)) links[, input_id := NA_character_]
   peak <- reg_context_overlap(mapped_tx, beds, target, aliases)
+  qtl_assessed <- !is.null(qspec) && nrow(qspec) > 0
   summary <- merge(tx, results, by.x = "transcript_id", by.y = "feature_id", all.x = TRUE)
   summary[, `:=`(n_qtl_links = 0L, n_peak_overlaps = 0L,
-    qtl_assessed = !is.null(qspec) && nrow(qspec) > 0,
+    n_event_qtl_links = if (qtl_assessed) 0L else NA_integer_,
+    n_gene_context_links = if (qtl_assessed) 0L else NA_integer_,
+    max_event_link_pip = NA_real_,
+    # 0 is meaningful only where the TSS was assessed against repeats and QTL were supplied.
+    n_qtl_variants_in_TSS_TE = if (qtl_assessed && !is.null(repeats)) 0L else NA_integer_,
+    qtl_assessed = qtl_assessed,
     chromatin_assessed = !is.null(beds) && nrow(beds) > 0,
+    TE_insertion_assessed = !is.null(repeats),
     interpretation = "baseline_transcript_POE_with_context_not_causal_or_colocalization")]
+  summary[!(tss_te_label %in% c("TE", "nonTE")), n_qtl_variants_in_TSS_TE := NA_integer_]
   if (nrow(links)) {
-    counts <- links[, .N, by = transcript_id]
-    summary[counts, on = "transcript_id", n_qtl_links := i.N]
+    counts <- links[, .(N = .N,
+      n_event_qtl_links = sum(link_level == "verified_phenotype_event"),
+      n_gene_context_links = sum(link_level != "verified_phenotype_event"),
+      max_event_link_pip = if (any(link_level == "verified_phenotype_event" & is.finite(pip_all)))
+        max(pip_all[link_level == "verified_phenotype_event" & is.finite(pip_all)]) else NA_real_,
+      n_qtl_variants_in_TSS_TE = uniqueN(paste(input_id, variant_id)[variant_overlaps_TSS_TE %in% TRUE])),
+      by = transcript_id]
+    summary[counts, on = "transcript_id", `:=`(n_qtl_links = i.N,
+      n_event_qtl_links = i.n_event_qtl_links, n_gene_context_links = i.n_gene_context_links,
+      max_event_link_pip = i.max_event_link_pip)]
+    summary[counts[transcript_id %in% summary[!is.na(n_qtl_variants_in_TSS_TE)]$transcript_id],
+      on = "transcript_id", n_qtl_variants_in_TSS_TE := i.n_qtl_variants_in_TSS_TE]
   }
   if (nrow(peak$hits)) {
     counts <- peak$hits[, .N, by = transcript_id]
     summary[counts, on = "transcript_id", n_peak_overlaps := i.N]
   }
+  provenance <- data.table(version = NB_VERSION, build = z$build,
+    unit = "transcript", qtl_required = isTRUE(required), qtl_assessed = qtl_assessed,
+    chromatin_assessed = !is.null(beds) && nrow(beds) > 0,
+    repeats = if (is.null(repeats)) "not_available" else basename(repeat_path),
+    overlap_unit = "exact_transcript_TSS_or_same_TE_insertion",
+    candidate_filter = "none_no_PIP_or_POE_significance_cutoff",
+    pip_note = "max_event_link_pip is NA for lead-only QTL inputs (no PIP column)",
+    caveat = "shared_GUSTO_or_annotation_selection_not_independent_replication")
   files <- nb_path(s, "context", c("human_transcript_context.tsv", "human_qtl_links.tsv.gz",
-    "human_peak_overlaps.tsv.gz", "human_mapping_coverage.tsv", "human_resource_coverage.tsv"))
-  for (i in seq_along(files)) nb_write(list(summary, links, peak$hits, coverage, peak$coverage)[[i]], files[i])
+    "human_peak_overlaps.tsv.gz", "human_mapping_coverage.tsv", "human_resource_coverage.tsv",
+    "human_context_provenance.tsv"))
+  for (i in seq_along(files))
+    nb_write(list(summary, links, peak$hits, coverage, peak$coverage, provenance)[[i]], files[i])
   nb_finish(s, "context", key, files)
 }
 nb_pilot <- function(cfg, s, root, n = 10L, te = FALSE) {
