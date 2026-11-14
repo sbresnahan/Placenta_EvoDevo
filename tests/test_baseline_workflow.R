@@ -4,6 +4,7 @@
 # Raw acquisition, parent assignment and site inputs are mocked explicitly.
 a <- commandArgs(trailingOnly = TRUE)
 root <- if (length(a)) normalizePath(a[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 if (!requireNamespace("glmmTMB", quietly = TRUE)) stop("glmmTMB required")
 suppressPackageStartupMessages({library(data.table); library(GenomicRanges)})
 for (module in c("common", "config", "regulatory_common", "regulatory_fish",

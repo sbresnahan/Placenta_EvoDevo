@@ -2,6 +2,7 @@
 # Software regression fixtures only. No fixture is biological evidence.
 args <- commandArgs(trailingOnly = TRUE)
 root <- if (length(args)) normalizePath(args[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (module in c("common", "regulatory_common", "baseline_nb", "baseline_te", "baseline_handoff"))
   source(file.path(root, "R", paste0(module, ".R")))

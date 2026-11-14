@@ -3,6 +3,7 @@
 # Tests actual REF/ALT parsing, coordinate mapping and parental orientation.
 a <- commandArgs(TRUE)
 root <- if (length(a)) normalizePath(a[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages({library(data.table); library(GenomicRanges)})
 for (module in c("common", "parental", "phase_origin", "gusto", "public", "pipeline"))
   source(file.path(root, "R", paste0(module, ".R")))

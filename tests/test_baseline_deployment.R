@@ -2,6 +2,7 @@
 # Software-only CLI and metadata fixtures. No site jobs are submitted.
 a <- commandArgs(TRUE)
 root <- if (length(a)) normalizePath(a[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 source(file.path(root, "R/config.R"))
 source(file.path(root, "R/common.R"))

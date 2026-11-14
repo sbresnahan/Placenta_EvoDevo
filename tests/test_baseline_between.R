@@ -3,6 +3,7 @@
 # arbitrary test outcomes and paired covariates. These are NOT POE estimates.
 a <- commandArgs(TRUE)
 root <- if (length(a)) normalizePath(a[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (module in c("config", "common", "regulatory_common", "regulatory_te_genes"))
   source(file.path(root, "R", paste0(module, ".R")))
