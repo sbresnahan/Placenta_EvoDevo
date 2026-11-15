@@ -1,0 +1,2 @@
+run_accession	study_accession	experiment_accession	biosample_accession	strain	assay	purpose	genome_build
+SRR40078298	PRJNA1509661	SRX34719858	SAMN62272763	Line_A	PacBio_Revio_HiFi_WGS	validate_Line_A_fixed_SNPs_and_allelic_methylation	GCF_027474105.1

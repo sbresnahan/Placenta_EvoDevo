@@ -1,0 +1,30 @@
+run_accession	geo_accession	biosample	experiment_accession	source_tissue	include	unit_id	maternal_parent	paternal_parent	stage	tissue	cluster_id	strand_mode	notes
+SRR37106126	GSM9493152	SAMN55060536	SRX32052321	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106127	GSM9493148	SAMN55060540	SRX32052320	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106128	GSM9493150	SAMN55060538	SRX32052319	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106129	GSM9493126	SAMN55060562	SRX32052318	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106130	GSM9493128	SAMN55060560	SRX32052317	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106131	GSM9493130	SAMN55060558	SRX32052316	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106132	GSM9493132	SAMN55060556	SRX32052315	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106133	GSM9493134	SAMN55060554	SRX32052314	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106134	GSM9493136	SAMN55060552	SRX32052313	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106135	GSM9493138	SAMN55060550	SRX32052312	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106136	GSM9493140	SAMN55060548	SRX32052311	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106137	GSM9493142	SAMN55060546	SRX32052310	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106138	GSM9493153	SAMN55060535	SRX32052309	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106139	GSM9493144	SAMN55060544	SRX32052308	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106140	GSM9493151	SAMN55060537	SRX32052307	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106141	GSM9493146	SAMN55060542	SRX32052306	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106142	GSM9493149	SAMN55060539	SRX32052305	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106143	GSM9493147	SAMN55060541	SRX32052304	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106144	GSM9493145	SAMN55060543	SRX32052303	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106145	GSM9493143	SAMN55060545	SRX32052302	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106146	GSM9493141	SAMN55060547	SRX32052301	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106147	GSM9493139	SAMN55060549	SRX32052300	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106148	GSM9493137	SAMN55060551	SRX32052299	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106149	GSM9493135	SAMN55060553	SRX32052298	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106150	GSM9493133	SAMN55060555	SRX32052297	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106151	GSM9493131	SAMN55060557	SRX32052296	placenta	NO					pericardial_sac			Cross direction and biological unit unverified
+SRR37106152	GSM9493129	SAMN55060559	SRX32052295	follicle	NO					follicle			Nonplacental; exclude from primary POE
+SRR37106153	GSM9493127	SAMN55060561	SRX32052294	embryo	NO					embryo			Nonplacental; exclude from primary POE
+SRR37106154	GSM9493125	SAMN55060563	SRX32052293	embryo	NO					embryo			Nonplacental; exclude from primary POE

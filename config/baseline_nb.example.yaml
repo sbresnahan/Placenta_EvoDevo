@@ -1,0 +1,15 @@
+# Add this section to each existing schema-2 cohort YAML, rather than using
+# this fragment as a standalone cohort configuration.
+baseline_nb:
+  output_dir: /absolute/cohort/results/baseline_nb_v1
+  metadata: /absolute/cohort/manifests/baseline_metadata.tsv
+  sex_column: sex
+  ancestry_column: ancestry
+  batches_gene: 20
+  batches_transcript: 100
+  bootstrap: 2000
+  bootstrap_chunk: 25
+  seed: 1147
+  # Guard for the two normalization matrices alone. Total RAM is higher.
+  # Increase only after allocating sufficient LSF memory and measuring a pilot.
+  max_dense_gb: 4

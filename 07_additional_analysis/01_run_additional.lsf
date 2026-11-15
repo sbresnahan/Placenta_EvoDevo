@@ -1,0 +1,12 @@
+#!/bin/bash
+# Additive analysis of frozen primary outputs; no indexing or re-quantification.
+#BSUB -J poe_additional
+#BSUB -q short
+#BSUB -n 2
+#BSUB -M 8
+#BSUB -R "rusage[mem=8]"
+#BSUB -W 3:00
+set -eo pipefail
+umask 077
+ROOT="${SCRIPTS_DIR:?Set SCRIPTS_DIR explicitly before bsub}"
+exec "$ROOT/bin/run_worker.sh" 'additional' "$@"

@@ -1,0 +1,32 @@
+#!/usr/bin/env Rscript
+# Exact J FASTQ -> infant SubjectID linkage. No guessed sample identifiers.
+f <- sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1])
+root <- normalizePath(file.path(dirname(f), ".."))
+source(file.path(root, "R/library_paths.R"))
+suppressPackageStartupMessages(library(data.table))
+source(file.path(root, "R/config.R"))
+a <- commandArgs(trailingOnly = TRUE)
+if (length(a) != 3L) stop("Usage: prepare_baseline_gusto_metadata.R CONFIG COVARIATES.csv OUTPUT.tsv")
+cfg <- read_config_v2(a[1])
+if (cfg$profile != "human_trio" || !isTRUE(cfg$gusto_precomputed$enabled))
+  stop("This helper requires the configured GUSTO precomputed linkage")
+if (file.exists(a[3])) stop("Refusing to overwrite metadata")
+cov <- fread(a[2], colClasses = "character")
+if (!all(c("SubjectID", "sex", "mother_ethnicity") %in% names(cov)))
+  stop("Covariates CSV needs SubjectID, sex and mother_ethnicity")
+if (anyDuplicated(cov$SubjectID)) stop("Duplicate covariate SubjectID")
+link <- fread(cfg$gusto_precomputed$fastq_id_map, header = FALSE,
+  col.names = c("SubjectID", "fastq_id"), colClasses = "character")
+if (ncol(link) != 2 || anyDuplicated(link$SubjectID) || anyDuplicated(link$fastq_id))
+  stop("Ambiguous infant-to-FASTQ linkage")
+link[, sample_id := paste0("J", fastq_id)]
+libraries <- fread(cfg$paths$libraries, colClasses = "character")
+joined <- merge(libraries[, .(sample_id)], link, by = "sample_id", all.x = TRUE)
+joined <- merge(joined, cov[, .(SubjectID, sex, ancestry = mother_ethnicity)], by = "SubjectID", all.x = TRUE)
+out <- joined[, .(sample_id, sex, ancestry)]
+if (nrow(out) != nrow(libraries) || anyNA(out) || any(!nzchar(out$sex) | !nzchar(out$ancestry)))
+  stop("Missing/ambiguous metadata for configured libraries. Resolve linkage; do not impute labels.")
+if (anyDuplicated(out$sample_id)) stop("Duplicate linked sample_id")
+dir.create(dirname(a[3]), recursive = TRUE, showWarnings = FALSE)
+fwrite(out, a[3], sep = "\t")
+cat("Wrote exact metadata for ", nrow(out), " libraries. Private file, not a report input.\n", sep = "")
