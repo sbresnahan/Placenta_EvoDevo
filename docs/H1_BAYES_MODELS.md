@@ -50,10 +50,47 @@ Keep missing parental assignments missing. Round maternal and paternal counts
 separately at fitting, audit fractional changes, and omit zero-total rows.
 Retain each transcript's original markers. Transcript marker sets may be disjoint.
 
-Declare count provenance and producing pipeline. Known duplicate-fragment
-assignment requires upstream correction. With unknown assignment covariance,
+Count-provenance and producing-pipeline labels are optional descriptive
+annotations. Reuse unchanged counts without a new version/provenance audit.
+Missing labels and shipped annotation placeholders remain unrecorded; they do
+not imply independent fragment assignment or duplicate correction. Valid
+existing annotations and cohort-specific settings are retained.
+Known duplicate-fragment assignment requires upstream correction, and explicit
+invalid assignment labels remain rejected. With unknown assignment covariance,
 the model's shared effects leave read-level allocation dependence unestimated.
 MCMC readiness describes computational reliability conditional on these assumptions.
+
+## Preparation resources
+
+`h1-inputs` reads the two transcript batch indexes once and each required
+count batch once. Features remain complete within their indexed batch.
+Workers apply the unchanged count gates to per-gene portions and return
+coverage plus compact metadata. The coordinator checks biological clusters
+across batches before writing any of the three output tables. This includes
+count-ineligible transcripts with informative rows. Completed stages are reused.
+
+`H1_PREP_WORKERS` defaults to 1. Set `H1_PREP_MEMORY_GB` to the total memory
+budget when requesting multiple workers. Unix process parallelism is capped
+by the requested workers, required batch count, scheduler CPU controls when
+present, and the memory estimate. The clean container forwards these controls
+and limits native-library threads to one per preparation process.
+The coordinator allowance is 1 GiB plus four annotation-table sizes, two
+feature-index sizes and one batch-index size. Each worker allowance is four
+times the largest required batch's recorded `object_bytes` plus 256 MiB.
+The controls use 1024-based GB. This is a conservative planning estimate,
+not an enforced RSS ceiling. Missing size metadata select batch-wise serial
+loading with an explicit message; no memory assurance is possible in that case.
+With size metadata but no budget, a multi-worker request also selects serial
+loading. A supplied budget below the estimated one-worker requirement fails
+before count loading.
+
+The submission helper derives preparation controls from `NB_CPUS` and
+`NB_MEMORY_GB`, rejects controls above those requests, requests one host and
+rejects preparation arrays. Direct interactive calls must set a budget and
+worker count within the actual allocation. Progress reports show effective
+workers, batch start/completion, elapsed times and the final eligible job count.
+Do not start concurrent preparations in one output directory. An interrupted
+incomplete preparation restarts; it has no per-gene checkpoints.
 
 ## Priors
 
@@ -82,6 +119,23 @@ derived quantities, zero divergences, zero tree-depth hits and E-BFMI ≥0.3 in
 each chain. Failed diagnostics remain in coverage. Longer runs require an
 explicit configuration and fresh output directory. Completed private task
 objects support interrupted-job continuation with identical settings.
+
+Fitting first loads the RStan/brms/CmdStanR/posterior backend and validates empty
+RStan class construction, before new sampling and outside per-task error
+handling. This preflight is read-only. The existing R 4.3.1 shared library can be
+repaired with `bin/repair_rstan_stack.R` using staged, same-version builds and
+explicit apply/rollback maintenance confirmation; see runbook section 0A.
+Fitting itself never installs or rebuilds packages.
+
+Normal `h1-fit JOB_INDEX` resumes interrupted genes and reuses compatible saved
+tasks. A completed gene with `fit_failure` tasks stops with instructions for
+`h1-retry-failed JOB_INDEX`. That explicit retry preserves prior gene-level
+failure files/receipt and reuses compatible task objects. Runtime failures,
+numerical diagnostic failures and unsupported omissions remain distinct.
+Saved profile/mapping comparisons retain column names, types, values and row
+order while ignoring process-local table metadata. Model specification,
+settings and seeds remain strict. Completed diagnostic failures are not
+automatically refitted, and diagnostic thresholds are unchanged.
 
 Observed-data residual summaries include fitted parental fractions, absolute
 count residuals and Pearson residual dispersion. These checks complement the

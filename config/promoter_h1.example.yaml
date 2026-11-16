@@ -2,8 +2,9 @@
 regulatory:
   te_tss_window_bp: 3000
 h1_bayes:
-  count_provenance: assignment_covariance_unknown
-  producing_pipeline: DECLARE_REVIEWED_COUNT_PRODUCER
+  # Optional descriptive annotations; null means not recorded.
+  count_provenance: null
+  producing_pipeline: null
   chains: 4
   warmup: 1000
   iterations: 1000

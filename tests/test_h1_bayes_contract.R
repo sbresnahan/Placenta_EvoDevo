@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 args <- commandArgs(TRUE)
 root <- normalizePath(if (length(args)) args[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("common", "regulatory_common", "baseline_nb", "h1_bayes"))
   source(file.path(root, "R", paste0(m, ".R")))
@@ -41,7 +42,8 @@ check("sampling defaults", hs$chains == 4 && hs$warmup == 1000 && hs$iterations 
 bad <- cfg; bad$h1_bayes$count_provenance <- "known_fragment_duplication"
 check("known duplicate fragments blocked", fails(h1_settings(bad)))
 bad$h1_bayes$count_provenance <- NULL
-check("undeclared count provenance blocked", fails(h1_settings(bad)))
+check("undeclared count provenance remains explicitly missing",
+  is.na(h1_settings(bad)$count_provenance))
 if (requireNamespace("posterior", quietly = TRUE)) {
   variables <- c("b_Intercept", "b_cross_c", "r_transcript[tx000001,Intercept]",
     "r_transcript[tx000001,cross_c]", "r_transcript[tx000002,Intercept]", "r_transcript[tx000002,cross_c]")

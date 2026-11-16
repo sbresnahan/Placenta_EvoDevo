@@ -27,11 +27,31 @@ for ((i=0; i<${#r_args[@]}; i++)); do
 done
 # Do not inherit native conda/venv linker or Python settings into R.
 stan_env=()
+for control in H1_PREP_WORKERS H1_PREP_MEMORY_GB LSB_DJOB_NUMPROC LSB_MAX_NUM_PROCESSORS LSB_JOBID; do
+  if [[ -n "${!control:-}" ]]; then
+    [[ "${!control}" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+      printf 'Invalid numeric resource control: %s\n' "$control" >&2; exit 1;
+    }
+    stan_env+=(--env "$control=${!control}")
+  fi
+done
+# One computational thread per preparation process, including native libraries.
+if [[ " $* " == *" h1-inputs "* ]]; then
+  for control in OMP_NUM_THREADS OPENBLAS_NUM_THREADS MKL_NUM_THREADS VECLIB_MAXIMUM_THREADS NUMEXPR_NUM_THREADS; do
+    stan_env+=(--env "$control=1")
+  done
+fi
 if [[ -n "${CMDSTAN:-}" ]]; then
   [[ "$CMDSTAN" == /* && "$CMDSTAN" != *","* && "$CMDSTAN" != *$'\n'* ]] || {
     printf 'CMDSTAN must be an absolute path without commas or newlines\n' >&2; exit 1;
   }
-  stan_env=(--env "CMDSTAN=$CMDSTAN")
+  stan_env+=(--env "CMDSTAN=$CMDSTAN")
+fi
+if [[ -n "${POE_CMDSTAN_ENV:-}" ]]; then
+  [[ "$POE_CMDSTAN_ENV" =~ ^/[A-Za-z0-9_./+-]+$ ]] || {
+    printf 'POE_CMDSTAN_ENV must be an absolute tool prefix without whitespace or metacharacters\n' >&2; exit 1;
+  }
+  stan_env+=(--env "POE_CMDSTAN_ENV=$POE_CMDSTAN_ENV")
 fi
 exec env -u LD_LIBRARY_PATH -u PYTHONPATH -u PYTHONHOME \
   "$POE_SINGULARITY" exec --cleanenv --bind /rsrch5 --bind /rsrch9 --bind /tmp \

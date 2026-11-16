@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 args <- commandArgs(trailingOnly = TRUE)
 root <- if (length(args)) normalizePath(args[1]) else normalizePath(".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("common", "config", "regulatory_common", "baseline_nb", "baseline_te", "baseline_handoff",
     "window_prepare", "exposure_inputs", "te_expression"))

@@ -2,6 +2,7 @@
 # Hand-specified aggregate software records; no biological estimates or fitting.
 a <- commandArgs(TRUE)
 root <- normalizePath(if (length(a)) a[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 source(file.path(root, "R/exposure_archive.R"))
 checks <- character()

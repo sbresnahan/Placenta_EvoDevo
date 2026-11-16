@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 args <- commandArgs(TRUE); root <- normalizePath(if (length(args)) args[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("common", "config", "regulatory_common", "regulatory_context", "baseline_nb",
     "baseline_handoff", "gxe_ppbmi", "exposure_inputs", "exposure_followup"))
@@ -19,6 +20,14 @@ spec <- data.table(input_id = "one", path = path, build = "GRCh38", tier = "tier
 q <- gxe_read(spec, NULL, "chr1")
 check("interaction effects use b_gi", identical(q$interaction_beta, d$b_gi) && all(q$source_b_g == 9))
 check("all tested features retained", nrow(q) == 2 && identical(q$primary_source_support, c(TRUE, FALSE)))
+shards <- copy(d); shards[, `:=`(exposure = "ppBMI.chr1", variant_id = "SHARD_NOT_FOR_CONTEXT")]
+nb_write(rbind(d, shards), path)
+filtered <- gxe_read(spec, NULL, "chr1")
+check("merged ppBMI rows exclude chromosome-labelled duplicates before validation",
+  nrow(filtered) == 2L && identical(filtered$interaction_beta, d$b_gi))
+nb_write(shards, path)
+check("chromosome-labelled rows cannot substitute for merged ppBMI",
+  fails(gxe_read(spec, NULL, "chr1")))
 bad <- copy(d); bad[, b_gi := NULL]; nb_write(bad, path)
 check("marginal effect cannot substitute interaction", fails(gxe_read(spec, NULL, "chr1")))
 bad <- copy(d); bad[, pos := c(31, 500)]; nb_write(bad, path)

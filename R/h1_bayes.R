@@ -1,23 +1,24 @@
 # Conditional SNP-level parental counts, fitted separately for each gene.
+source(file.path(root, "R/h1_annotations.R"), local = TRUE)
+source(file.path(root, "R/h1_prepare.R"), local = TRUE)
+source(file.path(root, "R/h1_backend.R"), local = TRUE)
+# Capture the source root now; preparation does not require the tool environment.
+h1_cmdstan_runtime <- local({
+  project_root <- root
+  function(...) {
+    runtime <- new.env(parent = baseenv())
+    sys.source(file.path(project_root, "R/cmdstan_runtime.R"), envir = runtime)
+    runtime$poe_cmdstan_runtime(project_root, ...)
+  }
+})
 H1_MODEL_SPEC <- "h1_joint_conditional_v1"
 h1_settings <- function(cfg) {
-  x <- nb_default(cfg$h1_bayes, list())
+  x <- h1_normalize_annotations(nb_default(cfg$h1_bayes, list()))
   out <- list(chains = 4L, warmup = 1000L, iterations = 1000L,
     adapt_delta = .95, max_treedepth = 12L, seed = 1147L, parallel_chains = 4L,
-    count_provenance = x$count_provenance, producing_pipeline = x$producing_pipeline)
+    count_provenance = NA_character_, producing_pipeline = NA_character_)
   for (k in intersect(names(x), names(out))) out[[k]] <- x[[k]]
-  if (length(out$count_provenance) != 1L ||
-      !out$count_provenance %in% c("fragment_unique_assignment", "upstream_duplicate_corrected",
-      "assignment_covariance_unknown"))
-    stop("Declare h1_bayes.count_provenance: fragment_unique_assignment, upstream_duplicate_corrected or assignment_covariance_unknown")
-  reg_text(out$producing_pipeline, "h1_bayes.producing_pipeline")
-  if (grepl("DECLARE|TODO|UNSPECIFIED", out$producing_pipeline, ignore.case = TRUE))
-    stop("Review and declare the actual H1 count-producing pipeline")
-  for (k in c("chains", "warmup", "iterations", "max_treedepth", "seed", "parallel_chains"))
-    if (length(out[[k]]) != 1L || !is.finite(out[[k]]) || out[[k]] < 1 ||
-        out[[k]] != floor(out[[k]])) stop("Invalid h1_bayes.", k)
-  if (out$chains < 4L || out$parallel_chains > out$chains || out$adapt_delta < .95 ||
-      out$adapt_delta >= 1) stop("H1 requires >=4 chains, valid parallel_chains and adapt_delta in [.95,1)")
+  h1_validate_controls(out)
   out
 }
 h1_profiles <- function() data.table(profile = c("primary", "half_effect_scales",
@@ -91,11 +92,7 @@ h1_prepare <- function(cfg, s, root) {
   outputs <- nb_path(s, c("h1_transcript_coverage.tsv", "h1_gene_coverage.tsv", "h1_bayes_jobs.tsv"))
   if (nb_current(s, "h1-inputs", NULL)) return(invisible(TRUE))
   a <- reg_read(nb_path(s, "transcript_TE_annotation.tsv"))
-  # Load one gene at a time through immutable upstream batch pointers.
-  coverage <- rbindlist(lapply(split(a, a$gene_id), function(ann) {
-    z <- nb_gene_data(s, ann$transcript_id)
-    h1_counts(z, ann, cfg, s)$coverage
-  }), fill = TRUE)
+  coverage <- h1_prepare_coverage(a, cfg, s)
   genes <- coverage[, .(n_TE = sum(eligibility == "eligible" & promoter_te_label == "TE"),
     n_nonTE = sum(eligibility == "eligible" & promoter_te_label == "nonTE"),
     n_transcripts = .N, n_count_eligible = sum(eligibility == "eligible")), by = gene_id]
@@ -107,6 +104,8 @@ h1_prepare <- function(cfg, s, root) {
   for (i in seq_along(outputs)) nb_write(list(coverage, genes, jobs)[[i]], outputs[i])
   nb_finish(s, "h1-inputs", list(settings = hs, profiles = h1_profiles(),
     parent = nb_require(s, "te-inputs")$key), outputs)
+  message(sprintf("H1 inputs complete: transcripts=%d; genes=%d; eligible mixed-class jobs=%d",
+    nrow(coverage), nrow(genes), nrow(jobs)))
 }
 h1_encode <- function(d) {
   d <- copy(d)
@@ -205,16 +204,18 @@ h1_residuals <- function(fit, d) {
 }
 h1_fit_once <- function(d, ann, hs, profile, seed, file) {
   encoded <- h1_encode(d)
+  poe_h1_backend_check()
   if (file.exists(file)) {
     saved <- readRDS(file)
     if (!identical(saved$model_spec, H1_MODEL_SPEC) ||
-        !identical(saved$settings, hs) || !identical(saved$profile, profile) ||
-        !identical(saved$seed, seed) || !identical(saved$map, encoded$map))
+        !identical(saved$settings, hs) || !h1_task_table_equal(saved$profile, profile) ||
+        !identical(saved$seed, seed) || !h1_task_table_equal(saved$map, encoded$map))
       stop("H1 task settings differ; use a fresh output directory")
     summary <- h1_summarize(saved$derived); summary[, status := saved$diagnostics$status]
     return(list(summary = summary, diagnostics = saved$diagnostics$summary,
       residuals = h1_residuals(saved$fit, encoded$data)))
   }
+  h1_cmdstan_runtime()
   fit <- brms::brm(h1_formula(), data = encoded$data, family = brms::beta_binomial(),
     prior = h1_priors(profile), backend = "cmdstanr", chains = hs$chains,
     iter = hs$warmup + hs$iterations, warmup = hs$warmup, cores = hs$parallel_chains,
@@ -228,7 +229,7 @@ h1_fit_once <- function(d, ann, hs, profile, seed, file) {
     profile = profile, seed = seed, diagnostics = diagnostics), file)
   list(summary = summary, diagnostics = diagnostics$summary, residuals = h1_residuals(fit, encoded$data))
 }
-h1_gene <- function(cfg, s, root, job_index) {
+h1_gene <- function(cfg, s, root, job_index, retry_failed = FALSE) {
   hs <- h1_settings(cfg); nb_require(s, "h1-inputs")
   id <- as.integer(job_index)
   job <- reg_read(nb_path(s, "h1_bayes_jobs.tsv"))[job_index == id]
@@ -237,15 +238,29 @@ h1_gene <- function(cfg, s, root, job_index) {
   counts <- h1_counts(nb_gene_data(s, ann$transcript_id), ann, cfg, s)
   d <- counts$data; ann <- ann[transcript_id %in% d$feature_id]
   stage <- sprintf("h1_%06d", job_index)
-  if (nb_current(s, stage, NULL)) return(invisible(TRUE))
-  if (!all(vapply(c("brms", "cmdstanr", "posterior"), requireNamespace, TRUE, quietly = TRUE)))
-    stop("Install brms, cmdstanr, posterior and CmdStan")
-  cmdstanr::cmdstan_path()
+  paths <- nb_path(s, "h1_bayes", sprintf("gene_%06d_%s.tsv", job_index,
+    c("posterior", "diagnostics", "residuals")))
+  if (nb_current(s, stage, NULL)) {
+    prior <- reg_read(paths[2L])
+    require_columns(prior, "status")
+    if (!any(prior$status %in% "fit_failure")) {
+      message("H1 gene already completed; retaining saved fits and diagnostic status")
+      return(invisible(TRUE))
+    }
+    if (!isTRUE(retry_failed)) stop("H1 gene has recorded fit failures. After backend validation use ",
+      "'h1-retry-failed ", job_index, "'; completed diagnostic failures are not automatically refitted.")
+  }
+  poe_h1_backend_check()
+  h1_cmdstan_runtime()
+  if (isTRUE(retry_failed) && any(file.exists(c(paths, nb_receipt(s, stage)))))
+    h1_archive_gene_failure(s, job_index, paths)
   profiles <- h1_profiles()
   tasks <- rbindlist(list(profiles[, .(profile, omitted_cluster = "")],
     data.table(profile = "primary", omitted_cluster = sort(unique(d$cluster_id)))))
   summaries <- diagnostics <- residuals <- list()
   for (i in seq_len(nrow(tasks))) {
+    message(sprintf("H1 gene %d task %d/%d: profile=%s; %s", job_index, i, nrow(tasks),
+      tasks$profile[i], if (nzchar(tasks$omitted_cluster[i])) "cluster omission" else "full data"))
     profile <- profiles[profile == tasks$profile[i]]
     omit <- tasks$omitted_cluster[i]
     dd <- if (nzchar(omit)) d[cluster_id != omit] else d
@@ -256,8 +271,11 @@ h1_gene <- function(cfg, s, root, job_index) {
       operator_action = "retain_eligibility_thresholds")) else tryCatch(
       h1_fit_once(dd, ann, hs, profile, seed,
         nb_path(s, "private", "h1_bayes", sprintf("gene_%06d_task_%04d.rds", job_index, i))),
-      error = function(e) list(diagnostics = data.table(status = "fit_failure",
-        error = conditionMessage(e), operator_action = "inspect_error_and_rerun_explicitly")))
+      error = function(e) {
+        message("H1 task ", i, " failed: ", conditionMessage(e))
+        list(diagnostics = data.table(status = "fit_failure",
+          error = conditionMessage(e), operator_action = "inspect_error_and_rerun_explicitly"))
+      })
     label <- function(x) {if (is.null(x)) return(NULL)
       x[, `:=`(gene_id = job$gene_id, profile = tasks$profile[i], task_index = i,
         omitted_cluster = if (nzchar(omit)) paste0("omission_", match(omit, sort(unique(d$cluster_id)))) else "",
@@ -266,8 +284,6 @@ h1_gene <- function(cfg, s, root, job_index) {
     diagnostics[[i]] <- label(result$diagnostics)
     residuals[[i]] <- label(result$residuals)
   }
-  paths <- nb_path(s, "h1_bayes", sprintf("gene_%06d_%s.tsv", job_index,
-    c("posterior", "diagnostics", "residuals")))
   empty <- data.table(gene_id = character(), status = character())
   for (i in seq_along(paths)) {
     x <- rbindlist(list(summaries, diagnostics, residuals)[[i]], fill = TRUE)
@@ -275,6 +291,7 @@ h1_gene <- function(cfg, s, root, job_index) {
   }
   nb_finish(s, stage, list(settings = hs, profiles = profiles, gene_id = job$gene_id,
     parent = nb_require(s, "h1-inputs")$key), paths)
+  message("H1 gene tasks recorded. Review diagnostics; completion does not imply numerical readiness.")
 }
 h1_combine <- function(cfg, s, root) {
   nb_require(s, "h1-inputs")

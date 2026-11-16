@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # Local full-config and container-wrapper mocks; no cluster access.
 args <- commandArgs(TRUE); root <- normalizePath(if (length(args)) args[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages({library(data.table); library(yaml)})
 source(file.path(root, "R/config.R"))
 checks <- 0L

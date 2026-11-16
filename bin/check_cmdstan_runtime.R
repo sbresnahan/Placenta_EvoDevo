@@ -1,0 +1,12 @@
+#!/usr/bin/env Rscript
+f <- gsub("~+~", " ", sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1]), fixed = TRUE)
+root <- normalizePath(file.path(dirname(f), ".."), mustWork = TRUE)
+source(file.path(root, "R/library_paths.R"))
+a <- commandArgs(TRUE)
+if (length(a) != 1L || !a[1] %in% c("check", "configure", "compile"))
+  stop("Usage: bin/Rscript_sif bin/check_cmdstan_runtime.R check|configure|compile")
+source(file.path(root, "R/cmdstan_runtime.R"))
+result <- poe_cmdstan_runtime(root, mode = a[1])
+for (key in names(result)) cat(key, ": ", result[[key]], "\n", sep = "")
+cat("R: ", R.version.string, "\nR library: ", .libPaths()[1L], "\n", sep = "")
+cat("PASS CmdStan ", a[1], " (no sampling)\n", sep = "")

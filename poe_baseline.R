@@ -13,7 +13,7 @@ for (module in c("config", "common", "workflow", "parental", "phase_origin", "gu
 setDTthreads(1)
 args <- commandArgs(trailingOnly = TRUE)
 usage <- paste("Usage: poe_baseline.R CONFIG preflight|prepare|pilot|fit LEVEL BATCH|combine|",
-  "prepare-window POE_INPUT_CONFIG|te-inputs|te-pilot|te-fit JOB_INDEX|h1-inputs|h1-fit JOB_INDEX|te-combine|between-genes|context|report-ready|status\n",
+  "prepare-window POE_INPUT_CONFIG|te-inputs|te-pilot|te-fit JOB_INDEX|h1-inputs|h1-fit JOB_INDEX|h1-retry-failed JOB_INDEX|te-combine|between-genes|context|report-ready|status\n",
   "       poe_baseline.R cross-summary OUTPUT.tsv CONFIG [CONFIG ...]")
 if (length(args) < 2L) stop(usage)
 if (args[1] == "cross-summary") {
@@ -35,6 +35,8 @@ switch(action,
   `te-inputs` = nb_te_prepare(cfg, s, root),
   `h1-inputs` = h1_prepare(cfg, s, root),
   `h1-fit` = {if (length(args) != 3L) stop(usage); h1_gene(cfg, s, root, as.integer(args[3]))},
+  `h1-retry-failed` = {if (length(args) != 3L) stop(usage)
+    h1_gene(cfg, s, root, as.integer(args[3]), retry_failed = TRUE)},
   `te-pilot` = nb_pilot(cfg, s, root, if (length(args) >= 3L) as.integer(args[3]) else 5L, TRUE),
   `te-fit` = {if (length(args) != 3L) stop(usage); nb_te_gene(cfg, s, root, as.integer(args[3]))},
   `te-combine` = if (cfg$profile == "public_cross") h1_combine(cfg, s, root) else nb_te_combine(cfg, s, root),

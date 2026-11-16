@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # Deterministic error-path orchestration; every model invocation deliberately fails.
 args <- commandArgs(TRUE); root <- normalizePath(if (length(args)) args[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("common", "config", "regulatory_common", "baseline_nb", "baseline_te", "h1_bayes"))
   source(file.path(root, "R", paste0(m, ".R")))

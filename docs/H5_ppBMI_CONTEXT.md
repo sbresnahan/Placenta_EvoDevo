@@ -16,12 +16,41 @@ Every manifest row declares GRCh38, one-based positions and
 `CHROM:POS:REF:ALT`. Supplied coordinate and allele columns are validated.
 Effects and alleles retain the producer's orientation.
 
-`ppBMI_exposure.template.tsv` requires an enabled ppBMI row, the actual
-continuous/binary definition, transform, scale and range, and paths to the
-producing configuration and runtime provenance. Template declarations are
-incomplete until reviewed. The producer's checked-in config disables ppBMI.
-Production enabling and scaling require an explicit declaration. The adapter
-does not open participant-level exposures, covariates or genotype inputs.
+For the established Seadragon deployment, run `bin/setup_external_ppbmi.R`
+through `bash bin/Rscript_sif`, supplying the project root. The populated
+`config/external_ppbmi.yaml` selects the external result root and actual
+producer config. The helper derives type from `inputs/exposure_manifest.tsv`
+and transformation/range from the actual producer config. Supplied records
+declare continuous ppBMI, no transformation, source limits 14–70, 417 nonmissing
+observations and external `enabled=1`. The reviewed input builder scales
+continuous exposures using pooled retained ancestries and population SD
+(`ddof=0`). [1] The versioned exposure manifest records the mean and SD.
+
+Local `enabled=TRUE` means include these existing external results. It is not
+evidence of a prior ppBMI analysis in Placenta_EvoDevo. A generic checked-in
+producer default cannot establish a production run's enabling state. The
+small-file receipt records supplied metadata and source sizes, not an immutable
+production config snapshot. The adapter does not open participant-level
+exposures, covariates or genotype inputs.
+
+The setup helper writes versioned private manifests and an operator copy,
+preserving existing H1 settings, optional exposure settings and QTL/BED overrides.
+The H1 count-provenance and pipeline annotations are optional: missing labels
+do not block configuration generation or H1 initialization. No new pipeline
+version audit is required for unchanged counts and no H1 provenance is invented.
+Genuinely required unresolved settings are still reported. All output conflicts are checked
+before writes. Identical reruns reuse outputs; differing files are not replaced.
+After completed setup, run the generator without rerunning setup. Previously
+generated operators containing the two shipped H1 annotation placeholders can be
+used directly; they and their historical setup receipts need not be rewritten.
+The generic `ppBMI_exposure.template.tsv` remains a schema guide, not a completed
+production declaration.
+
+The supplied summary contains 18 merged groups labelled exactly `ppBMI` as well
+as chromosome-labelled entries. The aggregator can include both. [2] The adapter's
+exact exposure filter must remain: never strip chromosome suffixes or combine
+shard rows with merged rows. Setup reads aggregate headers only. The later
+context stage still validates actual rows and mapping coverage.
 
 ## Statistical meaning
 
@@ -70,3 +99,8 @@ Sparse or separated fits remain unavailable.
 ppBMI context neither replaces maternal PFAS nor enters the H7 mediation
 covariates. Shared atlas cohorts and annotation selection require provenance
 review before any independent-validation claim.
+
+## References
+
+1. https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/50_build_gxe_inputs.py. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/50_build_gxe_inputs.py
+2. https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/57_aggregate_gxe.py. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/57_aggregate_gxe.py

@@ -2,6 +2,7 @@
 # Observed glmmTMB data, relabelled exclusively as software fixtures.
 args <- commandArgs(trailingOnly = TRUE)
 root <- normalizePath(if (length(args)) args[1] else ".")
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("exposure_inputs", "te_expression", "exposure_nb", "exposure_mediation",
             "exposure_followup", "exposure_workflow", "exposure_plots"))

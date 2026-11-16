@@ -2,7 +2,9 @@
 # Compiled backend integration check using observed counts with software labels.
 args <- commandArgs(TRUE)
 if (length(args) != 3L) stop("Usage: test_h1_sampler.R SOURCE_ROOT PRIVATE_TEST_DIR OBSERVED_COUNT_FIXTURE.rds")
-root <- normalizePath(args[1]); work <- args[2]; input <- readRDS(args[3])
+root <- normalizePath(args[1])
+source(file.path(root, "R/library_paths.R"))
+work <- args[2]; input <- readRDS(args[3])
 suppressPackageStartupMessages(library(data.table))
 for (m in c("common", "regulatory_common", "baseline_nb", "h1_bayes"))
   source(file.path(root, "R", paste0(m, ".R")))

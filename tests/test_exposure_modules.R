@@ -3,7 +3,7 @@
 # Artificial identifiers/labels below are software fixtures, never POE evidence.
 args <- commandArgs(trailingOnly = TRUE)
 root <- normalizePath(if (length(args)) args[1] else ".")
-Sys.setenv(POE_R_LIBRARY = Sys.getenv("POE_R_LIBRARY", .libPaths()[1]))
+source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages(library(data.table))
 for (m in c("exposure_inputs", "te_expression", "exposure_nb", "exposure_mediation",
             "exposure_followup", "exposure_workflow", "exposure_plots"))

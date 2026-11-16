@@ -1,0 +1,16 @@
+# Established external result locations; this is not an analysis configuration.
+gxe_root: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe
+producing_config: /rsrch5/home/epi/stbresnahan/bhattacharya_lab/software/Pantry/phenotyping/scripts/07_gxe_mapping/gxe_config.tsv
+producer_revision: 6f7435a334ed2d9d7f36ecd737c46efede46dd87
+# Metadata supplied from these files on Seadragon. Stop if they change.
+expected:
+  column: ppBMI
+  exposure_type: continuous
+  transformation: none
+  min: 14
+  max: 70
+  'n': 417
+  n_missing: 0
+  mean: '24.939616306954434'
+  sd: '5.520665327307657'
+  merged_groups: 18

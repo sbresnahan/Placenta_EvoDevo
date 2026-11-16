@@ -1,0 +1,34 @@
+# Copy to the private OPERATOR path, then edit before running the generator.
+# This is an operator overlay, not a full cohort configuration.
+# Required path placeholders block generation; H1 annotations are optional.
+h1_bayes:
+  # Leave absent unless already recorded; no new pipeline-version audit needed.
+  # Missing annotations do not certify fragment-assignment independence.
+  count_provenance: null
+  producing_pipeline: null
+  chains: 4
+  warmup: 1000
+  iterations: 1000
+  parallel_chains: 4
+  adapt_delta: 0.95
+  max_treedepth: 12
+  seed: 1147
+
+gusto_human_context:
+  # This phenotype-map location is listed in the supplied file tree.
+  # Verify its current readability and mapping coverage; do not recreate it.
+  phenotype_map: /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/GUSTO/private/qtl_context_v1/phenotype_map.tsv
+  # Set absolute paths to reviewed manifests (not individual result tables).
+  # Inspect the existing GUSTO config first: reuse an existing setting if valid.
+  # If needed, copy and complete the repository's gxe_tables.template.tsv and
+  # ppBMI_exposure.template.tsv before the context stage.
+  # Baseline qtl_inputs.tsv is NOT a GxE manifest.
+  gxe_tables: REVIEW_REQUIRED_GXE_MANIFEST
+  exposure_manifest: REVIEW_REQUIRED_PPBMI_EXPOSURE_MANIFEST
+
+# Unmentioned GUSTO context keys, including qtl_tables and beds, inherit from
+# data/GUSTO/private/GUSTO.baseline_nb.yaml; do not replace them with examples.
+# Optional exposure_by_cohort is omitted, so existing per-cohort exposure_nb
+# settings are inherited. To override, add complete reviewed cohort mappings
+# from config/exposure_nb.example.yaml under exposure_by_cohort.
+# The generator always updates baseline_dir and output_dir for each radius.
