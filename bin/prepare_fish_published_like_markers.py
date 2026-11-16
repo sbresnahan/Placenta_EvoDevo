@@ -15,7 +15,6 @@ Python 3.6+, standard library only. Does not overwrite existing outputs.
 import argparse
 import collections
 import csv
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -79,14 +78,6 @@ def write(path, rows, columns):
                            extrasaction='ignore', lineterminator='\n')
         w.writeheader()
         w.writerows(rows)
-
-
-def digest(path):
-    h = hashlib.sha256()
-    with open(str(path), 'rb') as f:
-        for block in iter(lambda: f.read(1024*1024), b''):
-            h.update(block)
-    return h.hexdigest()
 
 
 def fasta_index(path):
@@ -248,7 +239,7 @@ def main():
                   overlap_with_published_panel_not_known=True,
                   evidence_tiers=dict(tiers), min_depth_per_pooled_fish=a.min_depth,
                   parental_orientation='Line_A_REF_0_Line_B_ALT_1',
-                  input_sha256={name: digest(path) for name, path, _ in sources},
+                  input_bytes={name: path.stat().st_size for name, path, _ in sources},
                   genome_validation='NOT_PERFORMED', production_marker_file=None)
     if a.genome:
         fai_path = Path(str(a.genome)+'.fai')

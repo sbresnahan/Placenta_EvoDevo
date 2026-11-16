@@ -11,7 +11,7 @@ ACTION="${2:?Specify a baseline action}"
 shift 2
 [[ "$CONFIG" == /* && -f "$CONFIG" ]] || { printf 'Use an existing absolute CONFIG path\n' >&2; exit 1; }
 case "$ACTION" in
-  preflight|prepare|pilot|fit|combine|te-inputs|te-pilot|te-fit|te-combine|between-genes|context|report-ready|status) ;;
+  preflight|prepare|prepare-window|pilot|fit|combine|te-inputs|te-pilot|te-fit|h1-inputs|h1-fit|te-combine|between-genes|context|report-ready|status) ;;
   *) printf 'Unknown baseline action\n' >&2; exit 1 ;;
 esac
 QUEUE="${NB_QUEUE:-medium}"

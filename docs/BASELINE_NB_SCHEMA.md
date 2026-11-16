@@ -53,7 +53,7 @@ silently certified independent by assigning sample IDs.
 - `*_inventory.tsv.gz`. Every contributed feature-SNP, positive sample count,
   total expected count and count of explicit unknown parental records.
 - `*_availability.tsv`. Pre-fit feature coverage and count filters.
-- `transcript_TE_annotation.tsv`. Exact TSS TE labels for all reference transcripts.
+- `transcript_TE_annotation.tsv`. Exact TSS and active native promoter-window labels.
 - `transcript_TE_POE.tsv`. Joined annotations and baseline fits.
 - `within_gene_jobs.tsv`. Mixed genes eligible for the own-marker-set comparison.
 - `within_gene_contrasts.tsv.gz`. Each TE/non-TE transcript contrast and one
@@ -95,12 +95,17 @@ clusters, reciprocal coverage, counts, rank, convergence or Hessian quality.
 `q` and `interaction_q` are BH values retained for audit. They are not feature
 inclusion gates. Raw p < 0.05 is a nominal reference, not false-discovery control.
 
-Within-gene bootstrap CIs require at least 90% valid refits for the same
-transcript set. Absolute-effect tests near zero and all small-cohort results
-remain exploratory. A class contrast is TE minus nonTE on the ln scale.
+Small reciprocal cohorts use the joint conditional beta-binomial model in
+`H1_BAYES_MODELS.md`. The primary contrast is the difference of class means of
+absolute cross-balanced transcript beta. Signed differences are secondary.
+Posterior outputs include equal-tail intervals, directional probabilities,
+Monte Carlo errors and sampler diagnostics. GUSTO class contrasts are descriptive;
+count-refit bootstrap diagnostic fields require at least 90% valid refits for
+the same transcript set.
 
 The adjusted gene-level exposure comparison retains the existing definition:
-any multi-exon TSS event in a TE versus no such TSS in a TE or unknown repeat.
+any multi-exon TSS window intersecting a TE versus all such windows clear of
+TEs and unknown repeats. The active radius also applies to the shifted-track placebo.
 Its magnitude outcome is unbiased squared POE, `beta_adjusted^2 - se^2`,
 with squared-ln units. This is distinct from the absolute-beta magnitude
 contrasts in the within-gene and descriptive transcript-class outputs.
@@ -111,7 +116,7 @@ Individual-level records, metadata, size factors, model batches and bootstrap
 draws live under `private/`. They are not included by `--baseline-nb` export.
 Only allowlisted aggregate tables are exported. Identifier columns cause
 export failure. Stage receipts record the outputs each stage wrote; file
-contents and source code are not hashed, so changed inputs are not detected
+contents and source code are not verified, so changed inputs are not detected
 automatically and affected stages must be rerun explicitly.
 
 Missing repeat resources produce `not_assessed` labels and explicit unavailable

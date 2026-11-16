@@ -12,7 +12,7 @@ PREFIX='GCF_027474105.1_Auburn_PproV2'
 mkdir -p "$REF" "$COHORT_DIR/scratch"
 tmp="$(mktemp "${MANIFEST}.new.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
-printf 'resource_id\turl\tdestination\tpartial\tresponse\tbytes\tmd5\trequired\tbuild\tdecompress_to\treadiness\n' > "$tmp"
+printf 'resource_id\turl\tdestination\tpartial\tresponse\tbytes\trequired\tbuild\tdecompress_to\treadiness\n' > "$tmp"
 # HEAD may redirect; use the Content-Length of the FINAL response only.
 get_bytes() {
   local url=$1 h n
@@ -29,7 +29,7 @@ add() {
   local id=$1 file=$2 output=$3 url bytes destination
   url="$BASE/$file"; bytes=$(get_bytes "$url")
   destination="$REF/$file"
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t\tTRUE\tGCF_027474105.1\t%s\tready\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\tTRUE\tGCF_027474105.1\t%s\tready\n' \
     "$id" "$url" "$destination" "$destination.partial" \
     "$COHORT_DIR/scratch/${id}.response" "$bytes" "$output" >> "$tmp"
   printf 'Verified %-17s %s bytes\n' "$id" "$bytes"

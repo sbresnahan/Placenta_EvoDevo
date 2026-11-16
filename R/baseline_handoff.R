@@ -13,7 +13,7 @@ nb_pantry_transcript <- function(modality, phenotype) {
 }
 nb_context_resource_key <- function(cfg, s, root) {
   parent <- nb_te_require(cfg, s, root)$key
-  if (cfg$profile != "human_trio") return(nb_hash(list(parent, "nonhuman")))
+  if (cfg$profile != "human_trio") return(list(parent, "nonhuman"))
   z <- reg_settings(cfg)
   qspec <- reg_context_manifest(cfg, z, "qtl_tables")
   beds <- reg_context_manifest(cfg, z, "beds")
@@ -21,7 +21,10 @@ nb_context_resource_key <- function(cfg, s, root) {
     unlist(lapply(z$human_context[intersect(c("qtl_tables", "beds", "phenotype_map"),
       names(z$human_context))], reg_path, cfg = cfg)),
     z$contig_aliases, cfg$paths$genome_fai)
-  nb_hash(list(parent, resources = nb_file_key(paths)))
+  gx <- if (exists("gxe_specs", mode = "function")) gxe_specs(cfg, z) else NULL
+  if (!is.null(gx)) paths <- c(paths, gx$tables$path, gx$exposure$producing_config,
+    gx$exposure$producing_provenance, reg_path(z$human_context$exposure_manifest, cfg))
+  list(parent, resources = nb_file_key(paths))
 }
 nb_context <- function(cfg, s, root) {
   nb_check_prepare(cfg, s, root); nb_te_require(cfg, s, root); nb_require(s, "combine")
@@ -75,14 +78,15 @@ nb_context <- function(cfg, s, root) {
     if (!is.null(repeats) && nrow(links)) {
       setnames(links, "event_id", "context_event_id")
       links[, event_id := transcript_id]
-      links <- reg_context_variant_links(links,
-        mapped_tx[, .(chrom, tss, event_id = transcript_id)], repeats, target, aliases)
+      unit <- copy(mapped_tx); unit[, event_id := transcript_id]
+      links <- reg_context_variant_links(links, unit, repeats, target, aliases)
       links[, event_id := context_event_id][, context_event_id := NULL]
       if ("variant_at_event_TSS" %in% names(links))
         setnames(links, "variant_at_event_TSS", "variant_at_transcript_TSS")
     }
   }
-  for (v in c("variant_at_transcript_TSS", "variant_overlaps_TSS_TE"))
+  for (v in c("variant_at_transcript_TSS", "variant_overlaps_TSS_TE",
+      "variant_overlaps_promoter_TE", "variant_overlaps_proximal_only_TE"))
     if (!v %in% names(links)) links[, (v) := as.logical(NA)]
   if (!"pip_all" %in% names(links)) links[, pip_all := NA_real_]
   if (!"variant_id" %in% names(links)) links[, variant_id := NA_character_]
@@ -98,6 +102,7 @@ nb_context <- function(cfg, s, root) {
     max_event_link_pip = NA_real_,
     # 0 is meaningful only where the TSS was assessed against repeats and QTL were supplied.
     n_qtl_variants_in_TSS_TE = if (qtl_assessed && !is.null(repeats)) 0L else NA_integer_,
+    n_qtl_variants_in_proximal_TE = if (qtl_assessed && !is.null(repeats)) 0L else NA_integer_,
     qtl_assessed = qtl_assessed,
     chromatin_assessed = !is.null(beds) && nrow(beds) > 0,
     TE_insertion_assessed = !is.null(repeats),
@@ -108,6 +113,7 @@ nb_context <- function(cfg, s, root) {
       n_event_qtl_links = sum(link_level == "verified_phenotype_event"),
       n_gene_context_links = sum(link_level != "verified_phenotype_event"),
       n_exact_isoform_qtl_links = sum(exact_transcript_phenotype %in% TRUE),
+      n_qtl_variants_in_proximal_TE = uniqueN(paste(input_id, variant_id)[variant_overlaps_proximal_only_TE %in% TRUE]),
       max_event_link_pip = if (any(link_level == "verified_phenotype_event" & is.finite(pip_all)))
         max(pip_all[link_level == "verified_phenotype_event" & is.finite(pip_all)]) else NA_real_,
       n_qtl_variants_in_TSS_TE = uniqueN(paste(input_id, variant_id)[variant_overlaps_TSS_TE %in% TRUE])),
@@ -115,6 +121,7 @@ nb_context <- function(cfg, s, root) {
     summary[counts, on = "transcript_id", `:=`(n_qtl_links = i.N,
       n_event_qtl_links = i.n_event_qtl_links, n_gene_context_links = i.n_gene_context_links,
       n_exact_isoform_qtl_links = i.n_exact_isoform_qtl_links,
+      n_qtl_variants_in_proximal_TE = i.n_qtl_variants_in_proximal_TE,
       max_event_link_pip = i.max_event_link_pip)]
     summary[counts[transcript_id %in% summary[!is.na(n_qtl_variants_in_TSS_TE)]$transcript_id],
       on = "transcript_id", n_qtl_variants_in_TSS_TE := i.n_qtl_variants_in_TSS_TE]
@@ -123,6 +130,15 @@ nb_context <- function(cfg, s, root) {
     counts <- peak$hits[, .N, by = transcript_id]
     summary[counts, on = "transcript_id", n_peak_overlaps := i.N]
   }
+  summary[, `:=`(context_type = "baseline",
+    qtl_assessment_status = fifelse(!qtl_assessed, "not_assessed",
+      fifelse(n_qtl_links > 0, "assessed_mapped", "untested_or_unmapped")))]
+  summary[qtl_assessment_status != "assessed_mapped", `:=`(qtl_assessed = FALSE,
+    n_event_qtl_links = NA_integer_, n_gene_context_links = NA_integer_,
+    n_exact_isoform_qtl_links = NA_integer_, n_qtl_variants_in_TSS_TE = NA_integer_,
+    n_qtl_variants_in_proximal_TE = NA_integer_)]
+  summary[!promoter_te_label %in% c("TE", "nonTE"), n_qtl_variants_in_proximal_TE := NA_integer_]
+  links[, context_type := "baseline"]
   provenance <- data.table(version = NB_VERSION, build = z$build,
     unit = "transcript", qtl_required = isTRUE(required), qtl_assessed = qtl_assessed,
     chromatin_assessed = !is.null(beds) && nrow(beds) > 0,
@@ -136,12 +152,15 @@ nb_context <- function(cfg, s, root) {
     "human_context_provenance.tsv"))
   for (i in seq_along(files))
     nb_write(list(summary, links, peak$hits, coverage, peak$coverage, provenance)[[i]], files[i])
+  if (exists("gxe_context", mode = "function"))
+    files <- c(files, gxe_context(cfg, z, tx, map, repeats, target, aliases, s))
   nb_finish(s, "context", key, files)
 }
 nb_pilot <- function(cfg, s, root, n = 10L, te = FALSE) {
   nb_check_prepare(cfg, s, root)
   records <- list()
   if (te) {
+    if (cfg$profile != "human_trio") stop("Reciprocal H1 uses h1-inputs and h1-fit")
     nb_te_require(cfg, s, root)
     jobs <- reg_read(nb_path(s, "within_gene_jobs.tsv"))
     if (!nrow(jobs)) stop("No eligible mixed gene for TE pilot")
@@ -211,14 +230,14 @@ nb_report_ready <- function(cfg, s, root) {
   candidates <- nb_estimable(tx)[is.finite(p) & p < .05]
   candidates[, selection := "nominal_transcript_POE_not_TE_causality"]
   nb_write(candidates, nb_path(s, "nominal_transcript_candidates.tsv"))
-  # No preselected old gene list, no restriction on shared markers or FDR.
+  # Report the complete gene/transcript fit universe alongside nominal POE candidates.
   nb_write(data.table(cohort_id = cfg$cohort_id, species = cfg$species,
     version = NB_VERSION, n_gene_fits = nrow(reg_read(nb_path(s, "gene_POE.tsv"))),
     n_transcript_fits = nrow(reg_read(nb_path(s, "transcript_POE.tsv"))),
     n_nominal_transcript_candidates = nrow(candidates),
     marker_requirement = "all_informative_SNPs_per_feature_no_shared_isoform_marker",
     status = "ready_for_reanalysis"), nb_path(s, "report_summary.tsv"))
-  nb_finish(s, "report-ready", nb_hash(lapply(parents, `[[`, "key")), nb_path(s,
+  nb_finish(s, "report-ready", lapply(parents, `[[`, "key"), nb_path(s,
     c("report_summary.tsv", "nominal_transcript_candidates.tsv",
       "transcript_between_gene_table.tsv", "transcript_between_gene_summary.tsv")))
 }
@@ -270,7 +289,8 @@ nb_export_files <- function(s) {
   paths <- nb_path(s, fixed)
   extras <- unlist(lapply(c("context", "between_genes", "within_gene"), function(dir)
     list.files(nb_path(s, dir), pattern = "\\.tsv(\\.gz)?$", full.names = TRUE, recursive = TRUE)))
-  unique(c(paths, extras))
+  bayes <- list.files(s$output_dir, pattern = "^h1_.*\\.tsv(\\.gz)?$", full.names = TRUE)
+  unique(c(paths[file.exists(paths)], extras, bayes))
 }
 nb_export <- function(configs, out, root, partial = character()) {
   if (file.exists(out)) stop("Refusing to overwrite archive")
@@ -311,7 +331,7 @@ nb_export <- function(configs, out, root, partial = character()) {
       dest <- file.path(top, rel); dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
       if (!file.copy(src, dest)) stop("Copy failed: ", src)
       manifest[[length(manifest) + 1L]] <- data.table(cohort_id = cfg$cohort_id,
-        part = NB_VERSION, archive_path = rel, bytes = file.info(dest)$size, sha256 = reg_sha(dest))
+        part = NB_VERSION, archive_path = rel, bytes = file.info(dest)$size)
     }
     # Privacy-safe cohort/settings/QC summaries; no promoter-model POE endpoints.
     cohort_dir <- file.path(top, "cohorts", cfg$cohort_id)
@@ -340,7 +360,7 @@ nb_export <- function(configs, out, root, partial = character()) {
     "Reciprocal interaction p < 0.05 is flagged not strictly POE.",
     "Small public cohorts remain exploratory. Missing repeats are unavailable, not negative results.",
     "No individual-level count tables, manifests, model objects or bootstrap records are included.",
-    "MANIFEST.tsv records results checksums. AVAILABILITY.tsv records TE coverage.",
+    "MANIFEST.tsv records result filenames and sizes only. AVAILABILITY.tsv records TE coverage.",
     if (length(partial)) paste0("Partial cohorts (POE layer plus verified later stages only; ",
       "see cohorts/<id>/STAGE_STATUS.tsv): ", paste(partial, collapse = ", "), ".") else
       "All cohorts exported with every stage complete_verified.",

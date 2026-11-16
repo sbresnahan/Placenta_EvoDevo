@@ -6,7 +6,8 @@
 
 The authors report **55,224 fixed-difference placental SNPs** among **193,524 placental SNPs**. Their analysis used joint RNA-seq variant calling and within-line crosses, with a low-depth cutoff of six RNA reads per tissue. The deposited Dryad CSV tables contain allele *read counts*, not the exact original VCF genotypes or the inclusion flag for the published 55,224 SNPs. Accordingly, exact site-wise reproduction cannot be established from the tables alone.
 
-We reconstruct **53,734 RNA-supported candidate SNPs**, a numerical difference of **1,490 sites (2.70%)** from the reported benchmark. This is **count similarity, not demonstrated SNP-set overlap**. We did not tune the depth cutoff to force the published count.
+The candidate builder reports count and evidence-tier inventories for the supplied tables.
+Site-wise agreement with the publication requires the original selected-site identifiers.
 
 ### What the reconstruction actually tests
 
@@ -17,17 +18,12 @@ We reconstruct **53,734 RNA-supported candidate SNPs**, a numerical difference o
 - The supplied publication specifies A=REF, B=ALT, so candidates have `focal_index=0` (A), `alternate_index=1` (B). Sites supporting reversed orientation are **excluded**, never auto-flipped.
 - Exclude invalid/negative parental allele counts, cross-tissue ID/coordinate/allele disagreements, ambiguous or imprecisely printed genomic positions and invalid REF/ALT alleles.
 
-### Results on deposited tables
+### Evidence tiers
 
-| Class | SNPs |
-|---|---:|
-| Replicated in ≥2 distinct Line A and ≥2 distinct Line B individuals | 27,739 |
-| Replicated in ≥2 individuals of only one line | 19,024 |
-| Evidence from exactly one individual in each line | 6,971 |
-| **Total reconstructed** | **53,734** |
-| Article benchmark (not site-wise verified) | 55,224 |
-
-These are RNA-derived **proxy genotypes**. Monoallelic RNA can result from expression or mapping effects, and pooled same-fish tissues do not constitute independent germline genotype validation. Retain evidence tiers for sensitivity analyses.
+Record sites supported by at least two distinct individuals in each line, by at
+least two individuals in one line, or by one individual in each line. These
+RNA-derived proxy genotypes remain sensitive to expression, mapping and residual
+segregation. Same-fish tissues share biological dependence.
 
 ## Reproduce on Seadragon
 

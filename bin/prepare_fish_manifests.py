@@ -18,7 +18,7 @@ ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 SOURCES = ("run_id", "sample_id", "study_accession", "sample_accession",
            "experiment_accession", "library_name", "layout", "read_count",
-           "base_count", "url_1", "md5_1", "bytes_1", "url_2", "md5_2", "bytes_2")
+           "base_count", "url_1", "bytes_1", "url_2", "bytes_2")
 LIBRARIES = ("sample_id", "unit_id", "layout", "strand_mode")
 UNITS = ("unit_id", "cluster_id", "maternal_parent", "paternal_parent", "stage", "tissue")
 CURATION = ("run_accession", "include", "unit_id", "maternal_parent",
@@ -59,7 +59,6 @@ def positive_int(value, label):
 def fetch_urls(row, layout):
     urls = (row.get("fastq_ftp") or "").split(";")
     sizes = (row.get("fastq_bytes") or "").split(";")
-    hashes = (row.get("fastq_md5") or "").split(";")
     n = 2 if layout == "PE" else 1
     if len(urls) != n or len(sizes) != n:
         raise ValueError(f"{row['run_accession']}: ENA FASTQ mate metadata incomplete")
@@ -75,7 +74,7 @@ def fetch_urls(row, layout):
         if not uri.startswith("https://ftp.sra.ebi.ac.uk/"):
             raise ValueError("Expected official ENA FASTQ host")
         positive_int(sizes[i], "FASTQ byte count")
-        result.append((uri, hashes[i] if i < len(hashes) else "", sizes[i]))
+        result.append((uri, sizes[i]))
     return result
 
 
@@ -152,10 +151,9 @@ def build(ena, curated, dest, force):
                             library_name=item.get("library_name", ""),
                             layout=layout, read_count=str(positive_int(item["read_count"], "read_count")),
                             base_count=str(positive_int(item["base_count"], "base_count")),
-                            url_1=fq[0][0], md5_1=fq[0][1], bytes_1=fq[0][2],
+                            url_1=fq[0][0], bytes_1=fq[0][1],
                             url_2=fq[1][0] if layout == "PE" else "NA",
-                            md5_2=fq[1][1] if layout == "PE" else "NA",
-                            bytes_2=fq[1][2] if layout == "PE" else "NA"))
+                            bytes_2=fq[1][1] if layout == "PE" else "NA"))
     if len(units) < 3:
         raise ValueError("At least 3 curated biological units required for this cohort")
     directions = {r["maternal_parent"] for r in units.values()}

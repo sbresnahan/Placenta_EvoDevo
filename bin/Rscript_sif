@@ -26,8 +26,16 @@ for ((i=0; i<${#r_args[@]}; i++)); do
   esac
 done
 # Do not inherit native conda/venv linker or Python settings into R.
+stan_env=()
+if [[ -n "${CMDSTAN:-}" ]]; then
+  [[ "$CMDSTAN" == /* && "$CMDSTAN" != *","* && "$CMDSTAN" != *$'\n'* ]] || {
+    printf 'CMDSTAN must be an absolute path without commas or newlines\n' >&2; exit 1;
+  }
+  stan_env=(--env "CMDSTAN=$CMDSTAN")
+fi
 exec env -u LD_LIBRARY_PATH -u PYTHONPATH -u PYTHONHOME \
   "$POE_SINGULARITY" exec --cleanenv --bind /rsrch5 --bind /rsrch9 --bind /tmp \
   --env "R_LIBS_USER=$POE_R_LIBRARY" \
   --env "POE_R_LIBRARY=$POE_R_LIBRARY" --env "POE_R_BOOTSTRAP=$bootstrap" \
+  "${stan_env[@]}" \
   "$POE_R_SIF" Rscript "${r_args[@]}"

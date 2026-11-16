@@ -1,5 +1,5 @@
 #!/bin/bash
-# Host-only CyVerse VCF acquisition, without MD5 or checksum catalogs.
+# Host-only CyVerse VCF acquisition using size receipts.
 # Reuses an original-named file from reference/cyverse_downloads/ when present.
 set -eo pipefail
 umask 077

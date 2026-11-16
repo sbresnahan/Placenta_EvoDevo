@@ -105,10 +105,10 @@ reg_bed <- function(path) {
   reg_intervals(rbindlist(blocks), "BED")
 }
 reg_resource_defaults <- function(cfg, z) {
-  row <- function(id, url, format, build = z$build, md5_url = NA_character_) {
+  row <- function(id, url, format, build = z$build) {
     data.table(resource_id = id, url = url, path = file.path(z$cache_dir, basename(url)),
       format = format, build = build, version = basename(dirname(url)),
-      md5_url = md5_url, required = TRUE, selection_role = "annotation",
+      required = TRUE, selection_role = "annotation",
       scope = "full_reference")
   }
   if (cfg$species %in% c("human", "mouse")) {
@@ -130,11 +130,9 @@ reg_resource_defaults <- function(cfg, z) {
     b <- paste0("https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/027/474/105/",
       "GCF_027474105.1_Auburn_PproV2/")
     d <- rbind(row("fish_genome", paste0(b,
-      "GCF_027474105.1_Auburn_PproV2_genomic.fna.gz"), "fasta_gz",
-      md5_url = paste0(b, "md5checksums.txt")),
+      "GCF_027474105.1_Auburn_PproV2_genomic.fna.gz"), "fasta_gz"),
       row("fish_report", paste0(b,
-        "GCF_027474105.1_Auburn_PproV2_assembly_report.txt"), "text",
-        md5_url = paste0(b, "md5checksums.txt")))
+        "GCF_027474105.1_Auburn_PproV2_assembly_report.txt"), "text"))
   }
   # Explicit manifest replaces defaults by resource_id, allowing local-first
   # reuse without silently falling back when a requested local file is absent.
@@ -156,7 +154,7 @@ reg_resource_defaults <- function(cfg, z) {
   }
   assert_unique(d, "resource_id", "Regulatory resource IDs")
   assert_unique(d, "path", "Regulatory resource destinations")
-  for (nm in c("url", "md5_url")) if (!nm %in% names(d)) d[, (nm) := NA_character_]
+  if (!"url" %in% names(d)) d[, url := NA_character_]
   if (any(!d[resource_id == "repeats"]$scope %in% c("full_reference", "subset")))
     stop("Repeat scope must be full_reference or subset")
   if (anyNA(d[, .(path, format, build)])) stop("Incomplete resource manifest")
@@ -175,8 +173,7 @@ reg_prepare_resources <- function(cfg, z, root, job) {
       next
     }
     commands <- c(commands, paste("bash", shQuote(file.path(root, "bin/fetch_regulatory.sh")),
-      shQuote(d$url[i]), shQuote(d$path[i]), shQuote(d$format[i]),
-      shQuote(if (is.na(d$md5_url[i])) "-" else d$md5_url[i])))
+      shQuote(d$url[i]), shQuote(d$path[i]), shQuote(d$format[i])))
   }
   commands <- c(commands, paste(shQuote(file.path(root, "bin/Rscript_sif")),
     shQuote(file.path(root, "poe_regulatory.R")), shQuote(attr(cfg, "file")),
@@ -195,14 +192,14 @@ reg_finalize_resources <- function(cfg, z, root, manifest) {
         !any(grepl("genoStart", readLines(d$path[i], warn = FALSE))))
       stop("Invalid rmsk SQL schema")
   }
-  # The R image need not see /risapps. Runtime/image checksums are host receipts.
+  # The R image need not see /risapps; record runtime versions separately.
   dest <- file.path(z$output_dir, "resource_manifest.tsv")
   norm <- file.path(z$output_dir, "repeat_intervals.tsv.gz")
   outputs <- if (cfg$species == "fish" && !"repeats" %in% d$resource_id) dest else c(dest, norm)
   if (!reg_begin(z, "regulatory-resources", outputs)) return(invisible(TRUE))
   d[, `:=`(bytes = file.info(path)$size,
-    sha256 = vapply(path, reg_sha, ""), retrieved_utc = format(Sys.time(), tz = "UTC"),
-    source_status = ifelse(is.na(url), "configured_local", "local_or_verified_download"))]
+    retrieved_utc = format(Sys.time(), tz = "UTC"),
+    source_status = ifelse(is.na(url), "configured_local", "local_or_format_screened_download"))]
   if ("repeats" %in% d$resource_id) {
     r <- d[resource_id == "repeats"]
     f <- switch(r$format, rmsk = reg_rmsk, gff3 = reg_maize_gff,

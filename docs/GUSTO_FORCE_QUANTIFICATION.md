@@ -55,6 +55,6 @@ bin/submit_pipeline.sh "$CONFIG" models --submit
 
 If the discovery output is not exactly the expected failures, investigate. In
 particular, missing `assign_receipt` files for successful quantification jobs may
-indicate still-running assignments rather than unusable samples.
+indicate still-running assignments. Confirm job completion before classifying failures.
 
 The filtered cohort sample size must be reported when interpreting GUSTO results.

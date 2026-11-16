@@ -14,7 +14,7 @@
 #             balance table, 2 Mb genomic block bootstrap, within-stratum label
 #             permutation, and a placebo that circularly shifts the TE track per
 #             chromosome (keeps TE clustering, breaks the TSS-TE link).
-# This is an exploratory association within one cohort, not a causal estimate.
+# Interpretation: exploratory within-cohort association; causal identification is unavailable.
 TE_GENES_FILES <- c("te_genes_gene_table.tsv", "te_genes_balance.tsv",
   "te_genes_result.tsv", "te_genes_placebo.tsv", "te_genes_provenance.tsv")
 TE_GENES_COVARIATES <- c("log_depth", "log_informative_loci", "n_units", "log_se",
@@ -74,10 +74,11 @@ reg_window_coverage <- function(w, u) {
   cov
 }
 
-reg_gene_exposure <- function(tss, te_u, rep_u) {
+reg_gene_exposure <- function(tss, te_u, rep_u, radius = 3000L, contigs = NULL) {
+  win <- reg_tss_windows(tss, radius, contigs)
   d <- data.table(gene_id = tss$gene_id,
-    in_te = reg_points_in(tss$chrom, tss$tss, te_u),
-    in_rep = reg_points_in(tss$chrom, tss$tss, rep_u))
+    in_te = reg_window_coverage(win, te_u) > 0,
+    in_rep = reg_window_coverage(win, rep_u) > 0)
   d[, .(exposure = if (any(in_te)) "TE" else if (any(in_rep)) "unknown_repeat" else "nonTE"),
     by = gene_id]
 }
@@ -276,7 +277,7 @@ reg_te_genes_run <- function(cfg, z, inp, s, outputs) {
   set.seed(z$seed)
   covs <- TE_GENES_COVARIATES
   rep_u <- reg_union(inp$repeats[inp$repeats$is_te | inp$repeats$is_unknown])
-  exposure <- reg_gene_exposure(inp$tss, inp$te_u, rep_u)
+  exposure <- reg_gene_exposure(inp$tss, inp$te_u, rep_u, z$te_tss_window_bp, inp$contigs)
   g <- merge(inp$genes, exposure, by = "gene_id", all.x = TRUE)
   g[is.na(exposure), exposure := "no_multi_exon_TSS_event"]
   A <- g[exposure %in% c("TE", "nonTE")]
@@ -322,7 +323,7 @@ reg_te_genes_run <- function(cfg, z, inp, s, outputs) {
     placebo <- rbindlist(lapply(seq_len(s$placebo), function(i) {
       offs <- reg_shift_offsets(inp$contigs, s$min_shift_bp)
       ex <- reg_gene_exposure(inp$tss, reg_shift_union(inp$te_u, inp$contigs, offs),
-        reg_shift_union(rep_u, inp$contigs, offs))
+        reg_shift_union(rep_u, inp$contigs, offs), z$te_tss_window_bp, inp$contigs)
       Ai <- merge(base, ex, by = "gene_id")[exposure %in% c("TE", "nonTE")]
       e <- reg_te_genes_estimate(Ai, covs, s$strata, s$min_genes)
       data.table(draw = i, n_TE_genes = sum(Ai$exposure == "TE"),

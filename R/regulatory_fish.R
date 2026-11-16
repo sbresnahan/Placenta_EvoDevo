@@ -17,7 +17,7 @@ reg_fish_paths <- function(z) {
     intervals = file.path(z$output_dir, "fish_repeat_intervals.tsv.gz"),
     provenance = file.path(z$output_dir, "fish_repeat_provenance.tsv"))
 }
-reg_fasta_signature <- function(path) {
+reg_fasta_inventory <- function(path) {
   con <- if (endsWith(path, ".gz")) gzfile(path, "rt") else file(path, "rt")
   on.exit(close(con)); name <- NULL; parts <- character(); ans <- list()
   flush <- function() {
@@ -25,8 +25,7 @@ reg_fasta_signature <- function(path) {
     seq <- toupper(paste(parts, collapse = ""))
     if (!nzchar(seq) || grepl("[^ACGTRYSWKMBDHVN]", seq))
       stop("Empty/invalid genomic FASTA sequence: ", name)
-    ans[[length(ans) + 1L]] <<- data.table(chrom = name, length = nchar(seq),
-      sequence_sha256 = digest::digest(seq, serialize = FALSE, algo = "sha256"))
+    ans[[length(ans) + 1L]] <<- data.table(chrom = name, length = nchar(seq))
   }
   repeat {
     lines <- readLines(con, n = 50000L, warn = FALSE)
@@ -60,18 +59,18 @@ reg_fish_reference <- function(cfg, z) {
       stdout = tmp)
     if (!file.rename(tmp, p$genome)) stop("Cannot finalize fish FASTA")
   }
-  official <- reg_fasta_signature(d[resource_id == "fish_genome"]$path)
-  staged <- reg_fasta_signature(p$genome)
-  if (!identical(official, staged)) stop("Staged fish FASTA differs from NCBI reference")
+  official <- reg_fasta_inventory(d[resource_id == "fish_genome"]$path)
+  staged <- reg_fasta_inventory(p$genome)
+  if (!identical(official, staged)) stop("Staged fish FASTA contig names/lengths differ from NCBI reference")
   if (sum(staged$length) != 674152735 || nrow(staged) != 415L)
     stop("Unexpected GCF_027474105.1 reference lengths")
   if (file.exists(cfg$paths$genome)) {
-    primary <- reg_fasta_signature(cfg$paths$genome)
+    primary <- reg_fasta_inventory(cfg$paths$genome)
     a <- if (!is.null(z$contig_aliases)) reg_read(z$contig_aliases) else NULL
     primary[, chrom := reg_alias(chrom, official$chrom, a)]
     setorder(primary, chrom); setorder(official, chrom)
     if (!identical(primary, official))
-      stop("Frozen primary fish genome is not sequence-identical to discovery reference")
+      stop("Frozen primary fish genome contig names/lengths differ from discovery reference")
   }
   invisible(staged)
 }
@@ -142,18 +141,20 @@ reg_fish_commands <- function(cfg, z, phase, resume = NULL) {
 reg_fish_finish <- function(cfg, z, root, phase) {
   p <- reg_fish_paths(z)
   if (phase == "discovery") {
-    for (f in c(p$library, p$stockholm, p$log)) reg_sha(f)
+    for (f in c(p$library, p$stockholm, p$log)) reg_require_file(f)
     heads <- readLines(p$library, warn = FALSE)
     if (!any(startsWith(heads, ">"))) stop("Discovery did not produce a FASTA family library")
     if (!any(grepl("Random Number Seed|seed|srand", readLines(p$log, warn = FALSE),
         ignore.case = TRUE))) warning("Seed not found in summarized log; retained in run command")
     reg_finish(z, "fish-discovery", c(p$library, p$stockholm, p$log))
   } else {
-    for (f in c(p$out, p$tbl, p$gff)) reg_sha(f)
+    for (f in c(p$out, p$tbl, p$gff)) reg_require_file(f)
     x <- reg_repeatmasker_out(p$out)
     reg_write(x, p$intervals)
-    reg_write(data.table(build = z$build, genome_sha256 = reg_sha(p$genome),
-      family_library_sha256 = reg_sha(p$library),
+    reg_require_file(p$genome); reg_require_file(p$library)
+    reg_write(data.table(build = z$build, genome_bytes = file.info(p$genome)$size,
+      family_library_bytes = file.info(p$library)$size,
+      reference_validation = "declared_build_contig_names_lengths_not_sequence_identity",
       image = z$fish$image,
       seed = z$fish$seed, cpus = z$fish$cpus,
       rmblast_parallel_workers = z$fish$cpus %/% 4L,

@@ -1,0 +1,4 @@
+input_id	path	build	tier	source_format	coordinate_system
+ppBMI_tier1	/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe/aggregate/gxe_tier1_results.tsv.gz	GRCh38	tier1	CHROM:POS:REF:ALT	one_based
+ppBMI_tier1_meta	/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe/aggregate/gxe_tier1_meta.tsv.gz	GRCh38	tier1_meta	CHROM:POS:REF:ALT	one_based
+ppBMI_tier2	/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe/aggregate/gxe_tier2_results.tsv.gz	GRCh38	tier2	CHROM:POS:REF:ALT	one_based

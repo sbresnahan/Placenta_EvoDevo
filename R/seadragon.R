@@ -134,7 +134,7 @@ collect_pilot <- function(c,root,m) {
   }
   throughput<-report[mode=="pilot",sum(fragments)/sum(elapsed_seconds)]
   report[,`:=`(projected_quant_seconds=total/throughput,configured_total_fragments=total,
-    prefix_sampling="nonrandom_prefix_not_whole_file_checksum_identity",
+    prefix_sampling="nonrandom_prefix_not_whole_file_content_identity",
     actual_focal_parent=if(c$profile=="public_cross")c$parents$focal else
       if(gusto_enabled(c))"precomputed_maternal" else "typed_trio",
     actual_alternate_parent=if(c$profile=="public_cross")c$parents$alternate else

@@ -79,8 +79,8 @@ It creates FASTQs from NCBI SRA archives, so the manifest's ENA gzip byte
 counts **do not apply** to those generated files. The host writes a
 per-run `.sra.tsv` size receipt and the R finish gate verifies recorded sizes,
 mate consistency and manifest fragment counts. Existing ENA files are
-accepted when their original manifest byte sizes match. MD5 columns in
-manifests are ignored.
+accepted when their original manifest byte sizes match. Manifests record
+URLs and byte sizes, not content-identity signatures.
 PE read counts include both mates. Multiple runs link to one primary library.
 Missing or repeated cluster IDs do not gate public-cross model fitting.
 Public models require `models.min_callable_units` ≥3 (default 3), a single

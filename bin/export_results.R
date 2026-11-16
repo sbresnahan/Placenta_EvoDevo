@@ -10,16 +10,27 @@
 # Without --force every applicable part must be complete for every cohort.
 # With --force, parts that are not complete yet (e.g. fish te-tss while repeat
 # discovery runs) are skipped and recorded as unavailable in the archive.
-# Human (GUSTO) tables are aggregate-only: any table carrying sample, family,
-# child or parent identifiers is withheld, and no human manifest is exported.
+# Human (GUSTO) tables in the original mode are aggregate-only: tables carrying
+# participant/family identifiers are withheld; no human manifest is exported.
+#
+# Independent H6/H7 archive (no initial report or private model inputs needed):
+#   bin/Rscript_sif poe_exposure.R CONFIG export
+#   bin/Rscript_sif bin/export_results.R --exposure-nb --out FILE.tar.gz CONFIG [CONFIG ...]
+# Packages existing aggregate_export snapshots only; it never fits models.
+# This mode retains family_id as a native TE family and rejects participant IDs.
+# See docs/rerun_exposure_nb.md for input and aggregate export contracts.
 f <- gsub("~+~", " ", sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1]), fixed = TRUE)
 root <- normalizePath(file.path(dirname(f), ".."), mustWork = TRUE)
 source(file.path(root, "R/library_paths.R"))
 
-usage <- "Usage: bin/Rscript_sif bin/export_results.R --out FILE.tar.gz [--force] CONFIG [CONFIG ...]"
+usage <- paste("Usage: bin/Rscript_sif bin/export_results.R",
+  "[--baseline-nb | --exposure-nb] --out FILE.tar.gz [--force] CONFIG [CONFIG ...]")
 args <- commandArgs(trailingOnly = TRUE)
 baseline_mode <- "--baseline-nb" %in% args
 args <- args[args != "--baseline-nb"]
+exposure_mode <- "--exposure-nb" %in% args
+args <- args[args != "--exposure-nb"]
+if (baseline_mode && exposure_mode) stop("Choose only one archive mode", call. = FALSE)
 force <- "--force" %in% args
 args <- args[args != "--force"]
 # --partial ID[,ID...] (baseline only): export those cohorts' POE layer plus any
@@ -39,6 +50,15 @@ if (!length(configs) || any(startsWith(configs, "--"))) stop(usage, call. = FALS
 if (!grepl("\\.tar\\.gz$", out)) stop("--out must end in .tar.gz", call. = FALSE)
 out <- file.path(normalizePath(dirname(out), mustWork = TRUE), basename(out))
 if (file.exists(out)) stop("Refusing to overwrite existing archive: ", out, call. = FALSE)
+
+if (exposure_mode) {
+  if (force || !is.na(kp))
+    stop("--exposure-nb does not accept --force or --partial", call. = FALSE)
+  suppressPackageStartupMessages(library(data.table))
+  source(file.path(root, "R/exposure_archive.R"))
+  ex_archive(configs, out, root)
+  quit(status = 0)
+}
 
 for (m in c("config", "common", "workflow", "additional", "regulatory_common", "regulatory_fish"))
   source(file.path(root, "R", paste0(m, ".R")))
@@ -242,7 +262,7 @@ if (length(blocked) && !force)
 # Pass 2: stage files, then tar.
 name <- sub("\\.tar\\.gz$", "", basename(out))
 stage <- file.path(dirname(out), paste0(".", name, ".partial"))
-if (file.exists(stage)) stop("Remove the incomplete previous attempt first: ", stage, call. = FALSE)
+if (file.exists(stage)) stop("Remove the incomplete staging directory first: ", stage, call. = FALSE)
 top <- file.path(stage, name)
 dir.create(file.path(top, "docs"), recursive = TRUE)
 build_archive <- function() {
@@ -252,8 +272,7 @@ build_archive <- function() {
     dest <- file.path(top, rel)
     row <- function(state) data.table(cohort_id = cohort, part = part, archive_path = rel,
       source_path = src, state = state,
-      bytes = if (state == "included") file.info(dest)$size else NA_real_,
-      sha256 = if (state == "included") digest::digest(file = dest, algo = "sha256") else NA_character_)
+      bytes = if (state == "included") file.info(dest)$size else NA_real_)
     if (!file.exists(src) || file.info(src)$size <= 0) return(row("missing"))
     if (human && length(intersect(header_of(src), ID_COLUMNS)))
       return(row("withheld_individual_level"))
@@ -271,8 +290,7 @@ build_archive <- function() {
       dest <- file.path(top, base, f)
       manifest[[length(manifest) + 1L]] <- data.table(cohort_id = cfg$cohort_id, part = "design",
         archive_path = file.path(base, f), source_path = paste0("derived:", attr(cfg, "file")),
-        state = "included", bytes = file.info(dest)$size,
-        sha256 = digest::digest(file = dest, algo = "sha256"))
+        state = "included", bytes = file.info(dest)$size)
     }
     for (part in names(x$parts)) {
       s <- x$parts[[part]]
@@ -309,8 +327,7 @@ build_archive <- function() {
           write_tsv(sm, file.path(top, rel))
           rows <- rbind(rows, data.table(cohort_id = cfg$cohort_id, part = part, archive_path = rel,
             source_path = paste0("derived_summary:", cfg$paths[[k]]), state = "included",
-            bytes = file.info(file.path(top, rel))$size,
-            sha256 = digest::digest(file = file.path(top, rel), algo = "sha256")), fill = TRUE)
+            bytes = file.info(file.path(top, rel))$size), fill = TRUE)
         }
       }
       if (any(required$state == "missing") && !force)
@@ -330,7 +347,7 @@ build_archive <- function() {
       file.copy(src, file.path(top, "docs", n))
       manifest[[length(manifest) + 1L]] <- data.table(cohort_id = "all", part = "docs",
         archive_path = file.path("docs", n), source_path = DOCS[[n]], state = "included",
-        bytes = file.info(src)$size, sha256 = digest::digest(file = src, algo = "sha256"))
+        bytes = file.info(src)$size)
     }
   }
   manifest <- rbindlist(manifest, fill = TRUE)
@@ -338,30 +355,28 @@ build_archive <- function() {
   write_tsv(manifest, file.path(top, "MANIFEST.tsv"))
   write_tsv(availability, file.path(top, "AVAILABILITY.tsv"))
 
-  # Identify the code by a fingerprint of the files themselves.
+  # Descriptive code inventory only; operators manage source versions.
 code <- c(list.files(file.path(root, "R"), pattern = "\\.R$", full.names = TRUE),
   list.files(file.path(root, "bin"), full.names = TRUE, recursive = TRUE),
   file.path(root, c("poe.R", "run_pipeline.R", "runtime.R", "poe_regulatory.R")))
 code <- sort(code[file.exists(code) & !dir.exists(code) & !grepl("__pycache__", code)])
 scripts <- data.table(path = substring(code, nchar(root) + 2L),
-  sha256 = vapply(code, function(f) digest::digest(file = f, algo = "sha256"), ""))
+  bytes = file.info(code)$size)
 write_tsv(scripts, file.path(top, "SCRIPTS.tsv"))
-fingerprint <- digest::digest(paste(scripts$path, scripts$sha256, collapse = "\n"),
-  algo = "sha256", serialize = FALSE)
   avail_md <- c("| Cohort | Part | State | Detail |", "|---|---|---|---|",
     sprintf("| %s | %s | %s | %s |", availability$cohort_id, availability$part,
       availability$state, availability$detail))
   writeLines(c(
     "# Placenta_EvoDevo results archive", "",
-    sprintf("Created %s, code fingerprint `%s` (SHA-256 over every pipeline file; per-file hashes in `SCRIPTS.tsv`)%s.",
-      format(Sys.time(), "%Y-%m-%d %H:%M %Z"), substr(fingerprint, 1, 16),
+    sprintf("Created %s (descriptive code inventory in `SCRIPTS.tsv`)%s.",
+      format(Sys.time(), "%Y-%m-%d %H:%M %Z"),
       if (force) " with `--force` (incomplete parts skipped)" else ""),
     "", "## What is being tested", "",
     "- **Primary parent-of-origin (POE) models** (`primary/`): dosage-adjusted maternal vs paternal allelic expression per gene (`model_gene.tsv`) and per promoter/TSS event (`model_promoter.tsv`); `model_pairs.tsv` holds the paired event inputs. Public crosses (maize, mouse, fish) use reciprocal-cross intercepts conditional on parental markers; GUSTO (human) uses trio parental-origin assignments, cis orientation and covariates. GUSTO `model_gene.tsv` is a placeholder (`deferred_unimplemented`).",
     "- **additional_v1** (`additional_v1/`): exploratory reanalysis of the frozen counts: gene-level POE (`gene_POE.tsv`), TSS-vs-first-donor separation (`separated_TSS_donor_POE.tsv`), and TE annotation.",
     "- **Hypothesis #1** (`h1_te_tss/`): within a gene, conditional on the same first splice donor, do TSSs inside transposable elements show a different POE (signed difference beta_TE - beta_nonTE) or a larger POE magnitude (|beta_TE| - |beta_nonTE|) than non-TE TSSs? Start with `te_tss_cohort_summary.tsv`, then `te_tss_gene_summary.tsv`; `TE_annotation_coverage.tsv` shows how many TSSs could be classified. Magnitude inference is exploratory. See `docs/REGULATORY_MODULES.md`, \"#1\".",
   "- **Hypothesis #1, between genes** (`h1b_te_genes/`): do genes with at least one TE-derived TSS show a different gene-level POE than comparable genes whose TSSs are all non-TE? Start with `te_genes_result.tsv` (magnitude = difference in POE^2 - SE^2, which removes noise inflation; signed = difference in POE), then `te_genes_balance.tsv` (standardized mean differences before/after propensity weighting; |SMD| > 0.1 means residual imbalance). Confounders adjusted: depth, informative loci, units, SE, number of TSS events and transcripts, gene length, local TE density, promoter GC. p-values: genomic block bootstrap, within-stratum permutation, and a placebo that shifts the TE track (`te_genes_placebo.tsv`). Observational and complementary to the within-gene pairs, which cancel these confounders by design. See `docs/REGULATORY_MODULES.md`, \"#1b\".",
-    "- **Hypothesis #5** (`h5_human_context/`, GUSTO only): do POE TSS events, particularly TE-derived ones, carry placental cis-QTL (PANTRY, EAS and EUR, nine modalities) and placental chromatin evidence (ENCODE ENCSR057ORE cCREs)? `human_regulatory_context.tsv` is one row per event; `human_mapping_coverage.tsv` and `human_resource_coverage.tsv` separate 'not measured' from 'measured, no link'. Gene-level QTL links are context, not validation of a TSS phenotype. This is evidence integration, not causal inference. See `docs/REGULATORY_MODULES.md`, \"#5\".",
+    "- **Hypothesis #5** (`h5_human_context/`, GUSTO only): placental cis-QTL and chromatin context for POE TSS events. `human_regulatory_context.tsv` contains event-level evidence; mapping and resource coverage tables document assessability. Gene-level mappings provide gene context. Transcript-phenotype validation requires an exact mapping. Causal identification requires additional evidence. See `docs/REGULATORY_MODULES.md`, \"#5\".",
     "", "## Interpretation rules", "",
     "- Analyse each cohort/species separately. Cohorts differ in tissue, developmental stage, ploidy and design; do not pool across species or treat several analyses of the same allocations as independent replication.",
     "- Maize endosperm is triploid: expected maternal:paternal dosage is 2:1 and is subtracted before POE testing (see `cohort.tsv`).",
@@ -374,7 +389,7 @@ fingerprint <- digest::digest(paste(scripts$path, scripts$sha256, collapse = "\n
 "- `cohorts/<cohort_id>/qc/*_summary.tsv`: per-metric n, median and IQR (by pilot mode/strand); for human cohorts cells with fewer than 5 samples show n only",
     "- `cohorts/<cohort_id>/{primary,qc,manifests,additional_v1,h1_te_tss,h1b_te_genes,h5_human_context}/`",
     "- `docs/`: method documentation (hypothesis definitions in `REGULATORY_MODULES.md`, settings in `SCHEMA.md`, dataset provenance in `evidence_*`)",
-    "- `MANIFEST.tsv`: every file with source path, size and SHA-256; `AVAILABILITY.tsv`: the table above; `SCRIPTS.tsv`: SHA-256 of each pipeline code file used for this export"),
+    "- `MANIFEST.tsv`: exported filenames, source paths and sizes; `AVAILABILITY.tsv`: the table above; `SCRIPTS.tsv`: code filenames and sizes only. These inventories do not establish content integrity."),
     file.path(top, "README.md"))
 
   tmp <- paste0(out, ".partial")

@@ -1,0 +1,2 @@
+exposure	exposure_type	transformation	scale_definition	range_definition	producing_config	producing_provenance	enabled
+ppBMI	DECLARE	DECLARE	DECLARE	DECLARE	/absolute/producing/gxe_config.tsv	/absolute/producing/provenance.tsv	FALSE

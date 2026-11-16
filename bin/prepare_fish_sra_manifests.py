@@ -16,7 +16,7 @@ CROSS_FIELDS = ('run_accession','geo_accession','biosample','experiment_accessio
     'paternal_parent','stage','unit_id')
 SOURCE_FIELDS = ('run_id','sample_id','study_accession','sample_accession',
     'experiment_accession','library_name','layout','read_count','base_count',
-    'url_1','md5_1','bytes_1','url_2','md5_2','bytes_2')
+    'url_1','bytes_1','url_2','bytes_2')
 LIB_FIELDS = ('sample_id','unit_id','layout','strand_mode')
 UNIT_FIELDS = ('unit_id','cluster_id','maternal_parent','paternal_parent','stage','tissue')
 AUDIT_FIELDS = ('run_accession','geo_accession','dryad_alias','maternal_parent',
@@ -137,8 +137,8 @@ def build(crosswalk, runinfo, raw_dir, output_dir, strand_mode):
         sources.append(dict(run_id=run,sample_id=alias,study_accession='SRP674561',
             sample_accession=r['biosample'],experiment_accession=r['experiment_accession'],
             library_name=r['geo_accession'],layout='PE',read_count=str(2*fragments),
-            base_count=str(bases),url_1=accession_url,md5_1='NA',bytes_1=str(sizes[0]),
-            url_2=accession_url,md5_2='NA',bytes_2=str(sizes[1])))
+            base_count=str(bases),url_1=accession_url,bytes_1=str(sizes[0]),
+            url_2=accession_url,bytes_2=str(sizes[1])))
         libraries.append(dict(sample_id=alias,unit_id=alias,layout='PE',strand_mode=strand_mode))
         # Biological cluster identity (shared dam/litter) is unverified.
         # Missing cluster IDs must NOT be replaced with unique synthetic IDs.

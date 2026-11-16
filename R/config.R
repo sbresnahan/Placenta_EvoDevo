@@ -20,7 +20,7 @@ resolve_value <- function(x,base,allowed=character()) {
 }
 read_config_v2 <- function(path) {
   path<-normalizePath(path,mustWork=TRUE); c<-yaml::read_yaml(path,eval.expr=FALSE)
-  if(!identical(c$schema_version,2L))stop("Schema 2 required; schema 1 is retired")
+  if(!identical(c$schema_version,2L))stop("Schema 2 required")
   if(!c$profile %in% c("public_cross","human_trio")||!c$species %in% c("maize","mouse","fish","human"))
     stop("Unknown profile/species")
   if((c$species=="human")!=(c$profile=="human_trio"))stop("Mixed public/trio profile")

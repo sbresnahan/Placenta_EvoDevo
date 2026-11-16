@@ -149,7 +149,7 @@ fragments:
   fragment_sd_nt: 50
   fragment_parameter_origin: assumed_user_defined  # Only applies if curated runs are SE
 retrieval:
-  method: sra  # Use the NCBI SRA Toolkit rather than the unreliable ENA HTTPS FASTQs
+  method: sra  # Retrieve FASTQs with the NCBI SRA Toolkit.
   sra_threads: 2
   max_parallel_jobs: 2  # Limit simultaneous SRA cache and FASTQ conversion usage
   attempts: 3

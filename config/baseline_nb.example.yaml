@@ -1,5 +1,4 @@
-# Add this section to each existing schema-2 cohort YAML, rather than using
-# this fragment as a standalone cohort configuration.
+# Merge this fragment into a complete schema-2 cohort YAML.
 baseline_nb:
   output_dir: /absolute/cohort/results/baseline_nb_v1
   metadata: /absolute/cohort/manifests/baseline_metadata.tsv

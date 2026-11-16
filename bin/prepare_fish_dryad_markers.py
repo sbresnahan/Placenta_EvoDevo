@@ -9,7 +9,6 @@ Python >= 3.6, standard library only. Never modifies the Dryad input.
 import argparse
 import collections
 import csv
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -197,14 +196,6 @@ def mapping(path):
     return result
 
 
-def sha256(path):
-    digest = hashlib.sha256()
-    with open(str(path), 'rb') as handle:
-        for chunk in iter(lambda: handle.read(1024*1024), b''):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def write_tsv(path, rows, fields):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('w', encoding='utf-8', newline='') as handle:
@@ -312,8 +303,8 @@ def main():
                   'minimum_line_a_controls': args.min_a_controls,
                   'minimum_line_b_controls': args.min_b_controls,
                   'minimum_genome_match': args.min_genome_match,
-                  'DataS1_sha256': sha256(args.datas1),
-                  'DataS2_sha256': sha256(args.datas2) if args.datas2 else None})
+                  'DataS1_bytes': args.datas1.stat().st_size,
+                  'DataS2_bytes': args.datas2.stat().st_size if args.datas2 else None})
     if args.genome:
         if not args.genome.is_file() or not Path(str(args.genome)+'.fai').is_file():
             raise ValueError('Genome FASTA and FASTA.fai required (run samtools faidx)')

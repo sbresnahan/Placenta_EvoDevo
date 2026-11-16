@@ -1,0 +1,43 @@
+# Merge this fragment into a full schema-2 cohort YAML.
+# Use a fresh directory outside baseline_dir. No production job is implicit.
+exposure_nb:
+  output_dir: /absolute/private/cohort/results/exposure_nb_v1_run1
+  baseline_dir: /absolute/private/cohort/results/baseline_nb_v1
+  sample_crosswalk: /absolute/private/cohort/manifests/exposure_crosswalk.tsv
+  te_loci: /absolute/private/cohort/manifests/TE_loci.tsv
+  te_counts: /absolute/private/cohort/private/TE_locus_counts.tsv.gz
+  quant_qc: /absolute/private/cohort/manifests/TE_quantification_QC.tsv
+  annotation_id: cohort_build_TE_catalogue_release1
+  libraries: /absolute/private/cohort/manifests/TE_libraries.tsv
+  # repeat_intervals is used by te-plan only if te_loci does not exist.
+  repeat_intervals: /absolute/private/cohort/regulatory/repeat_intervals.tsv.gz
+  predictors: [target_excluded]
+  # Optional sensitivity jobs: inclusive, intergenic, unique_target_excluded.
+  family_only: false
+  local_flank: 1000
+  min_cpm: 1
+  min_prevalence: 0.2
+  min_expressed: 3
+  batch_jobs: 25
+  seed: 1147
+  bootstrap: 2000
+  bootstrap_top: 20
+  bootstrap_all: false
+  bootstrap_min_valid: 0.9
+  permutations: 2000
+  modification: false
+  max_condition: 100000000
+  allow_unverified_independence: false
+  quantifier_version: 1.0.3.1
+  quantifier_commit: 26a6c38df6d143387799edc2f3e9f976505f093d
+  star_version: 2.7.11b
+  multimap_limit: 100
+  annotation_min_overlap: 0.2
+  annotation_manifest: /absolute/private/cohort/manifests/functional_annotations.tsv
+  gene_sets: /absolute/private/cohort/manifests/gene_set_membership.tsv
+  # GUSTO only. Remove these entries for nonhuman cohorts.
+  pfas: /absolute/private/GUSTO/manifests/maternal_PFAS_zscores.tsv
+  exposure_dictionary: /absolute/private/GUSTO/manifests/maternal_PFAS_dictionary.tsv
+  common_pfas_samples: false
+  # Existing exact-transcript / 50-bp event / same-TE / exact-TSS cCRE context.
+  h5_annotations: /absolute/private/GUSTO/results/baseline_nb_v1/context/human_transcript_context.tsv

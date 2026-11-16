@@ -14,18 +14,19 @@ nb_te_resource_key <- function(cfg, s, root) {
       function(stage) reg_receipt_path(z, stage), ""))
   state <- setNames(vapply(candidates, function(p)
     nb_file_key(p)[[1]], ""), candidates)
-  nb_hash(list(nb_require(s, "combine")$key, resources = state,
-    reference = nb_file_key(cfg$paths$tx_map)[[1]], code = nb_code_hash(root)))
+  list(nb_require(s, "combine")$key, resources = state,
+    reference = nb_file_key(cfg$paths$tx_map)[[1]], code = nb_code_version(root))
 }
 nb_te_require <- function(cfg, s, root) {
   nb_require(s, "te-inputs", nb_te_resource_key(cfg, s, root))
 }
-nb_te_annotation <- function(tx, repeats = NULL, full_reference = FALSE) {
+nb_te_annotation <- function(tx, repeats = NULL, full_reference = FALSE, radius = 3000L, contigs = NULL) {
   x <- copy(tx)
   require_columns(x, c("transcript_id", "gene_id", "chrom", "tss"))
   x[, `:=`(tss_te_label = "not_assessed", te_class = NA_character_,
     te_family = NA_character_, te_ids = NA_character_)]
-  if (is.null(repeats) || !nrow(repeats)) return(x)
+  if (is.null(repeats) || !nrow(repeats))
+    return(reg_promoter_annotation(x, repeats, radius, contigs, full_reference))
   x[, tss_te_label := if (full_reference) "nonTE" else "not_assessed"]
   h <- reg_hits(x[, .(chrom, start = tss, end = tss)], repeats)
   if (nrow(h)) {
@@ -38,7 +39,7 @@ nb_te_annotation <- function(tx, repeats = NULL, full_reference = FALSE) {
     x[a$query, `:=`(tss_te_label = a$tss_te_label, te_class = a$te_class,
       te_family = a$te_family, te_ids = a$te_ids)]
   }
-  x
+  reg_promoter_annotation(x, repeats, radius, contigs, full_reference)
 }
 nb_te_prepare <- function(cfg, s, root) {
   nb_check_prepare(cfg, s, root); nb_require(s, "combine")
@@ -59,32 +60,45 @@ nb_te_prepare <- function(cfg, s, root) {
   }
   key <- nb_te_resource_key(cfg, s, root)
   if (nb_current(s, "te-inputs", key)) return(invisible(TRUE))
-  tx <- nb_te_annotation(reg_read(cfg$paths$tx_map), repeats, full)
+  tx <- nb_te_annotation(reg_read(cfg$paths$tx_map), repeats, full,
+    z$te_tss_window_bp, reg_native_contigs(cfg))
   nb_write(tx, nb_path(s, "transcript_TE_annotation.tsv"))
   fits <- reg_read(nb_path(s, "transcript_POE.tsv"))
   d <- merge(tx, fits, by.x = "transcript_id", by.y = "feature_id", all.x = TRUE)
   d[is.na(status), status := "no_informative_counts"]
   nb_write(d, nb_path(s, "transcript_TE_POE.tsv"))
   eligible <- nb_estimable(d)
-  mixed <- eligible[tss_te_label %in% c("TE", "nonTE"), .(
-    n_TE = sum(tss_te_label == "TE"), n_nonTE = sum(tss_te_label == "nonTE")), by = gene_id]
+  mixed <- eligible[promoter_te_label %in% c("TE", "nonTE"), .(
+    n_TE = sum(promoter_te_label == "TE"), n_nonTE = sum(promoter_te_label == "nonTE")), by = gene_id]
   mixed <- mixed[n_TE > 0 & n_nonTE > 0]
   setorder(mixed, gene_id); mixed[, job_index := .I]
   nb_write(mixed, nb_path(s, "within_gene_jobs.tsv"))
   availability <- data.table(cohort_id = cfg$cohort_id,
     repeats = if (is.null(repeats)) "not_available" else if (full) "full_reference" else "partial_reference",
     n_transcripts = nrow(tx), n_estimable_transcripts = nrow(eligible),
-    n_TE = sum(tx$tss_te_label == "TE"), n_nonTE = sum(tx$tss_te_label == "nonTE"),
-    n_unknown_or_unassessed = sum(!tx$tss_te_label %in% c("TE", "nonTE")), n_mixed_genes = nrow(mixed),
+    te_tss_window_bp = z$te_tss_window_bp,
+    n_TE = sum(tx$promoter_te_label == "TE"), n_nonTE = sum(tx$promoter_te_label == "nonTE"),
+    n_unknown_or_unassessed = sum(!tx$promoter_te_label %in% c("TE", "nonTE")), n_mixed_genes = nrow(mixed),
     status = if (is.null(repeats)) "TE_comparisons_unavailable_missing_repeats" else
       if (!full) "TE_comparisons_limited_partial_repeat_reference" else "ready")
   nb_write(availability, nb_path(s, "TE_availability.tsv"))
+  if (cfg$profile == "human_trio") {
+    coverage <- d[, .(transcript_id, gene_id, promoter_te_label, status,
+      eligibility = fifelse(!promoter_te_label %in% c("TE", "nonTE"), "unknown_TE_class",
+        fifelse(is.finite(beta_adjusted) & is.finite(se) & se > 0 &
+          status %in% c("eligible_NB", "exploratory_NB"), "eligible", status)),
+      te_tss_window_bp)]
+    nb_write(coverage, nb_path(s, "h1_transcript_coverage.tsv"))
+  }
   nb_finish(s, "te-inputs", key, nb_path(s, c("transcript_TE_annotation.tsv",
     "transcript_TE_POE.tsv", "within_gene_jobs.tsv", "TE_availability.tsv")))
 }
 nb_te_statistics <- function(estimates, annotations) {
+  annotations <- copy(annotations)
+  if (!"promoter_te_label" %in% names(annotations))
+    annotations[, promoter_te_label := tss_te_label]
   d <- merge(estimates[, .(feature_id, beta_adjusted)],
-    annotations[, .(transcript_id, tss_te_label)], by.x = "feature_id",
+    annotations[, .(transcript_id, tss_te_label = promoter_te_label)], by.x = "feature_id",
     by.y = "transcript_id")
   a <- d[tss_te_label == "TE"]; b <- d[tss_te_label == "nonTE"]
   if (!nrow(a) || !nrow(b)) return(data.table(contrast = character(), signed = numeric(), magnitude = numeric()))
@@ -95,9 +109,12 @@ nb_te_statistics <- function(estimates, annotations) {
       abs(b$beta_adjusted[match(nonte, b$feature_id)]))]
   pair[, contrast := paste(te, nonte, sep = "__vs__")]
   out <- pair[, .(contrast, signed, magnitude)]
-  rbind(out, data.table(contrast = "class_mean",
+  out <- rbind(out, data.table(contrast = "class_mean",
     signed = mean(a$beta_adjusted) - mean(b$beta_adjusted),
     magnitude = mean(abs(a$beta_adjusted)) - mean(abs(b$beta_adjusted))))
+  out[, `:=`(TE_signed_mean = mean(a$beta_adjusted), nonTE_signed_mean = mean(b$beta_adjusted),
+    TE_magnitude_mean = mean(abs(a$beta_adjusted)), nonTE_magnitude_mean = mean(abs(b$beta_adjusted)))]
+  out
 }
 nb_bootstrap_units <- function(z, public) {
   units <- unique(z[, .(sample_id, cluster_id, cross)])
@@ -126,19 +143,20 @@ nb_gene_data <- function(s, transcript_ids) {
   }))
 }
 nb_te_gene <- function(cfg, s, root, job_id) {
+  if (cfg$profile != "human_trio") stop("Use h1-inputs and h1-fit for reciprocal Bayesian H1")
   nb_check_prepare(cfg, s, root); r <- nb_te_require(cfg, s, root)
   jobs <- reg_read(nb_path(s, "within_gene_jobs.tsv"))
   job <- jobs[job_index == as.integer(job_id)]
   if (nrow(job) != 1L) stop("Unknown within-gene job index")
   gene <- job$gene_id
   all <- reg_read(nb_path(s, "transcript_TE_POE.tsv"))
-  a <- nb_estimable(all[gene_id == gene & tss_te_label %in% c("TE", "nonTE")])
+  a <- nb_estimable(all[gene_id == gene & promoter_te_label %in% c("TE", "nonTE")])
   estimates <- copy(a); setnames(estimates, "transcript_id", "feature_id")
   observed <- nb_te_statistics(estimates, a)
   observed[, no_detected_cross_interaction := !any(a$not_strictly_POE %in% TRUE)]
   # Each bootstrap must estimate the same set of transcripts as the observed statistic.
   data <- nb_gene_data(s, a$transcript_id)
-  key <- nb_hash(list(r$key, gene, s$bootstrap, s$seed, code = nb_code_hash(root)))
+  key <- list(r$key, gene, s$bootstrap, s$seed, code = nb_code_version(root))
   stage <- sprintf("te_%06d", job_id)
   output <- nb_path(s, "within_gene", sprintf("gene_%06d.tsv", job_id))
   if (nb_current(s, stage, key)) return(invisible(TRUE))
@@ -169,19 +187,21 @@ nb_te_gene <- function(cfg, s, root, job_id) {
     v <- boot[contrast == result$contrast[j]][[metric]]
     ok <- is.finite(v); frac <- mean(ok); obs <- result[[metric]][j]
     ci <- if (frac >= .9) quantile(v[ok], c(.025, .975), names = FALSE) else c(NA_real_, NA_real_)
-    result[j, (paste0(metric, c("_se", "_ci_low", "_ci_high", "_p", "_valid_fraction"))) :=
+    result[j, (paste0(metric, c("_bootstrap_se", "_bootstrap_ci_low", "_bootstrap_ci_high",
+        "_bootstrap_centered_tail_prob", "_bootstrap_valid_fraction"))) :=
       list(if (frac >= .9) sd(v[ok]) else NA_real_, ci[1], ci[2],
         if (frac >= .9) (1 + sum(abs(v[ok] - obs) >= abs(obs))) / (1 + sum(ok)) else NA_real_, frac)]
   }
   result[, `:=`(gene_id = gene, cohort_id = cfg$cohort_id, version = NB_VERSION,
-    n_TE = nrow(a[tss_te_label == "TE"]), n_nonTE = nrow(a[tss_te_label == "nonTE"]),
+    n_TE = nrow(a[promoter_te_label == "TE"]), n_nonTE = nrow(a[promoter_te_label == "nonTE"]),
     any_not_strictly_POE = any(a$not_strictly_POE %in% TRUE),
     independence_verified = all(a$independence_verified),
     shared_marker_required = FALSE, same_first_donor_required = FALSE,
-    interpretation = "within_gene_baseline_NB_bootstrap_magnitude_exploratory")]
+    interpretation = "descriptive_class_contrast_with_count_refit_bootstrap_diagnostic",
+    te_tss_window_bp = reg_settings(cfg)$te_tss_window_bp)]
   # A separate sensitivity subset never replaces the primary transcript set.
   aa <- a[!not_strictly_POE %in% TRUE]
-  if (any(aa$tss_te_label == "TE") && any(aa$tss_te_label == "nonTE")) {
+  if (any(aa$promoter_te_label == "TE") && any(aa$promoter_te_label == "nonTE")) {
     ee <- copy(aa); setnames(ee, "transcript_id", "feature_id")
     sensitivity <- nb_te_statistics(ee, aa)[contrast == "class_mean"]
     sensitivity[, `:=`(gene_id = gene, sensitivity = "no_detected_cross_interaction_descriptive")]
@@ -197,8 +217,8 @@ nb_te_combine <- function(cfg, s, root) {
   files <- nb_path(s, "within_gene", sprintf("gene_%06d.tsv", jobs$job_index))
   result <- if (nrow(jobs)) rbindlist(lapply(files, reg_read), fill = TRUE) else
     data.table(gene_id = character(), contrast = character(), signed = numeric(), magnitude = numeric(),
-      signed_p = numeric(), magnitude_p = numeric(), any_not_strictly_POE = logical())
-  result[, `:=`(signed_q = p.adjust(signed_p, "BH"), magnitude_q = p.adjust(magnitude_p, "BH"))]
+      signed_bootstrap_centered_tail_prob = numeric(), magnitude_bootstrap_centered_tail_prob = numeric(),
+      any_not_strictly_POE = logical())
   nb_write(result, nb_path(s, "within_gene_contrasts.tsv.gz"))
   class <- result[contrast == "class_mean"]
   summarize <- function(d, name) {
@@ -211,8 +231,7 @@ nb_te_combine <- function(cfg, s, root) {
         set.seed(s$seed)
         boot <- replicate(s$bootstrap, mean(v[sample.int(length(v), length(v), replace = TRUE)]))
         ci <- quantile(boot, c(.025, .975), names = FALSE)
-        out[, (paste0(metric, c("_ci_low", "_ci_high", "_p"))) :=
-          list(ci[1], ci[2], (1 + sum(abs(boot - mean(v)) >= abs(mean(v)))) / (1 + length(boot)))]
+        out[, (paste0(metric, c("_descriptive_ci_low", "_descriptive_ci_high"))) := list(ci[1], ci[2])]
       }
     }
     out
@@ -222,9 +241,18 @@ nb_te_combine <- function(cfg, s, root) {
   summary[, `:=`(cohort_id = cfg$cohort_id, unit = "gene_equal_weight",
     caveat = "gene_bootstrap_conditions_on_fitted_effects_not_independent_replication")]
   nb_write(summary, nb_path(s, "within_gene_cohort_summary.tsv"))
-  nb_finish(s, "te-combine", nb_hash(list(nb_require(s, "te-inputs")$key,
-    results = if (length(files)) nb_file_key(files) else "no_mixed_genes")),
-    nb_path(s, c("within_gene_contrasts.tsv.gz", "within_gene_cohort_summary.tsv")))
+  all <- reg_read(nb_path(s, "transcript_TE_POE.tsv"))
+  coverage <- all[, .(n_transcripts = .N,
+    n_TE = sum(promoter_te_label == "TE"), n_nonTE = sum(promoter_te_label == "nonTE")),
+    by = gene_id]
+  coverage[, diagnostic_status := "no_estimable_mixed_classes"]
+  if (nrow(class)) coverage[class, on = "gene_id", diagnostic_status :=
+    fifelse(i.magnitude_bootstrap_valid_fraction >= .9 & i.signed_bootstrap_valid_fraction >= .9,
+      "bootstrap_diagnostic_available", "bootstrap_diagnostic_insufficient_success")]
+  nb_write(coverage, nb_path(s, "h1_coverage.tsv"))
+  nb_finish(s, "te-combine", list(nb_require(s, "te-inputs")$key,
+    results = if (length(files)) nb_file_key(files) else "no_mixed_genes"),
+    nb_path(s, c("within_gene_contrasts.tsv.gz", "within_gene_cohort_summary.tsv", "h1_coverage.tsv")))
 }
 nb_between_genes <- function(cfg, s, root) {
   nb_check_prepare(cfg, s, root); nb_te_require(cfg, s, root)
@@ -237,8 +265,7 @@ nb_between_genes <- function(cfg, s, root) {
     nb_finish(s, "between-genes", nb_require(s, "te-inputs")$key, out)
     return(invisible(TRUE))
   }
-  # Existing adjusted comparison is reused, but its outcome and depth inventory
-  # must come from all-SNP baseline outputs, never the promoter-model completed_counts().
+  # The adjusted comparison uses all-SNP gene POE and its count inventory.
   inp <- reg_te_genes_inputs(cfg, reg_settings(cfg), root, reg_te_genes_settings(z),
     baseline = list(s = s))
   outputs <- file.path(z$output_dir, TE_GENES_FILES)
@@ -254,7 +281,8 @@ nb_between_genes <- function(cfg, s, root) {
 }
 nb_transcript_between <- function(cfg, s) {
   x <- nb_estimable(reg_read(nb_path(s, "transcript_TE_POE.tsv")))
-  x <- x[tss_te_label %in% c("TE", "nonTE")]
+  x <- x[promoter_te_label %in% c("TE", "nonTE")]
+  x[, tss_te_label := promoter_te_label]
   # One class mean per gene, so isoform-rich genes do not supply extra replicates.
   g <- x[, .(signed = mean(beta_adjusted),
     magnitude = mean(abs(beta_adjusted)), n_transcripts = .N,

@@ -2,9 +2,9 @@
 
 The evidence catalog contains 26 published study/cohort-stage entries:
 14 maize and 12 mouse, plus the fish resource audit in
-[fish_Pprolifica_AB.md](fish_Pprolifica_AB.md). These are not 26 independent datasets; rows can represent stages or
-components of a project. The catalog is a bounded review, not an exhaustive
-resource census. The four configured public profiles are the execution
+[fish_Pprolifica_AB.md](fish_Pprolifica_AB.md). Rows can represent dependent stages or
+components of a project. The catalog covers the stated bounded review.
+The four configured public profiles are the execution
 selections; other catalog entries are not automatically included.
 
 ## Readiness definitions

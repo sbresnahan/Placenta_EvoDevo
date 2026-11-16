@@ -12,8 +12,8 @@ schema-2 private configs with `python3 bin/sync_regulatory_configs.py --create-m
 (preview first with `--dry-run`). The standalone
 `config/regulatory.example.yaml` remains an illustrative fragment, not a full config.
 Set paths and the complete human input bundle before starting. Regulatory
-receipts track successful completion and required output presence; they do not
-rehash inputs, scripts or configuration between stages. The workflow assumes
+receipts track successful completion and required output presence, not input,
+script or configuration content identity. The workflow assumes
 inputs are frozen for an analysis. Use a separate versioned `output_dir` only
 for an intentionally distinct analysis, not for routine code updates.
 Paths in manifests are relative to the cohort config directory, not the
@@ -66,13 +66,13 @@ No whole-atlas, raw RNA, long-read or chromosome-wide LD download is implied.
 The `regulatory_*example.tsv` files contain headers only, with no invented
 local paths or identifiers. Populate them with actual reviewed input rows.
 The resources manifest enables local-first replacement by `resource_id`;
-omitted defaults remain enabled. Add URL and
-optional MD5 URL to download a replacement. Supported transfer formats are
+omitted defaults remain enabled. Add a URL to download a replacement.
+Supported transfer formats are
 rmsk, gff3, bed, sql, text, fasta_gz and h5_gz. Plain or gzip BED/GFF are
 accepted. Missing declared local files are errors, not fallback downloads.
-Transfers use bounded retries, partial files, gzip/HTML checks and upstream
-MD5 when available. Final manifests retain URLs, bytes, SHA256 and retrieval
-time. Existing bad files are not overwritten. Local overrides require
+Transfers use bounded retries, partial files and gzip/HTML format checks.
+Final manifests retain URLs, bytes and retrieval time only; these do not prove
+content identity. Existing bad files are not overwritten. Local overrides require
 `scope=full_reference` or `subset`; unhit subset sites are **not_assessed**.
 Contig aliases are conservative (`chr`/case normalization or an explicit
 one-to-one alias table); ambiguous aliases and off-reference coordinates fail.
@@ -101,8 +101,9 @@ liftover or allelic effect flipping is guessed.
 Crosswalk columns are modality, phenotype_id, gene_id, event_id, mapping_level
 (`event`/`gene`) and mapping_status (`verified`/`ambiguous`/`unmapped`). Exact
 gene/event agreement is enforced. Nonunique phenotype mappings are withheld,
-not resolved arbitrarily. Gene-level links are explicitly gene context, not
-validation of a TSS phenotype. Peak manifests require a TRUE/FALSE
+with an ambiguous mapping status. Gene-level links provide gene context.
+TSS-phenotype validation requires a verified event/transcript mapping.
+Peak manifests require a TRUE/FALSE
 `selection_used` flag to expose annotation reuse, including CAGE selection.
 
 ### GUSTO: PANTRY placenta cis-QTL inputs
@@ -164,8 +165,7 @@ is reported as its own evidence type. These are the only peak inputs.
 ```bash
 use_cohort GUSTO
 ENC="$COHORT_DIR/reference/regulatory_resources/encode"
-# ENCFF603ENH.bigBed from the ENCODE portal (md5 b719530058318231d99fa45c8ed05264)
-md5sum "$ENC/ENCFF603ENH.bigBed"
+# Obtain ENCFF603ENH.bigBed from the ENCODE portal.
 python3 bin/prepare_encode_ccre_beds.py --bigbed "$ENC/ENCFF603ENH.bigBed" \
   --accession ENCSR057ORE --out-dir "$ENC/ENCSR057ORE_v1"
 ```
@@ -303,7 +303,7 @@ exposure, estimate, covariates, propensity, stratum, weight),
 Interpretation: a within-cohort, between-gene association conditional on the
 measured covariates; unmeasured differences (for example gene age) remain.
 
-### #5: human evidence integration, not causal inference
+### #5: human regulatory context
 
 `human_regulatory_context.tsv` retains event TE labels, the representative
 paired POE fit and its status, event-level/gene-level QTL counts, exact-TSS

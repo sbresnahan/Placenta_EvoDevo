@@ -1,5 +1,5 @@
 reg_annotate_events <- function(tx, event_map, repeats, seqinfo, aliases = NULL,
-    full_reference = TRUE) {
+    full_reference = TRUE, radius = 3000L) {
   require_columns(tx, c("transcript_id", "gene_id", "chrom", "strand", "tss",
     "first_start", "first_end"))
   require_columns(event_map, c("transcript_id", "event_id", "window"))
@@ -46,6 +46,7 @@ reg_annotate_events <- function(tx, event_map, repeats, seqinfo, aliases = NULL,
   h <- reg_hits(win, te); tx[unique(h$query), window_te := TRUE]
   tx[, tss_te_label := fifelse(tss_unknown_repeat, "unknown_repeat",
     fifelse(tss_te, "TE", if (full_reference) "nonTE" else "not_assessed"))]
+  tx <- reg_promoter_annotation(tx, r, radius, seqinfo, full_reference)
   m <- unique(event_map[window == 50L, .(transcript_id, event_id)])
   if (any(!m$transcript_id %in% tx$transcript_id)) stop("Event map refers to absent transcripts")
   t <- merge(m, tx, by = "transcript_id")
@@ -57,6 +58,13 @@ reg_annotate_events <- function(tx, event_map, repeats, seqinfo, aliases = NULL,
     n_transcripts = .N, te_ids = paste(sort(unique(te_ids[!is.na(te_ids)])), collapse = ";"),
     te_class = paste(sort(unique(te_class[!is.na(te_class)])), collapse = ";"),
     first_exon_te = any(first_exon_te), window_te = any(window_te)), by = event_id]
+  active <- t[, .(promoter_te_label = if (any(promoter_te_label == "unknown_repeat")) "unknown_repeat" else
+    if (any(promoter_te_label == "not_assessed")) "not_assessed" else
+    if (all(promoter_te_label == "TE")) "TE" else
+    if (all(promoter_te_label == "nonTE")) "nonTE" else "mixed",
+    promoter_te_ids = paste(sort(unique(promoter_te_ids[!is.na(promoter_te_ids)])), collapse = ";"),
+    te_tss_window_bp = radius), by = event_id]
+  events <- merge(events, active, by = "event_id")
   if (any(t[, uniqueN(gene_id), by = event_id]$V1 != 1L))
     stop("Event spans multiple genes")
   if (any(t[, uniqueN(paste(chrom, strand)), by = event_id]$V1 != 1L))
@@ -81,6 +89,8 @@ reg_te_pairs <- function(events, labels) {
   assert_unique(e, "event_id", "50bp event catalog")
   e <- merge(e, labels[, .(event_id, tss_te_label, chrom, strand)],
     by = "event_id", all.x = TRUE, suffixes = c("_catalog", ""))
+  if ("promoter_te_label" %in% names(labels))
+    e[, tss_te_label := labels$promoter_te_label[match(event_id, labels$event_id)]]
   a <- e[tss_te_label == "TE" & !is.na(first_donor),
     .(gene_id, chrom, strand, first_donor, event_te = event_id, tss_te = tss_min,
       support_te = distinguishing_bp)]
@@ -323,7 +333,7 @@ reg_te_worker <- function(cfg, z, root) {
   resources <- reg_read(file.path(z$output_dir, "resource_manifest.tsv"))
   full <- cfg$species == "fish" ||
     identical(resources[resource_id == "repeats"]$scope, "full_reference")
-  anno <- reg_annotate_events(tx, map, r, seq, aliases, full)
+  anno <- reg_annotate_events(tx, map, r, seq, aliases, full, z$te_tss_window_bp)
   pairs <- reg_te_pairs(reg_read(cfg$paths$events), anno$events)
   result <- reg_analyze_pairs(pairs, counts$event, counts$gene, m$units,
     if (cfg$profile == "human_trio") reg_read(cfg$paths$covariates) else NULL, cfg, z)

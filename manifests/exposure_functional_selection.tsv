@@ -1,0 +1,11 @@
+set_id	category	name	source	selection_date	applicability	membership_policy
+GO:0006865	nutrient_transport	amino acid transport	QuickGO	2026-11-15	native_species_annotations	term_and_descendants_exclude_NOT
+GO:0008643	nutrient_transport	carbohydrate transport	QuickGO	2026-11-15	native_species_annotations	term_and_descendants_exclude_NOT
+GO:0006629	lipid_cholesterol	lipid metabolic process	QuickGO	2026-11-15	native_species_annotations	term_and_descendants_exclude_NOT
+GO:0008203	lipid_cholesterol	cholesterol metabolic process	QuickGO	2026-11-15	native_species_annotations_review_applicability	term_and_descendants_exclude_NOT
+GO:0009755	endocrine_trophoblast	hormone-mediated signaling pathway	QuickGO	2026-11-15	native_species_annotations	term_and_descendants_exclude_NOT
+GO:0001890	endocrine_trophoblast	placenta development	QuickGO	2026-11-15	mammals_only_no_plant_equivalence	term_and_descendants_exclude_NOT
+GO:0002682	immune_regulation	regulation of immune system process	QuickGO	2026-11-15	native_species_annotations_review_applicability	term_and_descendants_exclude_NOT
+R-HSA-382551	nutrient_transport	Transport of small molecules	Reactome	2026-11-15	human_or_documented_orthology	all_level_gene_memberships
+R-HSA-556833	lipid_cholesterol	Metabolism of lipids	Reactome	2026-11-15	human_or_documented_orthology	all_level_gene_memberships
+Geneimprint_Imprinted	imprinting	Independently catalogued imprinted genes	Geneimprint	2026-11-15	species_specific_review_tissue	status_Imprinted_only

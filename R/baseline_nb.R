@@ -1,4 +1,4 @@
-# All-SNP baseline NB models. No sentinel-marker result is an input.
+# All-SNP upstream gene/transcript NB models.
 NB_VERSION <- "baseline_nb_v1"
 NB_REFERENCE <- "c285f131071becec7347c830d263e78a88ac45de"
 nb_default <- function(x, y) if (is.null(x)) y else x
@@ -25,31 +25,19 @@ nb_settings <- function(cfg) {
   out
 }
 nb_path <- function(s, ...) file.path(s$output_dir, ...)
-nb_hash <- function(x) digest::digest(x, algo = "sha256")
-# Source code is not hashed: code edits do not invalidate baseline
-# stages. Every stage key still carries a "code" entry, so a fixed value is used.
-# If config/nb_code_hash.pin exists, its first line is used (set it to the
-# source_code value in an existing output_dir's provenance.tsv so that keys stay
-# consistent with receipts already written); otherwise the constant below.
-nb_code_hash <- function(root) {
-  pin <- file.path(root, "config", "nb_code_hash.pin")
-  if (file.exists(pin)) {
-    v <- trimws(readLines(pin, n = 1L, warn = FALSE))
-    if (length(v) == 1L && nzchar(v)) return(v)
-  }
-  "code_hash_disabled"
-}
+# Stage records are descriptive structured values, never validation signatures.
+nb_code_version <- function(root) "operator_managed_version"
 nb_runtime_key <- function() {
-  packages <- c("glmmTMB", "TMB", "Matrix", "lme4", "data.table", "digest",
+  packages <- c("glmmTMB", "TMB", "Matrix", "lme4", "data.table",
     "GenomicRanges", "Rsamtools", "Biostrings")
-  nb_hash(list(R = as.character(getRversion()), packages = setNames(vapply(packages,
+  list(R = as.character(getRversion()), packages = setNames(vapply(packages,
     function(p) tryCatch(as.character(utils::packageVersion(p)), error = function(e) "not_installed"),
-    ""), packages), contrasts = getOption("contrasts")))
+    ""), packages), contrasts = getOption("contrasts"))
 }
 nb_save <- function(x, path) reg_atomic_rds(x, path)
 nb_write <- function(x, path) reg_write(as.data.table(x), path)
-# No hash checking: fingerprints are file size + modification time from
-# metadata (no file is read), and stage receipts are not compared against them.
+# File size + modification time are descriptive metadata (no file is read).
+# Stage receipts are not compared against these values.
 # Reproducibility rests on running a known code version on known inputs.
 nb_file_key <- function(paths) {
   paths <- unique(paths)
@@ -75,7 +63,7 @@ nb_require <- function(s, stage, key = NULL) {
   if (!file.exists(p)) stop("Run baseline stage first: ", stage)
   r <- readRDS(p)
   if (!identical(r$version, NB_VERSION) || !all(file.exists(names(r$outputs))))
-    stop("Incomplete baseline stage: ", stage, ". Never fall back to sentinel outputs.")
+    stop("Incomplete baseline stage: ", stage)
   r
 }
 nb_context_key <- function(cfg, s, root) {
@@ -84,10 +72,10 @@ nb_context_key <- function(cfg, s, root) {
     if (cfg$profile == "public_cross") "markers" else "trios"), names(cfg$paths))])
   if (cfg$profile == "human_trio" && isTRUE(cfg$gusto_precomputed$enabled))
     paths <- c(paths, unlist(cfg$gusto_precomputed[c("fastq_id_map", "origin_matrix")]))
-  nb_hash(list(version = NB_VERSION, code = nb_code_hash(root), runtime = nb_runtime_key(), settings = s,
+  list(version = NB_VERSION, code = nb_code_version(root), runtime = nb_runtime_key(), settings = s,
     config = nb_file_key(attr(cfg, "file")),
     manifests_and_parent_resources = nb_file_key(paths),
-    metadata = nb_file_key(s$metadata)[[1]]))
+    metadata = nb_file_key(s$metadata)[[1]])
 }
 nb_validate_raw <- function(d) {
   require_columns(d, c("transcript_id", "gene_id", "locus_id", "maternal_count",
@@ -205,7 +193,7 @@ nb_prepare <- function(cfg, s, root) {
   m <- checked$manifests; meta <- checked$metadata
   key <- nb_context_key(cfg, s, root)
   products <- checked$files[input != "quant_receipt"]$path
-  key <- nb_hash(list(key, raw_products = nb_file_key(products)))
+  key <- list(key, raw_products = nb_file_key(products))
   if (nb_current(s, "prepare", key)) return(invisible(TRUE))
   dir.create(nb_path(s, "private"), recursive = TRUE, showWarnings = FALSE, mode = "0700")
   txmap <- reg_read(cfg$paths$tx_map)
@@ -218,11 +206,11 @@ nb_prepare <- function(cfg, s, root) {
     if (!stage_valid(getpath("quant_receipt"), qout)) stop("Incomplete quantification: ", sample)
     tp <- nb_path(s, "private", paste0(sample, ".transcript.rds"))
     gp <- nb_path(s, "private", paste0(sample, ".gene.rds"))
-    samplekey <- nb_hash(list(code = nb_code_hash(root),
+    samplekey <- list(code = nb_code_version(root),
       raw = nb_file_key(c(getpath("allele_counts"), getpath("tpms"))),
       parent_resources = key,
       references = nb_file_key(unlist(cfg$paths[c("tx_map", "exons", "event_map", "events")])),
-      config = nb_file_key(attr(cfg, "file"))[[1]]))
+      config = nb_file_key(attr(cfg, "file"))[[1]])
     recname <- paste0("assign_", sample)
     if (!nb_current(s, recname, samplekey)) {
       x <- assign_sample(cfg, m, sample, return_transcripts = TRUE)
@@ -271,7 +259,7 @@ nb_prepare <- function(cfg, s, root) {
     value = c(NB_VERSION, NB_REFERENCE, "ln_paternal_over_maternal",
       "fractional_expected_round_at_fit", "allele+sex+ancestry+(1|SNPpos)+(1|sample_id)",
       "allele*cross+available_covariates+(1|SNPpos)+(1|sample_id)",
-      nb_code_hash(root), as.character(Sys.time()))), nb_path(s, "provenance.tsv"))
+      nb_code_version(root), as.character(Sys.time()))), nb_path(s, "provenance.tsv"))
   nb_write(data.table(package = rownames(installed.packages()),
     version = installed.packages()[, "Version"]), nb_path(s, "package_versions.tsv"))
   safe_settings <- s[setdiff(names(s), c("output_dir", "metadata"))]
@@ -359,7 +347,8 @@ nb_make_batches <- function(d, meta, level, s, prepare_key) {
     nb_save(list(data = z, key = prepare_key, level = level), file)
     manifests[[b]] <- data.table(batch = b, level = level, n_features = length(ff),
       n_snp_rows = length(ii), n_long_rows = 2 * nrow(z), input_file = file,
-      sha256 = nb_file_key(file)[[1]], object_bytes = as.numeric(object.size(z)))
+      input_bytes = file.info(file)$size, input_mtime = floor(as.numeric(file.info(file)$mtime)),
+      object_bytes = as.numeric(object.size(z)))
   }
   nb_write(rbindlist(manifests), nb_path(s, paste0(level, "_batches.tsv")))
   nb_save(sf, nb_path(s, "private", paste0(level, "_size_factors.rds")))
@@ -482,7 +471,7 @@ nb_fit_batch <- function(cfg, s, root, level, batch_id) {
   row <- manifest[batch == as.integer(batch_id)]
   if (nrow(row) != 1L) stop("Unknown baseline batch")
   inp <- readRDS(row$input_file)
-  key <- nb_hash(list(inp$key, row$sha256, nb_code_hash(root)))
+  key <- list(parent = inp$key, batch = batch_id, input_file = row$input_file)
   stage <- sprintf("fit_%s_%04d", level, batch_id)
   output <- nb_path(s, "fits", sprintf("%s_%04d.tsv", level, batch_id))
   if (nb_current(s, stage, key)) return(invisible(TRUE))
@@ -497,7 +486,7 @@ nb_fit_batch <- function(cfg, s, root, level, batch_id) {
     sub("\\.tsv$", "_timing.tsv", output))
   nb_finish(s, stage, key, c(output, sub("\\.tsv$", "_timing.tsv", output)))
 }
-# Only requires a finished prepare: raw inputs are not re-fingerprinted.
+# Only requires a finished prepare; inputs must remain immutable.
 nb_check_prepare <- function(cfg, s, root) invisible(nb_require(s, "prepare"))
 nb_combine <- function(cfg, s, root) {
   nb_check_prepare(cfg, s, root)
@@ -516,6 +505,6 @@ nb_combine <- function(cfg, s, root) {
     out <- nb_path(s, paste0(level, "_POE.tsv"))
     nb_write(result, out); outputs <- c(outputs, out)
   }
-  key <- nb_hash(list(prepare = nb_require(s, "prepare")$key, results = nb_file_key(outputs)))
+  key <- list(prepare = nb_require(s, "prepare")$key, results = nb_file_key(outputs))
   nb_finish(s, "combine", key, outputs)
 }

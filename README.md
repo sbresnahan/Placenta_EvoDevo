@@ -13,6 +13,12 @@ between-gene comparisons, human regulatory context) and its results archive,
 use the [baseline runbook](docs/rerun_baseline_poe.md); outputs are described in
 the [baseline schema](docs/BASELINE_NB_SCHEMA.md).
 
+For completed upstream POE layers, follow
+`docs/Seadragon_analysis_runbook.md`: create independent radius-3000, radius-0
+and radius-1000 runs with `prepare-window`, fit Bayesian H1 for reciprocal
+cohorts, integrate baseline and ppBMI H5 context, then prepare H6/H7.
+The model specification is `docs/H1_BAYES_MODELS.md`.
+
 Scripts: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts`
 
 Data: `/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/<cohort>`

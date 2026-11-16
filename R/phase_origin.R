@@ -51,8 +51,7 @@ infer_chromosome_origin <- function(anchors,settings) {
     blocks<-.SD[!is.na(vote),.(n=.N,n1=sum(vote==1L),n2=sum(vote==2L)),by=window]
     covered<-sum(blocks$n>=settings$min_window_votes)
     # Phase-set switches, including switching between unlabelled PS blocks,
-    # invalidate chromosome-wide parental assignment instead of silently
-    # reversing parent labels over part of the chromosome.
+    # invalidate chromosome-wide parental assignment.
     conflicting_blocks<-if(nrow(blocks))sum(blocks$n>=settings$min_window_votes &
       if(winner==1L)blocks$n2/blocks$n>=0.75 else blocks$n1/blocks$n>=0.75) else 0L
     status<-if(length(vv)<settings$min_informative)"insufficient_informative_sites" else

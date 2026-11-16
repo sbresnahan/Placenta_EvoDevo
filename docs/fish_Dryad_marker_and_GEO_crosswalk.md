@@ -34,7 +34,7 @@ Outputs (no production marker is written without FASTA):
 - `lineA_lineB.RNA_controls_coding_embryo_corroborated.tsv`: coding subset with embryo corroboration.
 - `lineA_lineB.marker_report.json`: thresholds and input exclusions.
 
-Defaults: per-control total ref+alt depth >=20, ALT fraction <=0.10 or >=0.90, >=2 callable A controls and both B controls, **no conflicting callable control**. All F1 samples are ignored for line-genotype inference. A site is embryo corroborated if at least one A and one B embryo control has >=20 reads, both agree on the alleles, and no other callable embryo control contradicts them. This is a separate-tissue QC tier, not an additional independent embryo sample. Invalid negative counts, non-SNP alleles, and imprecise/noninteger SNP positions are excluded. Duplicate genomic positions fail closed.
+Defaults: per-control total ref+alt depth >=20, ALT fraction <=0.10 or >=0.90, >=2 callable A controls and both B controls, **no conflicting callable control**. All F1 samples are ignored for line-genotype inference. A site is embryo corroborated if at least one A and one B embryo control has >=20 reads, both agree on the alleles, and no other callable embryo control contradicts them. Embryo corroboration provides tissue-level QC from the named controls and adds no independent biological samples. Invalid negative counts, non-SNP alleles, and imprecise/noninteger SNP positions are excluded. Duplicate genomic positions fail closed.
 
 ### Production-marker promotion requires the exact reference FASTA
 

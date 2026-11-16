@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Between-gene software fixture. Observed example counts are transformed into
-# arbitrary test outcomes and paired covariates. These are NOT POE estimates.
+# numerical test outcomes and paired covariates, exclusively for software checks.
 a <- commandArgs(TRUE)
 root <- if (length(a)) normalizePath(a[1]) else normalizePath(".")
 source(file.path(root, "R/library_paths.R"))
@@ -28,14 +28,14 @@ inp <- list(genes = d[, !c("pair", "te")], tss = tss, repeats = repeats,
   te_u = reg_union(repeats), contigs = data.table(chrom = "chr1", length = 1e7),
   scale = "SOFTWARE_FIXTURE_NOT_POE", source_table = "software_fixture", dropped_incomplete = 0L)
 z <- list(output_dir = home, seed = 1147L, bootstrap = 20L, version = "software_fixture",
-  min_depth = 10, te_genes = list(permutations = 20, placebo_shifts = 5))
+  min_depth = 10, te_tss_window_bp = 3000L, te_genes = list(permutations = 20, placebo_shifts = 5))
 s <- reg_te_genes_settings(z)
 out <- file.path(home, TE_GENES_FILES)
 reg_te_genes_run(list(cohort_id = "software_fixture", species = "mouse"), z, inp, s, out)
 r <- reg_read(out[3]); table <- reg_read(out[1])
 check("between-gene nonempty adjusted estimator runs",
   r$status %in% c("exploratory_propensity_subclassification", "exploratory_residual_imbalance_gt_0.1"))
-check("between-gene outcome provenance is new fixture only", r$gene_POE_source == "software_fixture")
+check("between-gene outcome provenance", r$gene_POE_source == "software_fixture")
 check("between-gene cross and independence flags retained",
   all(c("not_strictly_POE", "independence_verified") %in% names(table)))
 check("between-gene uncertainty and placebo fields exported",

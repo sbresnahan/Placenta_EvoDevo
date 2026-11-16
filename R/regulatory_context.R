@@ -133,7 +133,8 @@ reg_context_overlap <- function(tx, specs, target, aliases = NULL) {
 reg_context_variant_links <- function(links, tx, repeats, target, aliases = NULL) {
   if (!nrow(links)) return(links)
   links <- copy(links)
-  links[, `:=`(variant_at_event_TSS = NA, variant_overlaps_TSS_TE = NA)]
+  links[, `:=`(variant_at_event_TSS = NA, variant_overlaps_TSS_TE = NA,
+    variant_overlaps_promoter_TE = NA, variant_overlaps_proximal_only_TE = NA)]
   use <- which(links$kind %in% c("lead", "pip") & !is.na(links$pos))
   if (!length(use)) return(links)
   links[use, chrom := reg_alias(chrom, target, aliases)]
@@ -158,6 +159,21 @@ reg_context_variant_links <- function(links, tx, repeats, target, aliases = NULL
   }
   links[use, `:=`(variant_at_event_TSS = seq_along(use) %in% at,
     variant_overlaps_TSS_TE = seq_along(use) %in% inside)]
+  if (all(c("promoter_start", "promoter_end") %in% names(tx))) {
+    wp <- tx[, .(chrom, start = promoter_start, end = promoter_end)]
+    wh <- reg_hits(wp, r)
+    wr <- if (nrow(wh)) unique(data.table(event_id = tx$event_id[wh$query],
+      repeat_row = wh$subject)) else data.table(event_id = character(), repeat_row = integer())
+    proximal <- if (nrow(wr)) fsetdiff(wr, er) else wr
+    matched <- function(table) {
+      if (!nrow(hr) || !nrow(table)) return(integer())
+      rr <- data.table(query = hr$query, repeat_row = hr$subject,
+        event_id = links$event_id[use[hr$query]])
+      unique(merge(rr, table, by = c("event_id", "repeat_row"))$query)
+    }
+    links[use, `:=`(variant_overlaps_promoter_TE = seq_along(use) %in% matched(wr),
+      variant_overlaps_proximal_only_TE = seq_along(use) %in% matched(proximal))]
+  }
   links
 }
 reg_context_worker <- function(cfg, z, root) {

@@ -74,7 +74,7 @@ if (libs[,any(uniqueN(unit_id)!=1L),by=child_id][,any(V1)])
   stop('One child maps to multiple biological units')
 
 # Validate each sample's quantification receipt and assigned count files.
-# Always use the existing stage_valid() rather than inferring success from LSF.
+# Validate completion with stage_valid().
 receipt_state <- function(i) {
   s <- libs$sample_id[i]; strand <- libs$strand_mode[i]
   path <- function(key) cfg_path(cfg,key,sample=s,mode='complete',strand=strand)

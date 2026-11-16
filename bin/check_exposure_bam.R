@@ -1,0 +1,11 @@
+#!/usr/bin/env Rscript
+argv <- commandArgs()
+root <- normalizePath(file.path(dirname(sub("^--file=", "", argv[grepl("^--file=", argv)][1])), ".."))
+source(file.path(root, "R/library_paths.R"))
+source(file.path(root, "R/exposure_inputs.R"))
+source(file.path(root, "R/te_expression.R"))
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) != 3L) stop("Usage: check_exposure_bam.R BAM MULTIMAP_LIMIT OUTPUT_TSV")
+limit <- suppressWarnings(as.integer(args[2]))
+if (!is.finite(limit) || limit < 2L) stop("Invalid multimapping limit")
+ex_write(ex_bam_probe(args[1], limit), args[3])

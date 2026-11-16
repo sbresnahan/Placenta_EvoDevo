@@ -20,6 +20,7 @@ reg_settings <- function(cfg) {
   z$seed <- as.integer(reg_default(z$seed, 1147L))
   z$min_depth <- as.numeric(reg_default(z$min_depth, 10))
   z$max_pairs_per_gene <- as.integer(reg_default(z$max_pairs_per_gene, 10L))
+  z$te_tss_window_bp <- reg_radius(reg_default(z$te_tss_window_bp, 3000L))
   z$version <- "regulatory_v2.1"
   z$build <- reg_text(cfg$reference$build, "reference.build")
   for (k in c("bootstrap", "seed", "min_depth", "max_pairs_per_gene"))
@@ -51,6 +52,61 @@ reg_settings <- function(cfg) {
   z$config_file <- attr(cfg, "file")
   z
 }
+reg_radius <- function(radius) {
+  if (length(radius) != 1L || !is.numeric(radius) || !is.finite(radius) ||
+      !radius %in% c(0, 1000, 3000)) stop("te_tss_window_bp must be 0, 1000 or 3000")
+  as.integer(radius)
+}
+reg_tss_windows <- function(tx, radius = 3000L, contigs = NULL) {
+  radius <- reg_radius(radius)
+  require_columns(tx, c("chrom", "tss"))
+  if (anyNA(tx[, .(chrom, tss)]) || any(!is.finite(tx$tss) | tx$tss < 1 | tx$tss != floor(tx$tss)))
+    stop("Invalid native transcript TSS coordinates")
+  upper <- rep(Inf, nrow(tx))
+  if (!is.null(contigs)) {
+    require_columns(contigs, c("chrom", "length"))
+    assert_unique(contigs, "chrom")
+    upper <- contigs$length[match(tx$chrom, contigs$chrom)]
+    if (anyNA(upper) || any(!is.finite(upper) | upper < tx$tss))
+      stop("Transcript coordinates disagree with native contig lengths")
+  } else if (radius > 0L) stop("Native contig lengths required for promoter windows")
+  data.table(chrom = tx$chrom, start = pmax(1, tx$tss - radius),
+    end = pmin(upper, tx$tss + radius), te_tss_window_bp = radius)
+}
+reg_native_contigs <- function(cfg) {
+  p <- cfg$paths$genome_fai
+  reg_require_file(p)
+  d <- fread(p, header = FALSE, select = 1:2, col.names = c("chrom", "length"))
+  d
+}
+reg_promoter_annotation <- function(tx, repeats, radius, contigs, full_reference) {
+  w <- reg_tss_windows(tx, radius, contigs)
+  out <- copy(tx)
+  out[, `:=`(promoter_start = w$start, promoter_end = w$end,
+    te_tss_window_bp = reg_radius(radius),
+    promoter_te_label = if (full_reference) "nonTE" else "not_assessed",
+    promoter_te_ids = NA_character_, promoter_te_families = NA_character_,
+    promoter_exact_TE = FALSE, promoter_min_TE_distance = NA_real_)]
+  if (is.null(repeats)) {
+    out[, promoter_te_label := "not_assessed"]
+    return(out)
+  }
+  h <- reg_hits(w, repeats)
+  if (nrow(h)) {
+    a <- cbind(h, repeats[h$subject, .(start, end, is_te, is_unknown, repeat_id, repeat_family)])
+    a[, distance := pmax(start - tx$tss[query], tx$tss[query] - end, 0)]
+    a <- a[, .(label = if (any(is_unknown)) "unknown_repeat" else if (any(is_te)) "TE" else
+      if (full_reference) "nonTE" else "not_assessed",
+      ids = paste(sort(unique(repeat_id[is_te & !is_unknown])), collapse = ";"),
+      families = paste(sort(unique(repeat_family[is_te & !is_unknown])), collapse = ";"),
+      exact = any(is_te & !is_unknown & distance == 0),
+      distance = if (any(is_te & !is_unknown)) min(distance[is_te & !is_unknown]) else NA_real_), by = query]
+    out[a$query, `:=`(promoter_te_label = a$label, promoter_te_ids = a$ids,
+      promoter_te_families = a$families, promoter_exact_TE = a$exact,
+      promoter_min_TE_distance = a$distance)]
+  }
+  out
+}
 reg_read <- function(path) {
   if (!file.exists(path) || file.info(path)$size <= 0) stop("Missing/empty input: ", path)
   if (grepl("\\.parquet$", path, ignore.case = TRUE)) {
@@ -60,9 +116,9 @@ reg_read <- function(path) {
   }
   fread(file = path, na.strings = c("", "NA"), showProgress = FALSE)
 }
-reg_sha <- function(path) {
-  if (!file.exists(path) || file.info(path)$size <= 0) stop("Missing fingerprint input: ", path)
-  digest::digest(file = path, algo = "sha256")
+reg_require_file <- function(path) {
+  if (!file.exists(path) || file.info(path)$size <= 0) stop("Missing/empty required file: ", path)
+  invisible(TRUE)
 }
 reg_atomic_rds <- function(x, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
@@ -81,8 +137,7 @@ reg_write <- function(x, path) {
 }
 reg_receipt_path <- function(z, stage) file.path(z$output_dir, paste0(stage, ".rds"))
 # Regulatory stages are immutable once completed. Receipts track completion and
-# required output presence, not mutable input/config/source fingerprints.
-# Older receipts with SHA256-named outputs remain readable.
+# required output presence.
 reg_valid <- function(z, stage) {
   parents <- switch(stage, `fish-discovery` = "regulatory-resources",
     `fish-masking` = "fish-discovery", `te-tss` = "regulatory-resources",
@@ -118,8 +173,8 @@ reg_finish <- function(z, stage, outputs) {
   info <- file.info(outputs)
   if (anyNA(info$size) || any(info$size <= 0))
     stop("Missing/empty required stage output: ", stage)
-  # Named output paths are the sole status contract. Do not rehash large
-  # datasets or invalidate unrelated completed stages after a code edit.
+  # Named output paths are the sole status contract. Do not invalidate
+  # unrelated completed stages after a code edit.
   reg_atomic_rds(list(state = "complete", outputs = stats::setNames(
     rep(TRUE, length(outputs)), outputs), finished = as.character(Sys.time()),
     version = z$version), p)

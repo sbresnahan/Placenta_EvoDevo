@@ -166,7 +166,6 @@ host_retrieval_items <- function(c,resources_only=FALSE) {
       ". Populate it with bin/prepare_fish_refseq_resources.sh before retrieval.")
   for(i in required_rows) {
     resource_method<-if("method" %in% names(r)&&!is.na(r$method[i]))r$method[i] else "https"
-    if(resource_method=="cyverse_md5")resource_method<-"cyverse" # also accept the cyverse_md5 method label
     unzip<-if("decompress_to" %in% names(r)&&!is.na(r$decompress_to[i])&&nzchar(r$decompress_to[i]))
       resolve_value(r$decompress_to[i],dirname(attr(c,"file")),unlist(c$environment_allowlist)) else NA_character_
     rows[[length(rows)+1L]]<-data.table(id=r$resource_id[i],mate=NA_integer_,
@@ -262,7 +261,7 @@ finish_host_retrieval <- function(c,job,target="shared") {
       if(is.null(d)||!all(c("path","bytes","url","method") %in% names(d))||nrow(d)!=1L)
         FALSE
       else if(d$path!=item$destination||d$url!=item$url||
-        !d$method %in% c("cyverse","cyverse_md5")||!grepl("^[1-9][0-9]*$",d$bytes))FALSE
+        d$method!="cyverse"||!grepl("^[1-9][0-9]*$",d$bytes))FALSE
       else if(!file.exists(item$destination)||file.info(item$destination)$size!=as.numeric(d$bytes))FALSE
       else {items$bytes[i]<-as.numeric(d$bytes);TRUE}
     } else verify_file(item$destination,item$bytes)

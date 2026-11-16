@@ -143,7 +143,7 @@ submit_graph <- function(c,root,stage,submit=FALSE,dependency="none",resume=FALS
     jobname<-paste(c$cohort_id,node$action,node$sample,id,sep="_")
     if(nchar(jobname)>180)stop("LSF job name too long")
     logs<-file.path(c$paths$logs,"lsf");dir.create(logs,recursive=TRUE,showWarnings=FALSE)
-    # LSF -env parses comma separators; reject rather than misparse values.
+    # LSF -env parses comma separators; reject ambiguous values.
     env<-c(CONFIG=attr(c,"file"),SCRIPTS_DIR=root,POE_SAMPLE=node$sample,
       POE_SITE_FILE=c$execution$site_file)
     if(any(grepl("[,\r\n\"']",env)))stop("Path cannot be represented safely in LSF -env")

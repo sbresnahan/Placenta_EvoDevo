@@ -58,7 +58,7 @@ manifests while that scale/model workflow is running. If later reintroducing the
 restore all five backup manifests together and reassess pilot, scale, and model
 receipts; a 195-sample completed run does not establish completion for 197 samples.
 
-Limitations: This is an opt-in command; it does not change the generic
-scheduler or the treatment of future scale-stage failures. If scale assignment
+Limitations: The opt-in command applies only to the reviewed pilot exclusions.
+The generic scheduler retains its scale-stage failure handling. If scale assignment
 fails for additional samples, those failures require a new auditable exclusion
 and collection step before models.

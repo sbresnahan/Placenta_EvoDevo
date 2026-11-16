@@ -41,7 +41,7 @@ No R process retrieves data or submits LSF jobs.
 
 SRA-derived compressed files will not have ENA's original compressed byte size.
 The worker records generated FASTQ sizes in a per-run `.sra.tsv` receipt and
-does not perform MD5, gzip-integrity or full FASTQ-content scans afterward.
+does not perform gzip-integrity or full FASTQ-content scans afterward.
 Per-run receipts are accepted by file size; this trades away
 silent-corruption detection for speed. A missing SRA accession, missing mate,
 unexpected unpaired reads, or unreceipted existing destination still fails.

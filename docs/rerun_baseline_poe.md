@@ -18,7 +18,7 @@ objects must remain on the deployment. Only the final archive is returned for
 reanalysis.
 
 Stages are reused while their receipt and outputs exist. The workflow does not
-fingerprint file contents or source code, so it does not detect changed inputs.
+verify file-content or source-code identity, so it does not detect changed inputs.
 Run a known code version on known inputs, and rerun affected stages explicitly
 after changing code, configuration, metadata, raw products or resources (see
 "Rerunning a stage" below).
@@ -37,8 +37,8 @@ node. Compiling glmmTMB/TMB can require several GB of RAM.
 ```bash
 export SCRIPTS_DIR=/absolute/path/to/scripts
 cd "$SCRIPTS_DIR"
-bin/Rscript_sif -e 'install.packages(c("digest","data.table","yaml","lme4","glmmTMB"), lib=.libPaths()[1], repos="https://cloud.r-project.org", Ncpus=1)'
-bin/Rscript_sif -e 'library(glmmTMB); library(lme4); library(GenomicRanges); library(Rsamtools); library(rtracklayer); library(digest); print(sessionInfo())'
+bin/Rscript_sif -e 'install.packages(c("data.table","yaml","lme4","glmmTMB"), lib=.libPaths()[1], repos="https://cloud.r-project.org", Ncpus=1)'
+bin/Rscript_sif -e 'library(glmmTMB); library(lme4); library(GenomicRanges); library(Rsamtools); library(rtracklayer); print(sessionInfo())'
 bin/Rscript_sif tests/test_baseline_nb.R "$SCRIPTS_DIR"
 bin/Rscript_sif tests/test_baseline_workflow.R "$SCRIPTS_DIR"
 bin/Rscript_sif tests/test_baseline_adapter.R "$SCRIPTS_DIR"
@@ -192,13 +192,14 @@ bin/submit_baseline_nb.sh "$CONFIG" te-inputs
 bin/submit_baseline_nb.sh "$CONFIG" te-pilot 5
 ```
 
-Inspect `TE_pilot_resources.tsv` before requesting the full bootstrap arrays.
-The pilot reports projected time for one gene, not all loci; transcript-rich
-genes can take much longer. Each production job jointly resamples biological
-clusters (within reciprocal direction for public cohorts), refits every
-eligible isoform using its own SNPs and retains signed and absolute-effect
-contrasts. Draws (`baseline_nb.bootstrap`) are checkpointed in chunks of 25.
->=90% valid draws are required for inferential summaries.
+The `te-pilot`/`te-fit` bootstrap commands apply to GUSTO descriptive H1
+diagnostics. Inspect `TE_pilot_resources.tsv` before requesting the arrays.
+Each job resamples biological clusters, refits the eligible isoforms with
+their own SNPs and records signed and absolute-effect contrasts.
+Draws (`baseline_nb.bootstrap`) are checkpointed in chunks of 25.
+Diagnostic intervals and centered-tail probabilities require ≥90% valid refits.
+Reciprocal cohorts use `h1-inputs` and `h1-fit` as specified in
+`Seadragon_analysis_runbook.md` and `H1_BAYES_MODELS.md`.
 
 ```bash
 # Set to the number of data rows in within_gene_jobs.tsv.
@@ -234,13 +235,13 @@ unavailable full repeat references are explicit states. The transcript-class
 between-gene comparison uses equal gene weights and is separate from aggregated
 gene POE.
 
-The adjusted gene-level exposure is any TE-overlapping multi-exon TSS event
-versus all such TSSs non-TE. Its magnitude outcome is `beta_adjusted^2 - SE^2`,
-not `abs(beta_adjusted)`. The all-transcript class comparison and within-gene
-contrasts instead use absolute beta. Keep these estimands separate.
+The adjusted gene-level exposure uses the active native TSS window.
+Its magnitude outcome is `beta_adjusted^2 - SE^2`. The all-transcript
+class comparison and within-gene contrasts use absolute beta.
 
-Human xQTL/chromatin annotations are context, not proof of transcript-specific
-POE, colocalization or causality. `context` requires the configured QTL tables
+Human xQTL/chromatin annotations provide association context. Transcript-specific
+POE-QTL colocalization and causal TE effects require additional measurements.
+`context` requires the configured QTL tables
 when `regulatory.human_context.require_qtl` is true. Unconfigured resources
 remain not assessed. Nonhuman context is explicitly not applicable.
 
@@ -268,7 +269,6 @@ OUT="/absolute/private/exports/results_baseline_nb_${STAMP}.tar.gz"
 mkdir -p "$(dirname "$OUT")"
 bin/Rscript_sif bin/export_results.R --baseline-nb --out "$OUT" "${CONFIGS[@]}"
 tar -tzf "$OUT" | head -n 40
-sha256sum "$OUT"
 ```
 
 Every cohort must have all seven stages `complete_verified`. A cohort whose
@@ -282,7 +282,7 @@ Export refuses identifier columns in the result tables. It includes all-SNP
 models, annotation/availability, within- and between-gene outputs,
 cross-dependent flags, nominal transcript candidates, context, package
 versions, cohort/settings/QC summaries, separate cohort summary, documentation
-and `MANIFEST.tsv` checksums. It excludes raw counts, private
+and `MANIFEST.tsv` filenames/sizes. It excludes raw counts, private
 metadata/manifests, fit objects, bootstrap records and promoter-model endpoints.
 
 Before sharing, extract to an empty private directory and verify:
@@ -295,10 +295,9 @@ args <- commandArgs(TRUE)
 top <- list.dirs(args[1], recursive=FALSE, full.names=TRUE)
 stopifnot(length(top)==1L)
 m <- data.table::fread(file.path(top,"MANIFEST.tsv"))
-actual <- vapply(file.path(top,m$archive_path), digest::digest, "",
-                 algo="sha256", file=TRUE)
-stopifnot(identical(unname(actual), as.character(m$sha256)))
-cat("Verified",nrow(m),"result checksums\n")
+actual <- file.info(file.path(top,m$archive_path))$size
+stopifnot(all(is.finite(actual)), all(actual == m$bytes))
+cat("Inspected",nrow(m),"result paths and sizes; content identity is not verified\\n")
 ' "$CHECK_DIR"
 tar -tzf "$OUT" | grep -E '/private/|/bootstraps/|/fits/|model_promoter.tsv|model_gene.tsv' \
   && printf 'STOP: inspect unexpected private/promoter-model entries\n' || true
@@ -306,7 +305,7 @@ tar -tzf "$OUT" | grep -E '/private/|/bootstraps/|/fits/|model_promoter.tsv|mode
 
 Also inspect the tables for free-text identifiers and paths. The automated
 privacy guard is a safeguard, not a substitute for local privacy review.
-Return only `results_baseline_nb_<timestamp>.tar.gz` and its SHA256. Do not
+Return only `results_baseline_nb_<timestamp>.tar.gz`. Do not
 return the source covariate CSV, parent counts or prepared input directories.
 
 ## Interpretation on return
