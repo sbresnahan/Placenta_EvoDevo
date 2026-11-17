@@ -12,14 +12,23 @@ poe_rstan_files <- function(path) {
   sort(z[!dir.exists(file.path(path, z))])
 }
 poe_rstan_bytes <- function(path) sum(file.info(file.path(path, poe_rstan_files(path)))$size)
+poe_rstan_entries <- function(path) {
+  c(".", sort(list.files(path, recursive = TRUE, all.files = TRUE,
+    no.. = TRUE, include.dirs = TRUE)))
+}
 poe_rstan_same <- function(a, b) {
-  fa <- poe_rstan_files(a); fb <- poe_rstan_files(b)
-  identical(fa, fb) && all(vapply(fa, function(f) {
+  if (!dir.exists(a) || !dir.exists(b)) return(FALSE)
+  ea <- poe_rstan_entries(a); eb <- poe_rstan_entries(b)
+  if (!identical(ea, eb)) return(FALSE)
+  pa <- file.path(a, ea); pb <- file.path(b, eb)
+  if (!identical(dir.exists(pa), dir.exists(pb)) ||
+      !identical(bitwAnd(as.integer(file.info(pa)$mode), 511L),
+        bitwAnd(as.integer(file.info(pb)$mode), 511L))) return(FALSE)
+  fa <- ea[!dir.exists(pa)]
+  all(vapply(fa, function(f) {
     pa <- file.path(a, f); pb <- file.path(b, f)
     n <- file.info(pa)$size
     identical(n, file.info(pb)$size) &&
-      identical(bitwAnd(as.integer(file.info(pa)$mode), 511L),
-        bitwAnd(as.integer(file.info(pb)$mode), 511L)) &&
       identical(readBin(pa, "raw", n), readBin(pb, "raw", n))
   }, TRUE))
 }
@@ -27,8 +36,16 @@ poe_rstan_copy <- function(from, to) {
   if (file.exists(to)) stop("Refusing to replace an existing maintenance directory: ", to)
   if (!dir.create(to, recursive = TRUE, mode = "0700")) stop("Cannot create ", to)
   fs <- list.files(from, all.files = TRUE, no.. = TRUE, full.names = TRUE)
-  if (!all(file.copy(fs, to, recursive = TRUE, copy.mode = TRUE, copy.date = TRUE)) ||
-      !poe_rstan_same(from, to)) stop("Package copy verification failed: ", from)
+  if (!all(file.copy(fs, to, recursive = TRUE, copy.mode = TRUE, copy.date = TRUE)))
+    stop("Package content copy failed: ", from)
+  # file.copy applies the process umask even with copy.mode=TRUE.
+  # Restore exact source permissions inside the private backup parent, including
+  # the package root that will later become visible in the shared library.
+  entries <- poe_rstan_entries(from)
+  modes <- file.info(file.path(from, entries))$mode
+  if (!all(Sys.chmod(file.path(to, entries), modes, use_umask = FALSE)))
+    stop("Cannot preserve copied package permissions: ", from)
+  if (!poe_rstan_same(from, to)) stop("Package copy verification failed: ", from)
   invisible(to)
 }
 poe_rstan_description <- function(package, library, expected) {

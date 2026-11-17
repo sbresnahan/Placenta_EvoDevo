@@ -98,7 +98,12 @@ login-node fetch without an allocation or backend loading, validated-cache
 reuse, failed and partial downloads, real fetch CLI parsing, offline staging
 with a downloader that errors if called, and rejection of missing, empty,
 invalid or wrong-version archives before the first build. It uses fake
-package directories and build/load callbacks. Actual subprocesses check
+package directories and build/load callbacks. Private-umask fixtures check
+exact file and directory permissions, empty directories, package-root access
+bits after promotion, strict rejection of changed content or modes, retained
+partial incoming copies and retry from the same staged build without compiling
+again. The private process umask and backup parent remain unchanged.
+Actual subprocesses check
 environment isolation and the fetch CLI; none install or load native R packages. These
 tests do not establish that the Seadragon shared library has been repaired.
 

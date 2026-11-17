@@ -338,6 +338,112 @@ main <- function() {
       writeLines("replacement", path); 0L
     }), "without replacing an existing file") &&
       identical(readLines(dest), "completed transfer"))
+  # The production wrapper uses 077, but installed package modes can be 0755/0644.
+  local({
+    old_mask <- Sys.umask("0077")
+    on.exit(Sys.umask(old_mask), add = TRUE)
+    f <- fixture("private_umask_copy")
+    from <- file.path(f$dir, "source_package")
+    parent <- file.path(f$dir, "private_incoming")
+    to <- file.path(parent, "package")
+    dir.create(file.path(from, "libs"), recursive = TRUE)
+    dir.create(file.path(from, "empty"))
+    dir.create(parent, mode = "0700")
+    writeLines("package metadata fixture", file.path(from, "DESCRIPTION"))
+    writeLines("native content fixture", file.path(from, "libs", "software.so"))
+    dirs <- c(from, file.path(from, "libs"), file.path(from, "empty"))
+    Sys.chmod(dirs, "0755", use_umask = FALSE)
+    Sys.chmod(file.path(from, "DESCRIPTION"), "0644", use_umask = FALSE)
+    Sys.chmod(file.path(from, "libs", "software.so"), "0755", use_umask = FALSE)
+    e$poe_rstan_copy(from, to)
+    check("private umask copy preserves exact bytes and every directory/file mode",
+      e$poe_rstan_same(from, to))
+    check("copy retains the private process umask",
+      identical(as.integer(Sys.umask()), as.integer(as.octmode("0077"))))
+    check("incoming parent stays private while package root retains source access",
+      as.character(file.info(parent)$mode) == "700" &&
+        as.character(file.info(to)$mode) == "755")
+    check("empty source directories are preserved and checked",
+      dir.exists(file.path(to, "empty")))
+    Sys.chmod(file.path(to, "DESCRIPTION"), "0600", use_umask = FALSE)
+    check("strict comparison detects file permission changes",
+      !e$poe_rstan_same(from, to))
+    Sys.chmod(file.path(to, "DESCRIPTION"), "0644", use_umask = FALSE)
+    Sys.chmod(to, "0700", use_umask = FALSE)
+    check("strict comparison detects package root permission changes",
+      !e$poe_rstan_same(from, to))
+    Sys.chmod(to, "0755", use_umask = FALSE)
+    Sys.chmod(file.path(to, "libs"), "0700", use_umask = FALSE)
+    check("strict comparison detects nested directory permission changes",
+      !e$poe_rstan_same(from, to))
+    Sys.chmod(file.path(to, "libs"), "0755", use_umask = FALSE)
+    unlink(file.path(to, "empty"), recursive = TRUE)
+    check("strict comparison detects a missing empty directory",
+      !e$poe_rstan_same(from, to))
+    dir.create(file.path(to, "empty")); Sys.chmod(file.path(to, "empty"), "0755", use_umask = FALSE)
+    writeLines("changed native content", file.path(to, "libs", "software.so"))
+    check("strict comparison still detects native content changes",
+      !e$poe_rstan_same(from, to))
+    check("copy does not replace a preexisting incoming package",
+      fails(e$poe_rstan_copy(from, to), "existing maintenance directory"))
+
+    f <- fixture("private_umask_promotion")
+    calls$fail <- ""; calls$space <- Inf
+    state <- invoke(f, "stage")
+    for (p in names(e$poe_rstan_versions())) {
+      source <- file.path(state$staging, p)
+      entries <- e$poe_rstan_entries(source)
+      paths <- file.path(source, entries)
+      modes <- ifelse(dir.exists(paths), "0755", "0644")
+      stopifnot(all(Sys.chmod(paths, modes, use_umask = FALSE)))
+    }
+    state <- invoke(f, "apply", TRUE)
+    check("shared promotion succeeds under the actual private wrapper umask",
+      state$phase == "applied" && all(vapply(names(state$versions), function(p)
+        e$poe_rstan_same(file.path(f$lib, p), file.path(state$staging, p)), TRUE)))
+    check("promoted package roots remain searchable for other shared-library users",
+      all(as.character(file.info(file.path(f$lib, names(state$versions)))$mode) == "755"))
+    check("promoted metadata retains source read permissions",
+      all(as.character(file.info(file.path(f$lib, names(state$versions), "DESCRIPTION"))$mode) == "644"))
+    check("promotion backup parent remains private",
+      as.character(file.info(state$backup)$mode) == "700")
+    check("normal-library validation still follows private-umask promotion",
+      tail(calls$validate, 1L) == "validation_shared")
+    state <- invoke(f, "rollback", TRUE)
+    check("private-umask rollback restores original packages",
+      state$phase == "rolled_back" && unchanged(f))
+    check("private-umask rollback releases the repair lock",
+      !dir.exists(file.path(f$lib, ".poe_rstan_repair.lock")))
+    f <- fixture("copy_error_same_stage_retry")
+    invoke(f, "stage")
+    before_builds <- calls$build
+    normal_copy <- e$poe_rstan_copy
+    e$poe_rstan_copy <- function(from, to) {
+      dir.create(to)
+      writeLines("retained partial copy fixture", file.path(to, "partial"))
+      stop("Package copy verification failed: deliberate pre-promotion fixture")
+    }
+    failed <- tryCatch(invoke(f, "apply", TRUE), error = identity,
+      finally = { e$poe_rstan_copy <- normal_copy })
+    check("pre-promotion copy failure leaves originals and staged state intact",
+      inherits(failed, "error") && unchanged(f) &&
+        readRDS(file.path(f$work, "state.rds"))$phase == "staged" &&
+        !dir.exists(file.path(f$lib, ".poe_rstan_repair.lock")))
+    partial <- list.files(f$lib, "^\\.poe_rstan_repair_[0-9]", all.files = TRUE, full.names = TRUE)
+    check("failed incoming copy remains available for inspection",
+      length(partial) == 1L &&
+        file.exists(file.path(partial, "incoming", "RcppParallel", "partial")))
+    # Separate CLI calls have distinct process IDs. Give the retained fixture
+    # its own name so this same-process test also has a distinct backup name.
+    retained <- paste0(partial, "_retained")
+    stopifnot(file.rename(partial, retained))
+    state <- invoke(f, "apply", TRUE)
+    check("same staged build can be retried without another compilation",
+      state$phase == "applied" && identical(calls$build, before_builds) &&
+        file.exists(file.path(retained, "incoming", "RcppParallel", "partial")))
+    check("same-stage retry retains working rollback",
+      invoke(f, "rollback", TRUE)$phase == "rolled_back" && unchanged(f))
+  })
   if (length(a) > 1L) {
     dir.create(a[2L], recursive = TRUE, showWarnings = FALSE)
     write.table(data.frame(check = checks, status = "pass"),

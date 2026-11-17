@@ -249,6 +249,38 @@ directories in a private backup under the shared library, and promotes them
 with same-filesystem directory renames. It validates again from a fresh process
 using the normal library. A promotion/validation error attempts automatic
 rollback. Backups, rejected candidates, logs and `state.rds` are retained.
+
+**If apply stops at `Package copy verification failed` before promotion:**
+the private wrapper umask can restrict copied permissions even when R is told
+to preserve them. A local reproduction changed a 0644 file to 0600 with
+identical contents. The copy-permissions follow-up restores source file and
+directory mode bits explicitly, including the package root, inside the private
+backup parent. Verification still checks contents and permissions; it also
+checks nested and empty directories. The process umask remains private.
+
+Apply this incremental patch to the checkout that already has the offline-source
+update, then transfer the updated checkout as usual:
+
+```bash
+git apply --check Placenta_EvoDevo_RStan_copy_permissions_fix.patch && git apply Placenta_EvoDevo_RStan_copy_permissions_fix.patch
+```
+
+For this pre-promotion copy failure, do not rebuild, change the work directory,
+delete the partial backup, remove locks manually or change shared permissions
+by hand. The staged state and active original packages are retained. Keep the
+same `RSTAN_REPAIR` and, while coordinated maintenance remains in effect, retry:
+
+```bash
+bin/Rscript_sif bin/repair_rstan_stack.R apply "$RSTAN_REPAIR" --maintenance-confirmed
+```
+
+The helper revalidates the saved staging library, prepares a new private
+incoming copy and leaves the earlier partial copy available for inspection.
+This fix does not establish actual shared-library access for other accounts
+or reproduce site-specific ACL behavior; it preserves source permission bits
+and still requires normal-library validation. A different failure must be
+inspected without bypassing verification.
+
 Do not run fits until normal-library validation succeeds:
 
 ```bash
