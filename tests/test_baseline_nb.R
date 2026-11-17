@@ -42,12 +42,32 @@ check("equal-cross effect is not reference coefficient", abs(avg[["beta"]] - .3)
 check("equal-cross covariance retained", abs(avg[["se"]]^2 - (.04 + .25 * .09 + .01)) < 1e-12)
 check("nominal interaction flag", identical(nb_cross_flag(c(.049, .05, NA_real_)), c(TRUE, FALSE, NA)))
 check("maize dosage null yields zero adjusted effect", log(.5) - log(1 / 2) == 0)
-est <- data.table(feature_id = c("txA", "txB"), beta_adjusted = c(.4, -.1))
+est <- data.table(feature_id = c("txA", "txB"), beta_adjusted = c(.4, -.1), se = c(.1, .2))
 annot <- data.table(transcript_id = c("txA", "txB"), tss_te_label = c("TE", "nonTE"),
   first_donor = c(100, 999), marker = c("chr1:20:C:T", "chr1:30:G:A"))
 stats <- nb_te_statistics(est, annot)
 check("different markers and donors do not gate comparisons", nrow(stats) == 2 && all(abs(stats$signed - .5) < 1e-12))
 check("magnitude contrast not signed contrast", all(abs(stats$magnitude - .3) < 1e-12))
+# (.4^2 - .1^2) - ((-.1)^2 - .2^2) = .15 - (-.03) = .18; root scale sqrt(.15) - 0.
+check("noise-corrected squared magnitude", all(abs(stats$magnitude_sq_corrected - .18) < 1e-12))
+check("root-scale corrected magnitude truncates at zero",
+  all(abs(stats$magnitude_rms_corrected - sqrt(.15)) < 1e-12))
+check("class precision recorded", abs(stats$TE_mean_se[1] - .1) < 1e-12 &&
+  abs(stats$nonTE_mean_se[1] - .2) < 1e-12 &&
+  abs(stats$raw_magnitude_zero_effect_inflation_difference[1] - sqrt(2 / pi) * -.1) < 1e-12)
+# Each estimate's magnitude equals its own SE: raw |b| differs by .2, corrected by 0.
+noise <- data.table(feature_id = c("txA", "txB"), beta_adjusted = c(.3, -.1), se = c(.3, .1))
+ns <- nb_te_statistics(noise, annot)[contrast == "class_mean"]
+check("unequal precision inflates raw magnitude only",
+  abs(ns$magnitude - .2) < 1e-12 && abs(ns$magnitude_sq_corrected) < 1e-12 &&
+    abs(ns$magnitude_rms_corrected) < 1e-12)
+check("transcript SE required for magnitude correction",
+  fails(nb_te_statistics(est[, .(feature_id, beta_adjusted)], annot)))
+check("single-class gene yields typed empty contrasts",
+  identical(names(nb_te_statistics(est, annot[, .(transcript_id, tss_te_label = "TE")])),
+    c("contrast", NB_TE_METRICS)))
+check("versioned within-gene stages", nb_te_stage(7) == "te_000007_within_gene_stats_v2" &&
+  nb_te_stage(7, 3) == "te_000007_within_gene_stats_v2_chunk_00003")
 z <- data.table(feature_id = "x", SNPpos = c("chr1:1:A:G", "chr1:2:C:T"),
   sample_id = "s1", maternal_count = c(1.6, NA), paternal_count = c(2.4, NA),
   offset = 0, sex = "F", ancestry = "A", cross = NA_character_,

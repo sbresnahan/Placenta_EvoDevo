@@ -167,3 +167,20 @@ recompute count-refit bootstrap diagnostics for the active radius.
 intervals and SEs require ≥90% successful refits. No H1 BH or primary
 frequentist-discovery columns are assigned. A replacement GUSTO inferential
 model is outside this implementation.
+
+Point-estimate magnitudes are inflated by estimation noise: at zero effect
+`E|b| = SE * sqrt(2/pi)`. Classes with different precision therefore differ in
+mean `|b|` even without a true difference. The primary GUSTO magnitude field is
+`magnitude_sq_corrected`, the TE minus nonTE class mean of `b^2 - SE^2`
+(squared-ln units). It is unbiased for the class mean of squared POE given
+accurate SEs, matching the between-gene outcome. `magnitude_rms_corrected`
+compares the square roots of the class means truncated at zero; it is a
+descriptive root-scale companion and is not unbiased. Raw `magnitude`
+(mean `|b|` difference) is secondary. `TE_mean_se`, `nonTE_mean_se` and
+`raw_magnitude_zero_effect_inflation_difference` (`sqrt(2/pi)` times the
+mean-SE difference) report the precision imbalance behind the raw contrast.
+Each bootstrap refit recomputes all fields from its own estimates and SEs.
+`signed` is unaffected. These fields are labelled `within_gene_stats_v2`;
+genes or bootstrap chunks recorded under the earlier definition are recomputed.
+This GUSTO scale differs from the Bayesian `Delta_mag` above, so the two are
+not directly comparable effect sizes.

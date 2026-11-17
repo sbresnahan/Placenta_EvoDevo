@@ -93,27 +93,52 @@ nb_te_prepare <- function(cfg, s, root) {
   nb_finish(s, "te-inputs", key, nb_path(s, c("transcript_TE_annotation.tsv",
     "transcript_TE_POE.tsv", "within_gene_jobs.tsv", "TE_availability.tsv")))
 }
+# Within-gene class contrasts of individually fitted transcript POE estimates.
+# Raw |b| is inflated by estimation noise (E|b| = SE*sqrt(2/pi) at zero effect),
+# so classes that differ in precision differ in raw magnitude even without a
+# true difference. b^2 - SE^2 is unbiased for beta^2 given an accurate SE, as in
+# the between-gene analysis; its class-mean difference is the primary magnitude
+# field (squared-ln units). The root-scale version is a descriptive companion;
+# raw |b| is retained as a secondary field.
+NB_TE_METRICS <- c("signed", "magnitude", "magnitude_sq_corrected", "magnitude_rms_corrected")
+NB_TE_STATS_VERSION <- "within_gene_stats_v2"
+# Versioned stage names: genes or bootstrap chunks recorded by an earlier
+# statistic definition are recomputed rather than mixed with new ones.
+nb_te_stage <- function(job_id, chunk = NULL)
+  paste0(sprintf("te_%06d_%s", as.integer(job_id), NB_TE_STATS_VERSION),
+    if (!is.null(chunk)) sprintf("_chunk_%05d", as.integer(chunk)) else "")
+nb_te_rms <- function(q) sqrt(pmax(q, 0))
 nb_te_statistics <- function(estimates, annotations) {
   annotations <- copy(annotations)
   if (!"promoter_te_label" %in% names(annotations))
     annotations[, promoter_te_label := tss_te_label]
-  d <- merge(estimates[, .(feature_id, beta_adjusted)],
+  require_columns(estimates, c("feature_id", "beta_adjusted", "se"), "transcript estimates")
+  d <- merge(estimates[, .(feature_id, beta_adjusted, se)],
     annotations[, .(transcript_id, tss_te_label = promoter_te_label)], by.x = "feature_id",
     by.y = "transcript_id")
+  d[, q := beta_adjusted^2 - se^2]
   a <- d[tss_te_label == "TE"]; b <- d[tss_te_label == "nonTE"]
-  if (!nrow(a) || !nrow(b)) return(data.table(contrast = character(), signed = numeric(), magnitude = numeric()))
+  if (!nrow(a) || !nrow(b)) return(as.data.table(c(list(contrast = character()),
+    setNames(rep(list(numeric()), length(NB_TE_METRICS)), NB_TE_METRICS))))
   pair <- CJ(te = a$feature_id, nonte = b$feature_id)
-  pair[, `:=`(signed = a$beta_adjusted[match(te, a$feature_id)] -
-    b$beta_adjusted[match(nonte, b$feature_id)],
-    magnitude = abs(a$beta_adjusted[match(te, a$feature_id)]) -
-      abs(b$beta_adjusted[match(nonte, b$feature_id)]))]
+  ia <- match(pair$te, a$feature_id); ib <- match(pair$nonte, b$feature_id)
+  pair[, `:=`(signed = a$beta_adjusted[ia] - b$beta_adjusted[ib],
+    magnitude = abs(a$beta_adjusted[ia]) - abs(b$beta_adjusted[ib]),
+    magnitude_sq_corrected = a$q[ia] - b$q[ib],
+    magnitude_rms_corrected = nb_te_rms(a$q[ia]) - nb_te_rms(b$q[ib]))]
   pair[, contrast := paste(te, nonte, sep = "__vs__")]
-  out <- pair[, .(contrast, signed, magnitude)]
+  out <- pair[, c("contrast", NB_TE_METRICS), with = FALSE]
+  qa <- mean(a$q); qb <- mean(b$q)
   out <- rbind(out, data.table(contrast = "class_mean",
     signed = mean(a$beta_adjusted) - mean(b$beta_adjusted),
-    magnitude = mean(abs(a$beta_adjusted)) - mean(abs(b$beta_adjusted))))
+    magnitude = mean(abs(a$beta_adjusted)) - mean(abs(b$beta_adjusted)),
+    magnitude_sq_corrected = qa - qb,
+    magnitude_rms_corrected = nb_te_rms(qa) - nb_te_rms(qb)))
   out[, `:=`(TE_signed_mean = mean(a$beta_adjusted), nonTE_signed_mean = mean(b$beta_adjusted),
-    TE_magnitude_mean = mean(abs(a$beta_adjusted)), nonTE_magnitude_mean = mean(abs(b$beta_adjusted)))]
+    TE_magnitude_mean = mean(abs(a$beta_adjusted)), nonTE_magnitude_mean = mean(abs(b$beta_adjusted)),
+    TE_sq_corrected_mean = qa, nonTE_sq_corrected_mean = qb,
+    TE_mean_se = mean(a$se), nonTE_mean_se = mean(b$se),
+    raw_magnitude_zero_effect_inflation_difference = sqrt(2 / pi) * (mean(a$se) - mean(b$se)))]
   out
 }
 nb_bootstrap_units <- function(z, public) {
@@ -156,15 +181,17 @@ nb_te_gene <- function(cfg, s, root, job_id) {
   observed[, no_detected_cross_interaction := !any(a$not_strictly_POE %in% TRUE)]
   # Each bootstrap must estimate the same set of transcripts as the observed statistic.
   data <- nb_gene_data(s, a$transcript_id)
-  key <- list(r$key, gene, s$bootstrap, s$seed, code = nb_code_version(root))
-  stage <- sprintf("te_%06d", job_id)
+  key <- list(r$key, gene, s$bootstrap, s$seed, code = nb_code_version(root),
+    statistics = NB_TE_STATS_VERSION)
+  stage <- nb_te_stage(job_id)
   output <- nb_path(s, "within_gene", sprintf("gene_%06d.tsv", job_id))
   if (nb_current(s, stage, key)) return(invisible(TRUE))
   chunks <- split(seq_len(s$bootstrap), ceiling(seq_len(s$bootstrap) / s$bootstrap_chunk))
   chunk_files <- character()
   for (k in seq_along(chunks)) {
-    chunk_stage <- sprintf("te_%06d_chunk_%05d", job_id, k)
-    file <- nb_path(s, "private", "bootstraps", sprintf("gene_%06d_chunk_%05d.rds", job_id, k))
+    chunk_stage <- nb_te_stage(job_id, k)
+    file <- nb_path(s, "private", "bootstraps", NB_TE_STATS_VERSION,
+      sprintf("gene_%06d_chunk_%05d.rds", job_id, k))
     chunk_files <- c(chunk_files, file)
     if (nb_current(s, chunk_stage, key)) next
     results <- lapply(chunks[[k]], function(draw_id) {
@@ -173,9 +200,12 @@ nb_te_gene <- function(cfg, s, root, job_id) {
       sample <- nb_bootstrap_units(data, cfg$profile == "public_cross")
       fits <- rbindlist(lapply(split(sample, sample$feature_id), nb_fit_one, cfg = cfg, s = s), fill = TRUE)
       good <- nb_estimable(fits)
+      # Same-transcript-set refits only; each refit uses its own estimates and SEs.
+      # Keep only the contrast and metric columns so failed draws bind consistently.
       if (!setequal(good$feature_id, a$transcript_id)) {
-        out <- observed[, .(contrast, signed = NA_real_, magnitude = NA_real_)]
-      } else out <- nb_te_statistics(good, a)
+        out <- observed[, .(contrast)]
+        out[, (NB_TE_METRICS) := NA_real_]
+      } else out <- nb_te_statistics(good, a)[, c("contrast", NB_TE_METRICS), with = FALSE]
       out[, draw := draw_id]; out
     })
     nb_save(rbindlist(results), file)
@@ -183,7 +213,7 @@ nb_te_gene <- function(cfg, s, root, job_id) {
   }
   boot <- rbindlist(lapply(chunk_files, readRDS))
   result <- copy(observed)
-  for (j in seq_len(nrow(result))) for (metric in c("signed", "magnitude")) {
+  for (j in seq_len(nrow(result))) for (metric in NB_TE_METRICS) {
     v <- boot[contrast == result$contrast[j]][[metric]]
     ok <- is.finite(v); frac <- mean(ok); obs <- result[[metric]][j]
     ci <- if (frac >= .9) quantile(v[ok], c(.025, .975), names = FALSE) else c(NA_real_, NA_real_)
@@ -198,6 +228,7 @@ nb_te_gene <- function(cfg, s, root, job_id) {
     independence_verified = all(a$independence_verified),
     shared_marker_required = FALSE, same_first_donor_required = FALSE,
     interpretation = "descriptive_class_contrast_with_count_refit_bootstrap_diagnostic",
+    magnitude_primary_field = "magnitude_sq_corrected", statistics_version = NB_TE_STATS_VERSION,
     te_tss_window_bp = reg_settings(cfg)$te_tss_window_bp)]
   # A separate sensitivity subset never replaces the primary transcript set.
   aa <- a[!not_strictly_POE %in% TRUE]
@@ -213,18 +244,20 @@ nb_te_gene <- function(cfg, s, root, job_id) {
 nb_te_combine <- function(cfg, s, root) {
   nb_check_prepare(cfg, s, root); nb_te_require(cfg, s, root)
   jobs <- reg_read(nb_path(s, "within_gene_jobs.tsv"))
-  for (j in jobs$job_index) nb_require(s, sprintf("te_%06d", j))
+  for (j in jobs$job_index) nb_require(s, nb_te_stage(j))
   files <- nb_path(s, "within_gene", sprintf("gene_%06d.tsv", jobs$job_index))
-  result <- if (nrow(jobs)) rbindlist(lapply(files, reg_read), fill = TRUE) else
-    data.table(gene_id = character(), contrast = character(), signed = numeric(), magnitude = numeric(),
-      signed_bootstrap_centered_tail_prob = numeric(), magnitude_bootstrap_centered_tail_prob = numeric(),
-      any_not_strictly_POE = logical())
+  result <- if (nrow(jobs)) rbindlist(lapply(files, reg_read), fill = TRUE) else {
+    metric_cols <- c(NB_TE_METRICS, paste0(NB_TE_METRICS, "_bootstrap_centered_tail_prob"))
+    as.data.table(c(list(gene_id = character(), contrast = character()),
+      setNames(rep(list(numeric()), length(metric_cols)), metric_cols),
+      list(any_not_strictly_POE = logical())))
+  }
   nb_write(result, nb_path(s, "within_gene_contrasts.tsv.gz"))
   class <- result[contrast == "class_mean"]
   summarize <- function(d, name) {
     out <- data.table(subset = name, n_genes = nrow(d),
       status = if (nrow(d) >= 2) "exploratory_gene_bootstrap" else "insufficient_genes")
-    for (metric in c("signed", "magnitude")) {
+    for (metric in NB_TE_METRICS) {
       v <- d[[metric]]
       if (length(v)) out[, (paste0(metric, "_mean")) := mean(v)]
       if (length(v) >= 2) {
@@ -239,6 +272,7 @@ nb_te_combine <- function(cfg, s, root) {
   summary <- rbindlist(list(summarize(class, "all_estimable_mixed_genes"),
     summarize(class[any_not_strictly_POE %in% FALSE], "no_detected_cross_interaction")), fill = TRUE)
   summary[, `:=`(cohort_id = cfg$cohort_id, unit = "gene_equal_weight",
+    magnitude_primary_field = "magnitude_sq_corrected", statistics_version = NB_TE_STATS_VERSION,
     caveat = "gene_bootstrap_conditions_on_fitted_effects_not_independent_replication")]
   nb_write(summary, nb_path(s, "within_gene_cohort_summary.tsv"))
   all <- reg_read(nb_path(s, "transcript_TE_POE.tsv"))
@@ -246,9 +280,12 @@ nb_te_combine <- function(cfg, s, root) {
     n_TE = sum(promoter_te_label == "TE"), n_nonTE = sum(promoter_te_label == "nonTE")),
     by = gene_id]
   coverage[, diagnostic_status := "no_estimable_mixed_classes"]
-  if (nrow(class)) coverage[class, on = "gene_id", diagnostic_status :=
-    fifelse(i.magnitude_bootstrap_valid_fraction >= .9 & i.signed_bootstrap_valid_fraction >= .9,
+  if (nrow(class)) {
+    valid <- as.matrix(class[, paste0(NB_TE_METRICS, "_bootstrap_valid_fraction"), with = FALSE])
+    ok <- data.table(gene_id = class$gene_id, ok = rowSums(is.na(valid) | valid < .9) == 0)
+    coverage[ok, on = "gene_id", diagnostic_status := fifelse(i.ok,
       "bootstrap_diagnostic_available", "bootstrap_diagnostic_insufficient_success")]
+  }
   nb_write(coverage, nb_path(s, "h1_coverage.tsv"))
   nb_finish(s, "te-combine", list(nb_require(s, "te-inputs")$key,
     results = if (length(files)) nb_file_key(files) else "no_mixed_genes"),
@@ -284,8 +321,10 @@ nb_transcript_between <- function(cfg, s) {
   x <- x[promoter_te_label %in% c("TE", "nonTE")]
   x[, tss_te_label := promoter_te_label]
   # One class mean per gene, so isoform-rich genes do not supply extra replicates.
+  # magnitude_sq_corrected removes noise inflation (b^2 - SE^2); see nb_te_statistics.
   g <- x[, .(signed = mean(beta_adjusted),
-    magnitude = mean(abs(beta_adjusted)), n_transcripts = .N,
+    magnitude = mean(abs(beta_adjusted)), magnitude_sq_corrected = mean(beta_adjusted^2 - se^2),
+    n_transcripts = .N,
     any_not_strictly_POE = any(not_strictly_POE %in% TRUE)), by = .(gene_id, tss_te_label)]
   out <- data.table(cohort_id = cfg$cohort_id, n_genes = uniqueN(g$gene_id),
     status = "insufficient_groups", estimand = "transcript_class_gene_equal_weight_not_gene_aggregate_POE")
@@ -294,7 +333,8 @@ nb_transcript_between <- function(cfg, s) {
       mean(a[tss_te_label == "nonTE"][[metric]])
     blocks <- split(g, g$gene_id)
     set.seed(s$seed)
-    for (metric in c("signed", "magnitude")) {
+    # The added metric runs last, so the existing signed/magnitude draws are unchanged.
+    for (metric in c("signed", "magnitude", "magnitude_sq_corrected")) {
       obs <- difference(g, metric)
       boot <- replicate(s$bootstrap, {
         a <- rbindlist(blocks[sample.int(length(blocks), length(blocks), replace = TRUE)])

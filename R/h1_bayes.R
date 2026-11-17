@@ -298,10 +298,22 @@ h1_combine <- function(cfg, s, root) {
   jobs <- reg_read(nb_path(s, "h1_bayes_jobs.tsv"))
   coverage <- reg_read(nb_path(s, "h1_gene_coverage.tsv"))
   for (j in jobs$job_index) nb_require(s, sprintf("h1_%06d", j))
+  # Full-data rows are labelled omitted_cluster = "". A gene table with no
+  # cluster-omission rows (every omission lacked support) has an all-blank
+  # column, which the reader returns as logical NA; restore the label so the
+  # full-data filters below keep those genes.
+  read_gene <- function(path) {
+    x <- reg_read(path)
+    if ("omitted_cluster" %in% names(x)) {
+      x[, omitted_cluster := as.character(omitted_cluster)]
+      x[is.na(omitted_cluster), omitted_cluster := ""]
+    }
+    x
+  }
   objects <- lapply(c("posterior", "diagnostics", "residuals"), function(type) {
     if (!nrow(jobs)) return(data.table(gene_id = character(), status = character()))
     rbindlist(lapply(nb_path(s, "h1_bayes",
-      sprintf("gene_%06d_%s.tsv", jobs$job_index, type)), reg_read), fill = TRUE)
+      sprintf("gene_%06d_%s.tsv", jobs$job_index, type)), read_gene), fill = TRUE)
   })
   diag <- objects[[2]]
   coverage[, fit_status := "ineligible"]

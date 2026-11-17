@@ -101,14 +101,27 @@ absolute cross-balanced transcript beta. Signed differences are secondary.
 Posterior outputs include equal-tail intervals, directional probabilities,
 Monte Carlo errors and sampler diagnostics. GUSTO class contrasts are descriptive;
 count-refit bootstrap diagnostic fields require at least 90% valid refits for
-the same transcript set.
+the same transcript set in every reported metric.
+
+`within_gene_contrasts.tsv.gz` reports `signed`, raw `magnitude` (difference in
+mean `|beta_adjusted|`), `magnitude_sq_corrected` (difference in mean
+`beta_adjusted^2 - se^2`; primary magnitude, squared-ln units) and
+`magnitude_rms_corrected` (difference in square roots of those class means
+truncated at zero; descriptive). Each has bootstrap SE, interval, centered tail
+probability and valid fraction. Class rows also carry `TE_mean_se`,
+`nonTE_mean_se`, `TE_sq_corrected_mean`, `nonTE_sq_corrected_mean` and
+`raw_magnitude_zero_effect_inflation_difference`. `magnitude_primary_field`
+and `statistics_version` (`within_gene_stats_v2`) label the definition.
+`within_gene_cohort_summary.tsv` and `transcript_between_gene_summary.tsv`
+add the same corrected squared magnitude.
 
 The adjusted gene-level exposure comparison retains the existing definition:
 any multi-exon TSS window intersecting a TE versus all such windows clear of
 TEs and unknown repeats. The active radius also applies to the shifted-track placebo.
 Its magnitude outcome is unbiased squared POE, `beta_adjusted^2 - se^2`,
-with squared-ln units. This is distinct from the absolute-beta magnitude
-contrasts in the within-gene and descriptive transcript-class outputs.
+with squared-ln units. The within-gene and descriptive transcript-class
+outputs report the same corrected squared magnitude as `magnitude_sq_corrected`
+alongside their raw absolute-beta `magnitude` contrasts.
 
 ## Privacy and completeness
 

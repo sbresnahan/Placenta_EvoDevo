@@ -666,6 +666,14 @@ are recomputed from private counts for this radius. Their field names include
 `bootstrap_centered_tail_prob`; ≥90% valid refits are required for diagnostic
 uncertainty. H1 discovery thresholds are not assigned.
 
+The primary magnitude field is `magnitude_sq_corrected` (class mean of
+`b^2 - SE^2`), which removes the noise inflation of raw `|b|` when TE and
+nonTE transcripts differ in precision; raw `magnitude` is secondary. Review
+`TE_mean_se` and `nonTE_mean_se` in the class rows. Gene jobs and bootstrap
+chunks completed before this `within_gene_stats_v2` change are not reused:
+`te-fit` recomputes them, and `te-combine` requires the new gene receipts.
+Earlier gene tables are overwritten in place; earlier private chunks are kept.
+
 ## 5. GUSTO baseline and ppBMI H5
 
 Use the versioned private GxE and ppBMI manifests generated in section 1B; do not
