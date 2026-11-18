@@ -1,6 +1,5 @@
 # All-SNP upstream gene/transcript NB models.
 NB_VERSION <- "baseline_nb_v1"
-NB_REFERENCE <- "c285f131071becec7347c830d263e78a88ac45de"
 nb_default <- function(x, y) if (is.null(x)) y else x
 nb_settings <- function(cfg) {
   x <- nb_default(cfg$baseline_nb, list())
@@ -254,9 +253,9 @@ nb_prepare <- function(cfg, s, root) {
     nb_make_batches(d, meta[selected == TRUE], level, s, key)
     rm(d); gc(FALSE)
   }
-  nb_write(data.table(setting = c("version", "reference", "effect", "counts", "formula_human",
+  nb_write(data.table(setting = c("version", "effect", "counts", "formula_human",
       "formula_reciprocal", "source_code", "prepared_utc"),
-    value = c(NB_VERSION, NB_REFERENCE, "ln_paternal_over_maternal",
+    value = c(NB_VERSION, "ln_paternal_over_maternal",
       "fractional_expected_round_at_fit", "allele+sex+ancestry+(1|SNPpos)+(1|sample_id)",
       "allele*cross+available_covariates+(1|SNPpos)+(1|sample_id)",
       nb_code_version(root), as.character(Sys.time()))), nb_path(s, "provenance.tsv"))

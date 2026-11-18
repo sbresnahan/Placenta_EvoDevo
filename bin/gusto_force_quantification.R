@@ -47,7 +47,7 @@ cfg <- read_config_v2(config_file)
 if (dir.exists(cfg$tools$r_library)) .libPaths(cfg$tools$r_library,include.site=FALSE)
 suppressPackageStartupMessages(library(data.table))
 for (module in c('common','workflow','parental','phase_origin','models','exports',
-                 'acquisition','public','reference','pipeline','stages','additional',
+                 'acquisition','public','reference','pipeline','stages',
                  'scheduler','seadragon','lsf')) {
   f <- file.path(root,'R',paste0(module,'.R'))
   if (file.exists(f)) source(f)

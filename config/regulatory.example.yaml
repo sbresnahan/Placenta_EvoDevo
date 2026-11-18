@@ -4,8 +4,6 @@
 regulatory:
   bootstrap: 2000
   seed: 1147
-  min_depth: 10
-  max_pairs_per_gene: 10
   fish:
     runtime: container
     # Path and versions reported by Sean from Seadragon; not a proposed download.

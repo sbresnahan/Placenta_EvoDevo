@@ -111,7 +111,7 @@ primary profile. An omission violating any transcript support gate is unavailabl
 
 R implementation: brms with cmdstanr and CmdStan. Default: four chains,
 1000 warmup and 1000 retained iterations per chain, one thread per chain,
-adapt_delta 0.95 and maximum tree depth 12. Task-specific seeds are recorded.
+adapt_delta 0.99 and maximum tree depth 12. Task-specific seeds are recorded.
 Size concurrent chains to the CPU allocation and pilot measured peak memory.
 
 Ready fits require Rhat <1.01, bulk and tail ESS ≥400 for model parameters and
@@ -122,15 +122,17 @@ objects support interrupted-job continuation with identical settings.
 
 Fitting first loads the RStan/brms/CmdStanR/posterior backend and validates empty
 RStan class construction, before new sampling and outside per-task error
-handling. This preflight is read-only. The existing R 4.3.1 shared library can be
-repaired with `bin/repair_rstan_stack.R` using staged, same-version builds and
-explicit apply/rollback maintenance confirmation; see runbook section 0A.
+handling. This preflight is read-only. If it fails, rebuild the RStan stack in
+the R 4.3.1 shared library with `bin/repair_rstan_stack.R` (staged,
+same-version builds with explicit apply/rollback maintenance confirmation);
+see runbook section 0B.
 Fitting itself never installs or rebuilds packages.
 
 Normal `h1-fit JOB_INDEX` resumes interrupted genes and reuses compatible saved
 tasks. A completed gene with `fit_failure` tasks stops with instructions for
-`h1-retry-failed JOB_INDEX`. That explicit retry preserves prior gene-level
-failure files/receipt and reuses compatible task objects. Runtime failures,
+`h1-retry-failed JOB_INDEX`. That explicit retry moves the gene's existing
+tables and receipt to the private `h1_recovery` folder and reuses compatible
+task objects. Runtime failures,
 numerical diagnostic failures and unsupported omissions remain distinct.
 Saved profile/mapping comparisons retain column names, types, values and row
 order while ignoring process-local table metadata. Model specification,
@@ -152,7 +154,10 @@ intervals, directional probabilities, Monte Carlo errors, Rhat and ESS.
 `h1_diagnostics.tsv` retains every prior/omission task and its status.
 `h1_residuals.tsv` records observed-data diagnostics.
 `h1_coverage.tsv` retains all genes and primary fit status.
-`h1_cohort_descriptive.tsv` gives equal-gene descriptive averages. Gene fits
+`h1_cohort_descriptive.tsv` gives equal-gene descriptive averages of the
+full-data posterior means and medians over every fitted gene, including
+genes whose cluster omissions all lacked support, with the number of ready
+genes per profile; the averages include genes that failed diagnostics. Gene fits
 share specimens, so cross-gene posterior dependence remains unestimated.
 The cohort table has no posterior combined uncertainty.
 
@@ -165,8 +170,7 @@ Use completed transcript POE models for descriptive class contrasts and
 recompute count-refit bootstrap diagnostics for the active radius.
 `*_bootstrap_centered_tail_prob` names the centered-tail diagnostic;
 intervals and SEs require ≥90% successful refits. No H1 BH or primary
-frequentist-discovery columns are assigned. A replacement GUSTO inferential
-model is outside this implementation.
+frequentist-discovery columns are assigned. GUSTO has no Bayesian H1 model.
 
 Point-estimate magnitudes are inflated by estimation noise: at zero effect
 `E|b| = SE * sqrt(2/pi)`. Classes with different precision therefore differ in
@@ -180,7 +184,8 @@ descriptive root-scale companion and is not unbiased. Raw `magnitude`
 `raw_magnitude_zero_effect_inflation_difference` (`sqrt(2/pi)` times the
 mean-SE difference) report the precision imbalance behind the raw contrast.
 Each bootstrap refit recomputes all fields from its own estimates and SEs.
-`signed` is unaffected. These fields are labelled `within_gene_stats_v2`;
-genes or bootstrap chunks recorded under the earlier definition are recomputed.
+`signed` is unaffected. Outputs carry `statistics_version = within_gene_stats_v2`
+and the gene and bootstrap-chunk stage names include the same label, so
+recorded genes are reused only under this definition.
 This GUSTO scale differs from the Bayesian `Delta_mag` above, so the two are
 not directly comparable effect sizes.

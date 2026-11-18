@@ -1,4 +1,4 @@
-# Opt-in regulatory analyses. No primary/additional_v1 file is modified.
+# Shared regulatory settings, repeat/resource receipts and interval helpers.
 reg_default <- function(x, default) if (is.null(x)) default else x
 reg_text <- function(x, label) {
   if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x) ||
@@ -11,19 +11,16 @@ reg_path <- function(x, cfg) {
 reg_settings <- function(cfg) {
   z <- reg_default(cfg$regulatory, list())
   base <- dirname(cfg$paths$model_gene)
-  z$output_dir <- reg_path(reg_default(z$output_dir, file.path(base, "additional_v2")), cfg)
+  z$output_dir <- reg_path(reg_default(z$output_dir, file.path(base, "regulatory")), cfg)
   z$cache_dir <- reg_path(reg_default(z$cache_dir,
     file.path(base, "reference", "regulatory_resources")), cfg)
   z$work_dir <- reg_path(reg_default(z$work_dir,
-    file.path(cfg$paths$scratch, "regulatory_v2")), cfg)
+    file.path(cfg$paths$scratch, "regulatory_work")), cfg)
   z$bootstrap <- as.integer(reg_default(z$bootstrap, 2000L))
   z$seed <- as.integer(reg_default(z$seed, 1147L))
-  z$min_depth <- as.numeric(reg_default(z$min_depth, 10))
-  z$max_pairs_per_gene <- as.integer(reg_default(z$max_pairs_per_gene, 10L))
   z$te_tss_window_bp <- reg_radius(reg_default(z$te_tss_window_bp, 3000L))
-  z$version <- "regulatory_v2.1"
   z$build <- reg_text(cfg$reference$build, "reference.build")
-  for (k in c("bootstrap", "seed", "min_depth", "max_pairs_per_gene"))
+  for (k in c("bootstrap", "seed"))
     if (length(z[[k]]) != 1L || !is.finite(z[[k]]) || z[[k]] < 1)
       stop("Invalid regulatory.", k)
   if (z$bootstrap < 200L) stop("regulatory.bootstrap must be >=200")
@@ -140,13 +137,9 @@ reg_receipt_path <- function(z, stage) file.path(z$output_dir, paste0(stage, ".r
 # required output presence.
 reg_valid <- function(z, stage) {
   parents <- switch(stage, `fish-discovery` = "regulatory-resources",
-    `fish-masking` = "fish-discovery", `te-tss` = "regulatory-resources",
-    `te-genes` = "te-tss",
-    `human-context` = "te-tss", character())
+    `fish-masking` = "fish-discovery", character())
   if (length(parents) && !all(vapply(parents, function(s) reg_valid(z, s), logical(1))))
     return(FALSE)
-  if (stage == "te-tss" && file.exists(reg_receipt_path(z, "fish-masking")) &&
-      !reg_valid(z, "fish-masking")) return(FALSE)
   p <- reg_receipt_path(z, stage)
   if (!file.exists(p)) return(FALSE)
   r <- tryCatch(readRDS(p), error = function(e) NULL)
@@ -176,12 +169,10 @@ reg_finish <- function(z, stage, outputs) {
   # Named output paths are the sole status contract. Do not invalidate
   # unrelated completed stages after a code edit.
   reg_atomic_rds(list(state = "complete", outputs = stats::setNames(
-    rep(TRUE, length(outputs)), outputs), finished = as.character(Sys.time()),
-    version = z$version), p)
+    rep(TRUE, length(outputs)), outputs), finished = as.character(Sys.time())), p)
 }
 reg_status <- function(z) {
-  rbindlist(lapply(c("regulatory-resources", "fish-discovery", "fish-masking", "te-tss", "te-genes",
-      "human-context"), function(s) {
+  rbindlist(lapply(c("regulatory-resources", "fish-discovery", "fish-masking"), function(s) {
     p <- reg_receipt_path(z, s)
     r <- if (file.exists(p)) tryCatch(readRDS(p), error = function(e) NULL) else NULL
     data.table(stage = s, state = if (is.null(r)) "not_run" else

@@ -1,7 +1,7 @@
 # All-SNP baseline results
 
-`baseline_nb_v1` is a separate result namespace. Promoter-model (primary),
-additional_v1 and additional_v2 POE files are not inputs to its model or TE contrasts.
+`baseline_nb_v1` is a separate result namespace. Promoter-model (primary) POE
+files are not inputs to its model or TE contrasts.
 
 ## Inputs
 

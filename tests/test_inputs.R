@@ -10,7 +10,7 @@ if(length(a)!=1L)stop("Usage: tests/test_inputs.sh CONFIG")
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(k in c("common","workflow","parental","phase_origin","gusto","models","exports","acquisition","public",
-           "reference","pipeline","stages","additional","scheduler","seadragon","lsf"))
+           "reference","pipeline","stages","scheduler","seadragon","lsf"))
   source(file.path(root,"R",paste0(k,".R")))
 
 problems<-character();checked<-0L
@@ -83,7 +83,6 @@ if(file.exists(c$paths$genome)||is.null(c$reference$genome_source))need(c$paths$
   need(c$reference$genome_source,"reference.genome_source")
 need(c$paths$annotation,"annotation")
 if(!is.null(c$reference$transcript_source))need(c$reference$transcript_source,"reference.transcript_source")
-if(!is.null(c$additional_analysis$te_rmsk))need(c$additional_analysis$te_rmsk,"additional_analysis.te_rmsk")
 
 if(length(problems)) {
   cat(sprintf("%s: %d of %d input checks FAILED\n",c$cohort_id,length(problems),checked))

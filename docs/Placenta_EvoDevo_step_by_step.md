@@ -710,7 +710,7 @@ python3 bin/prepare_fish_manifests.py \
 bin/submit_pipeline.sh "$CONFIG" reference  # validation and dry-run plan
 ```
 
-The helper refuses to replace previously populated manifests unless
+The helper refuses to replace populated manifests unless
 `--force` is supplied. It refuses nonplacental tissues, missing directions,
 or fewer than three curated units. The included `fish_Pprolifica_AB_sources.tsv`,
 `libraries.tsv` and `units.tsv` in the repository start **header-only on

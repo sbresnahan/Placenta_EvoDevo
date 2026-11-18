@@ -181,9 +181,10 @@ for public exploratory models. NA uncertainty is never a significant result.
 
 ## 5. TE-TSS annotation and within-gene comparisons
 
-Use the prepared, provenance-checked repeat resources from the configured
-regulatory analysis. `te-inputs` reads those resources; it does not download
-them or silently infer a complete repeat reference.
+Use the repeat resources prepared by `regulatory-resources` (and, for fish,
+`fish-repeats`); see `REGULATORY_RESOURCES.md`. `te-inputs` reads those
+resources; it does not download them or silently infer a complete repeat
+reference.
 
 ```bash
 bin/submit_baseline_nb.sh "$CONFIG" te-inputs
@@ -195,7 +196,8 @@ bin/submit_baseline_nb.sh "$CONFIG" te-pilot 5
 The `te-pilot`/`te-fit` bootstrap commands apply to GUSTO descriptive H1
 diagnostics. Inspect `TE_pilot_resources.tsv` before requesting the arrays.
 Each job resamples biological clusters, refits the eligible isoforms with
-their own SNPs and records signed and absolute-effect contrasts.
+their own SNPs and records signed, raw absolute-effect and noise-corrected
+squared-effect contrasts.
 Draws (`baseline_nb.bootstrap`) are checkpointed in chunks of 25.
 Diagnostic intervals and centered-tail probabilities require ≥90% valid refits.
 Reciprocal cohorts use `h1-inputs` and `h1-fit` as specified in
@@ -228,16 +230,18 @@ bin/submit_baseline_nb.sh "$CONFIG" report-ready
 bin/submit_baseline_nb.sh "$CONFIG" status
 ```
 
-`between-genes` uses the propensity/balance, block-bootstrap, permutation and
-placebo machinery of the regulatory module, with the POE outcome and depth
+`between-genes` uses propensity/balance, block-bootstrap, permutation and
+placebo estimation (`REGULATORY_RESOURCES.md`), with the POE outcome and depth
 inventory taken from the all-SNP gene model. Insufficient exposure groups and
 unavailable full repeat references are explicit states. The transcript-class
 between-gene comparison uses equal gene weights and is separate from aggregated
 gene POE.
 
 The adjusted gene-level exposure uses the active native TSS window.
-Its magnitude outcome is `beta_adjusted^2 - SE^2`. The all-transcript
-class comparison and within-gene contrasts use absolute beta.
+Its magnitude outcome is `beta_adjusted^2 - SE^2`. The GUSTO within-gene
+contrasts and the all-transcript class comparison report the same
+noise-corrected squared magnitude beside raw absolute beta; reciprocal
+Bayesian H1 uses posterior absolute beta (`H1_BAYES_MODELS.md`).
 
 Human xQTL/chromatin annotations provide association context. Transcript-specific
 POE-QTL colocalization and causal TE effects require additional measurements.

@@ -125,7 +125,7 @@ ex_prepare <- function(cfg, s) {
       frozen_utc = format(Sys.time(), tz = "UTC")),
       ex_path(s, "private", "frozen_annotations.rds"))
   }
-  ex_write(data.table::data.table(version = EX_VERSION, base_commit = EX_BASE_COMMIT,
+  ex_write(data.table::data.table(version = EX_VERSION,
     cohort_id = cfg$cohort_id, species = cfg$species, build = cfg$reference$build,
     no_remaining_confounding = TRUE, covariates = "sex,ancestry",
     temporal_ordering = "assumed", h7_ready = obj$h7_ready),

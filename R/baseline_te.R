@@ -102,8 +102,8 @@ nb_te_prepare <- function(cfg, s, root) {
 # raw |b| is retained as a secondary field.
 NB_TE_METRICS <- c("signed", "magnitude", "magnitude_sq_corrected", "magnitude_rms_corrected")
 NB_TE_STATS_VERSION <- "within_gene_stats_v2"
-# Versioned stage names: genes or bootstrap chunks recorded by an earlier
-# statistic definition are recomputed rather than mixed with new ones.
+# Stage names carry the statistic-definition label, so a recorded gene or
+# bootstrap chunk is reused only under the same definition.
 nb_te_stage <- function(job_id, chunk = NULL)
   paste0(sprintf("te_%06d_%s", as.integer(job_id), NB_TE_STATS_VERSION),
     if (!is.null(chunk)) sprintf("_chunk_%05d", as.integer(chunk)) else "")

@@ -26,8 +26,8 @@ observations and external `enabled=1`. The reviewed input builder scales
 continuous exposures using pooled retained ancestries and population SD
 (`ddof=0`). [1] The versioned exposure manifest records the mean and SD.
 
-Local `enabled=TRUE` means include these existing external results. It is not
-evidence of a prior ppBMI analysis in Placenta_EvoDevo. A generic checked-in
+Local `enabled=TRUE` means include these external results. It does not
+indicate a ppBMI analysis run within Placenta_EvoDevo. A generic checked-in
 producer default cannot establish a production run's enabling state. The
 small-file receipt records supplied metadata and source sizes, not an immutable
 production config snapshot. The adapter does not open participant-level
@@ -36,13 +36,12 @@ exposures, covariates or genotype inputs.
 The setup helper writes versioned private manifests and an operator copy,
 preserving existing H1 settings, optional exposure settings and QTL/BED overrides.
 The H1 count-provenance and pipeline annotations are optional: missing labels
-do not block configuration generation or H1 initialization. No new pipeline
-version audit is required for unchanged counts and no H1 provenance is invented.
-Genuinely required unresolved settings are still reported. All output conflicts are checked
-before writes. Identical reruns reuse outputs; differing files are not replaced.
-After completed setup, run the generator without rerunning setup. Previously
-generated operators containing the two shipped H1 annotation placeholders can be
-used directly; they and their historical setup receipts need not be rewritten.
+do not block configuration generation or H1 initialization, and no H1
+provenance is invented. Genuinely required unresolved settings are still
+reported. All output conflicts are checked before writes. Identical repeated
+runs reuse outputs; differing files are not replaced. After setup completes,
+run the generator directly; operator files containing the two shipped H1
+annotation placeholders are accepted as they are.
 The generic `ppBMI_exposure.template.tsv` remains a schema guide, not a completed
 production declaration.
 

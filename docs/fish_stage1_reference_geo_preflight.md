@@ -77,4 +77,4 @@ bin/submit_fish_sra_placenta.sh --verify
 bin/Rscript_sif poe.R "$SCRIPTS_DIR/config/fish_Pprolifica_AB.private.yaml" status
 ```
 
-The current `bin/prepare_fish_manifests.py` requires ENA FASTQ URLs and does not directly accept this SRA curation file. The SRA-only manifest adapter and stage-aware analysis remain distinct follow-up changes. Do **not** submit `reference` or `pilot` until the crosswalk, contig+REF checks, source manifest contract, and mixed-stage model design are resolved.
+`bin/prepare_fish_manifests.py` requires ENA FASTQ URLs and does not accept this SRA curation file; SRA-only manifests are built as described in `fish_F1_SRA_manifests_quantification_only.md`. Do **not** submit `reference` or `pilot` until the crosswalk, contig+REF checks, source manifest contract, and mixed-stage model design are resolved.

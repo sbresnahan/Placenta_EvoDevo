@@ -1,7 +1,7 @@
 # H6/H7 implementation and aggregate archive
 
 Start with `docs/Seadragon_analysis_runbook.md`, `docs/H6_H7_MODELS.md`
-and `docs/rerun_exposure_nb.md`. Output definitions are in
+and `docs/EXPOSURE_NB_WORKFLOW.md`. Output definitions are in
 `docs/exposure_output_schema.md`.
 
 - H6: continuous matching-family TE-RNA × allele NB2 models.

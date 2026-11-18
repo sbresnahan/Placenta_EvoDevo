@@ -1,4 +1,4 @@
-# H6/H7 deployment runbook
+# H6/H7 workflow
 
 ## 1. Runtime and configuration
 
@@ -273,13 +273,13 @@ a null result. Do not interpret an archive as a `report-ready` completion receip
 `family_id` is a TE family and is retained; participant IDs, private predictors,
 counts and raw errors are rejected.
 
-To refresh after later bootstrap/enrichment stages, first move the old snapshot
+To include later bootstrap/enrichment stages, first move the existing snapshot
 aside inside the private run, then export again. Set `RUN` to that YAML's actual
 `exposure_nb.output_dir`; do not move the whole run or edit its private inputs:
 
 ```bash
 RUN=/absolute/private/GUSTO/results/exposure_nb_v2_run1
-mv "$RUN/aggregate_export" "$RUN/aggregate_export_previous_$(date +%Y%m%d_%H%M%S)"
+mv "$RUN/aggregate_export" "$RUN/aggregate_export_$(date +%Y%m%d_%H%M%S)"
 bin/Rscript_sif poe_exposure.R "$CONFIG" export
 # Create a NEW archive filename and run --exposure-nb again.
 ```
@@ -337,7 +337,7 @@ with artificial labels strictly as software fixtures. No simulated cohort or
 biological H6/H7 finding is supplied. The short two-draw bootstrap in the test
 is not a production precision recommendation.
 
-Run all `tests/test_baseline*.R` as well. Manifest/provenance assertions now use
+Run all `tests/test_baseline*.R` as well. Manifest/provenance assertions use
 descriptive fields; scientific fitting parity checks remain. The archive tests
 use hand-specified aggregate software records, not biological estimates.
 See bundled validation receipts for exact outcomes and unrun checks.

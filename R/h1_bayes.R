@@ -15,7 +15,7 @@ H1_MODEL_SPEC <- "h1_joint_conditional_v1"
 h1_settings <- function(cfg) {
   x <- h1_normalize_annotations(nb_default(cfg$h1_bayes, list()))
   out <- list(chains = 4L, warmup = 1000L, iterations = 1000L,
-    adapt_delta = .95, max_treedepth = 12L, seed = 1147L, parallel_chains = 4L,
+    adapt_delta = .99, max_treedepth = 12L, seed = 1147L, parallel_chains = 4L,
     count_provenance = NA_character_, producing_pipeline = NA_character_)
   for (k in intersect(names(x), names(out))) out[[k]] <- x[[k]]
   h1_validate_controls(out)

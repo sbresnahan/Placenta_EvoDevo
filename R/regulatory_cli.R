@@ -1,5 +1,5 @@
-reg_actions <- c("regulatory-resources", "fish-repeats", "te-tss", "te-genes",
-  "human-context", "regulatory-status")
+# Repeat and regulatory resource preparation used by the baseline TE stages.
+reg_actions <- c("regulatory-resources", "fish-repeats", "regulatory-status")
 
 reg_lsf_resource <- function(cfg, action, z) {
   if (action == "fish-repeats") {
@@ -14,7 +14,7 @@ reg_lsf_resource <- function(cfg, action, z) {
     key <- gsub("-", "_", action)
     r <- cfg$lsf$stages[[key]]
     if (is.null(r)) return(stage_resource(cfg,
-      if (action == "regulatory-resources") "retrieve" else "models"))
+      "retrieve"))
     r$queue <- reg_default(r$queue, cfg$lsf$queue)
     r$reservation_value <- reg_default(r$reservation_value, r$memory_value)
   }
@@ -28,7 +28,6 @@ reg_plan_jobs <- function(cfg, z, root, action, submit, after = "none", resume =
   if (!grepl("^(none|[0-9]+)$", after)) stop("--after requires a numeric LSF job ID")
   if (!is.null(resume) && action != "fish-repeats") stop("--resume requires fish-repeats")
   if (action == "fish-repeats" && cfg$species != "fish") stop("Fish profile required")
-  if (action == "human-context" && cfg$species != "human") stop("Human profile required")
   r <- reg_lsf_resource(cfg, action, z)
   job <- file.path(z$output_dir, "jobs",
     paste0(action, "_", format(Sys.time(), "%Y%m%dT%H%M%S"), "_", Sys.getpid()))
@@ -56,11 +55,7 @@ reg_plan_jobs <- function(cfg, z, root, action, submit, after = "none", resume =
         reg_command(c(entry, "worker-fish-finish", "--phase", phase)))
       writeLines(lines, scripts[i])
     }
-  } else {
-    scripts <- file.path(job, "run.sh")
-    writeLines(c("#!/bin/bash", "set -eo pipefail", "umask 077",
-      reg_command(c(entry, paste0("worker-", action)))), scripts)
-  }
+  } else stop("Unknown regulatory action")
   host <- file.path(job, "host.sh")
   env <- c(paste0("export SCRIPTS_DIR=", shQuote(root)),
     paste0("export POE_SITE_FILE=", shQuote(cfg$execution$site_file)))
@@ -92,9 +87,8 @@ reg_main <- function(args, root) {
   if (length(args) < 2L) stop("Usage: poe_regulatory.R CONFIG ACTION [--submit] [--after JOB] [--resume DIR]")
   for (module in c("config", "common", "workflow", "parental", "phase_origin", "gusto",
       "models", "exports", "acquisition", "public", "reference", "pipeline", "stages",
-      "additional", "scheduler", "seadragon", "lsf", "annotation",
-      "regulatory_common", "regulatory_resources", "regulatory_fish",
-      "regulatory_te", "regulatory_te_genes", "regulatory_context"))
+      "scheduler", "seadragon", "lsf", "annotation",
+      "regulatory_common", "regulatory_resources", "regulatory_fish"))
     source(file.path(root, "R", paste0(module, ".R")), local = .GlobalEnv)
   cfg <- read_config_v2(args[1])
   if (dir.exists(cfg$tools$r_library)) .libPaths(cfg$tools$r_library, include.site = FALSE)
@@ -128,8 +122,5 @@ reg_main <- function(args, root) {
       cat("RUN=", as.integer(reg_fish_begin(cfg, z, root, phase, values[["--resume"]])),
         "\n", sep = "")
     else reg_fish_finish(cfg, z, root, phase)
-  } else if (action == "worker-te-tss") reg_te_worker(cfg, z, root)
-  else if (action == "worker-te-genes") reg_te_genes_worker(cfg, z, root)
-  else if (action == "worker-human-context") reg_context_worker(cfg, z, root)
-  else stop("Unknown regulatory action")
+  } else stop("Unknown regulatory action")
 }

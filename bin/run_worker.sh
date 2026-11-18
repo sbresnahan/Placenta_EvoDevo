@@ -47,7 +47,7 @@ case "$stage" in
     run_r prepare
     bash "$job/pre.sh"
     run_r finish ;;
-  collect-pilot|assign|collect-quantification|models|additional)
+  collect-pilot|assign|collect-quantification|models)
     run_r finish ;;
   *) printf 'Unknown worker stage: %s\n' "$stage" >&2; exit 1 ;;
 esac

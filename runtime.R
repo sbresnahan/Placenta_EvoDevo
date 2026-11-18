@@ -8,7 +8,7 @@ if(length(a)!=5L)stop("Usage: runtime.R CONFIG STAGE PHASE LIBRARY JOB_DIRECTORY
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(k in c("common","workflow","parental","phase_origin","gusto","models","exports","acquisition","public","reference",
-           "pipeline","stages","additional","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
+           "pipeline","stages","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
 suppressPackageStartupMessages(library(GenomicRanges))
 source(file.path(root,"R/annotation.R"))
 data.table::setDTthreads(as.integer(c$ornaments$threads))

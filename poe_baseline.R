@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
-# Versioned all-SNP model workflow, called through bin/Rscript_sif on deployment.
+# All-SNP baseline model workflow, called through bin/Rscript_sif.
 f <- gsub("~+~", " ", sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1]), fixed = TRUE)
 root <- normalizePath(dirname(f), mustWork = TRUE)
 source(file.path(root, "R/library_paths.R"))
 suppressPackageStartupMessages({library(data.table); library(GenomicRanges)})
 for (module in c("config", "common", "workflow", "parental", "phase_origin", "gusto",
-    "models", "acquisition", "public", "reference", "pipeline", "stages", "additional",
+    "models", "acquisition", "public", "reference", "pipeline", "stages",
     "annotation", "regulatory_common", "regulatory_resources", "regulatory_fish",
     "regulatory_te_genes", "regulatory_context", "baseline_nb", "baseline_te", "baseline_handoff",
     "window_prepare", "h1_bayes", "gxe_ppbmi"))

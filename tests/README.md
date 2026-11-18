@@ -33,8 +33,8 @@ reference and later stages read is present:
 | Public crosses (maize, mouse, fish) | Manifest linkage; every FASTQ mate at its ENA byte size or SRA receipt size; every required resource (and its decompressed copy); the retrieval receipt; marker sources (and the AGPv3 liftover chain for maize); genome, annotation |
 | GUSTO | Manifest/trio linkage; every private local FASTQ; precomputed VCF, origin matrix and FASTQ ID map; trio and covariate tables; genome, annotation, curated transcript FASTA |
 
-Configured `additional_analysis.te_rmsk` is also checked. Regulatory-module
-resources are retrieved and checked by `regulatory-resources` itself.
+Repeat and regulatory resources are retrieved and checked by
+`regulatory-resources` itself (see `docs/REGULATORY_RESOURCES.md`).
 
 Expected last line: `<cohort>: all N input checks passed; inputs are ready.`
 On failure, every missing or mis-sized input is listed and the script exits 1.
@@ -105,10 +105,10 @@ partial incoming copies and retry from the same staged build without compiling
 again. The private process umask and backup parent remain unchanged.
 Actual subprocesses check
 environment isolation and the fetch CLI; none install or load native R packages. These
-tests do not establish that the Seadragon shared library has been repaired.
+tests do not establish that the Seadragon shared library is usable.
 
-`test_h1_parallel_prepare.R SOURCE_ROOT [RECEIPT_DIR]` compares the frozen
-previous preparation loop with batch-wise one-worker and two-worker execution.
+`test_h1_parallel_prepare.R SOURCE_ROOT [RECEIPT_DIR]` compares a frozen
+per-gene reference loop with batch-wise one-worker and two-worker execution.
 All three TSVs must match byte-for-byte, with additional in-memory checks of
 coverage types and missing values. Fixed software fixtures cover cross-batch
 genes, missing transcripts, support exclusions, rounding, cluster conflicts
@@ -133,12 +133,12 @@ phenotype-map contents or count provenance. `test_gxe_contract.R` additionally
 checks that the real adapter excludes chromosome-labelled duplicate rows before
 row validation and rejects shard-only input.
 
-`test_h1_optional_annotations.R SOURCE_ROOT [RECEIPT_DIR]` reproduces the reported
+`test_h1_optional_annotations.R SOURCE_ROOT [RECEIPT_DIR]` uses a
 two-placeholder operator with absent upstream H1 blocks. It generates all 18
 configs and initializes the 15 reciprocal H1 settings without fitting or compiler
 access. It verifies unrecorded optional metadata, exact valid-setting identity,
 cohort-specific inheritance, retained numerical checks and unchanged count
-sentinels, upstream YAMLs, operator, ppBMI manifests and historical setup receipt.
+sentinels, upstream YAMLs, operator, ppBMI manifests and setup receipt.
 No scientific count data are created or modified by these setup fixtures.
 
 `test_promoter_operator_setup.R SOURCE_ROOT [RECEIPT_DIR]` executes the exact

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare PANTRY cis-QTL results for the GUSTO human-context module.
+"""Prepare PANTRY cis-QTL results for the GUSTO baseline context stage (H5).
 
 For each ancestry and modality this keeps every significant permutation lead
 (qval < --qval in *_top.tsv) plus every conditionally independent signal
@@ -190,7 +190,7 @@ def main(argv=None):
     p.add_argument("--event-map", required=True, type=Path, help="GUSTO paths.event_map")
     p.add_argument("--out-dir", required=True, type=Path, help="new output directory")
     p.add_argument("--qval", type=float, default=0.05, help="top-lead FDR cutoff (default 0.05)")
-    p.add_argument("--window", type=int, default=50, help="TSS event window used by te-tss (default 50)")
+    p.add_argument("--window", type=int, default=50, help="TSS event window in paths.event_map (default 50)")
     p.add_argument("--ancestries", default="EAS,EUR")
     p.add_argument("--modalities", default=",".join(MODALITIES),
                    help="comma-separated (default: all nine supported)")

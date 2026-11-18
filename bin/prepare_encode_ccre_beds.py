@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split an ENCODE per-biosample cCRE bigBed into BED inputs for human-context.
+"""Split an ENCODE per-biosample cCRE bigBed into BED inputs for the baseline context stage.
 
 ENCODE v2 biosample cCRE files (bed9 + "ccRE Group" + "Classification") list
 every registry element and label its activity in that biosample. Elements

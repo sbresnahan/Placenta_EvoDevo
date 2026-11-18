@@ -1,77 +1,70 @@
-# Native promoter-window H1/H5/H6/H7 execution
+# Promoter-window H1/H5/H6/H7 analysis on Seadragon
 
 ## Scope and prerequisites
 
-Use completed upstream gene/transcript POE models, preparation metadata and
-immutable original private count batches. Recompute window-dependent analyses.
-Keep all existing external results intact. Commands below are operator actions;
-this source package performs no remote execution or automatic submission.
+This runbook starts from completed all-SNP baseline layers
+(`docs/BASELINE_NB_WORKFLOW.md`) and immutable private count batches. Each
+promoter-window radius is an independent analysis: radius 3000 bp is primary,
+radius 0 and 1000 bp are sensitivities. Window-dependent analyses are computed
+per radius; upstream baseline results and external results are read, never
+modified. Commands below are operator actions; the repository performs no
+remote execution or automatic submission.
 
-**Resuming after successful ppBMI setup:** apply the H1 metadata-gate repair,
-keep the existing private operator/manifests/receipt and unchanged count files,
-and continue directly at section 1D. Do not rerun ppBMI setup or fill optional
-H1 annotations merely to pass generation. Earlier setup receipts may still
-list those fields as blockers; retain that historical receipt unchanged.
-
-**Resuming an interrupted slow H1 preparation:** after the metadata-gate repair,
-apply the H1 parallel-preparation repair and use section 3A. Keep the existing
-promoter configuration, ppBMI setup and completed upstream stages. Do not
-repeat `prepare-window` or delete outputs to restart this incomplete stage.
-
-**Resuming after the RStan/TBB loading error:** use section 0A to validate and
-repair the existing shared R library, then section 3B for gene-1 restart or
-explicit failed-task retry. Keep completed H1 preparation and all ppBMI files.
-
-Roots:
+Roots (set again in every new shell or allocation):
 
 ```bash
 export PROJECT=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo
 export SCRIPTS_DIR="$PROJECT/scripts"
 export GXE=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe
+export CONFIG_DIR="$PROJECT/data/private/promoter_configs_ppBMI_v1"
+export OPERATOR="$PROJECT/data/private/promoter_operator_settings.ppBMI_v1.yaml"
+export POE_CMDSTAN_ENV="$(<"$SCRIPTS_DIR/config/cmdstan_env.path")"
+unset CMDSTAN
 cd "$SCRIPTS_DIR"
 ```
 
 The six cohort IDs are GUSTO, mouse_Babr_CAST, mouse_FVB_CAST_E12,
-maize_B73_Ki11, maize_B73_W22 and fish_Pprolifica_AB.
-Upstream inputs are `data/<COHORT>/results/baseline_nb_v1_run1`;
-the corresponding full input configuration is
-`data/<COHORT>/private/<COHORT>.baseline_nb.yaml`.
-The helper verifies the actual configured locations and compatibility.
+maize_B73_Ki11, maize_B73_W22 and fish_Pprolifica_AB. Each baseline layer's
+full input configuration is `data/<COHORT>/private/<COHORT>.baseline_nb.yaml`;
+the helpers verify the configured locations and compatibility.
 
-Use the cluster `bin/Rscript_sif` and configured R library for NB stages.
-Every standalone R entry point initializes `R/library_paths.R` before loading
-packages or modules. `POE_R_LIBRARY` overrides `config/r_library.path`.
-An invalid selected library stops immediately; initialization does not install
-packages. Keep the existing R container and shared R package library.
+Use the cluster `bin/Rscript_sif` and the configured R library. Every
+standalone R entry point initializes `R/library_paths.R` before loading
+packages or modules. `POE_R_LIBRARY` overrides `config/r_library.path`. An
+invalid selected library stops immediately; initialization does not install
+packages.
 
-## 0. R library and CmdStan tools
+Login nodes are limited to light work (two cores, 12 GB). Run `te-inputs`,
+H1 fitting pilots and CmdStan setup on an allocated compute node, for example
+an LSF interactive allocation from the site's interactive queue:
 
-Check the actual selected library before retrying configuration generation:
+```bash
+bsub -Is -q "$INTERACTIVE_QUEUE" -n 4 -M 16 -R "rusage[mem=16]" -W 8:00 /bin/bash
+```
+
+## 0. Software environment
+
+### 0A. R library and CmdStan tools
+
+Check the selected library:
 
 ```bash
 bin/Rscript_sif -e 'cat(R.version.string, "\n"); print(.libPaths()); cat("yaml: ", find.package("yaml"), "\n")'
-```
-
-If YAML is absent, install it into that same R-compatible shared library through
-the existing package-management procedure. Do not introduce Conda R or a second
-R package library. Bayesian H1 also needs brms, cmdstanr and posterior in the
-selected library:
-
-```bash
 bin/Rscript_sif -e 'for (p in c("brms", "cmdstanr", "posterior")) {stopifnot(requireNamespace(p, quietly=TRUE)); cat(p, as.character(packageVersion(p)), find.package(p), "\n")}'
 ```
 
-Install a **tool-only** environment once. The proposed environment is named
-`poe_cmdstan`; it is not assumed to exist already. Review the Conda solve:
-it should provide CmdStan and build tools, not `r-base` or R packages.
-`config/cmdstan_env.path` is the default prefix. Set `POE_CMDSTAN_ENV` to
-override it, or edit that one-line file so fresh batch sessions use the same
-selection. Keep the prefix on a filesystem bound into the R container; the
-default under `/rsrch5` is already bound.
+Missing packages are installed into this same shared library through the
+site package-management procedure. Do not introduce Conda R or a second R
+package library.
+
+CmdStan and its build tools come from a **tool-only** Conda environment
+(`poe_cmdstan`). `config/cmdstan_env.path` holds its prefix; `POE_CMDSTAN_ENV`
+overrides it. The solve should provide CmdStan and build tools, not `r-base`
+or R packages. Keep the prefix on a filesystem bound into the R container
+(`/rsrch5` is bound).
 
 ```bash
 eval "$(/risapps/rhel8/miniforge3/24.5.0-0/bin/conda shell.bash hook)"
-export POE_CMDSTAN_ENV="$(<config/cmdstan_env.path)"
 conda create --prefix "$POE_CMDSTAN_ENV" --override-channels -c conda-forge \
   --strict-channel-priority cmdstan cxx-compiler make
 mkdir -p "$PROJECT/data/private/runtime_checks"
@@ -81,20 +74,17 @@ conda list --prefix "$POE_CMDSTAN_ENV" --explicit \
 unset CMDSTAN
 ```
 
-R points to the tools within its own session, as with CMake. No Conda activation
-is needed for fits. Conda's installation root is `<prefix>/bin/cmdstan`. [1]
-The initializer prepends `<prefix>/bin`, sets make and the Conda C++ compiler,
-and calls `cmdstanr::set_cmdstan_path()`. It preserves the R library and does
-not import host `LD_LIBRARY_PATH` or Python settings. If an explicit `CMDSTAN`
-points elsewhere, startup fails; unset it or select the matching prefix.
-The prefix must be an absolute path without whitespace or make/shell special
-characters. A missing tool environment does not block non-CmdStan stages.
+No Conda activation is needed for fits. The installation root is
+`<prefix>/bin/cmdstan`. [1] The initializer prepends `<prefix>/bin`, sets make
+and the Conda C++ compiler, and calls `cmdstanr::set_cmdstan_path()`. It keeps
+the R library and does not import host `LD_LIBRARY_PATH` or Python settings.
+An explicit `CMDSTAN` pointing elsewhere stops startup. The prefix must be an
+absolute path without whitespace or make/shell special characters.
 
-On an allocated compute node, configure the compiler **once**, with no fitting
-jobs running. This backs up `make/local`, preserves existing TBB/linker settings,
-adds a final compiler setting, and explicitly rebuilds CmdStan using one core.
-The setup modifies the tool environment, not the R library. CmdStanR documents
-`make/local` compiler settings and recommends rebuilding after changes. [2]
+On an allocated compute node, with no fits running, configure the compiler
+once, then check and compile a smoke model. `configure` backs up `make/local`,
+keeps existing TBB/linker settings, adds a final compiler setting and rebuilds
+CmdStan with one core. [2]
 
 ```bash
 set -o pipefail
@@ -106,227 +96,123 @@ bin/Rscript_sif bin/check_cmdstan_runtime.R compile 2>&1 \
   | tee "$PROJECT/data/private/runtime_checks/cmdstan_compile.log"
 ```
 
-Run each command only after the preceding command succeeds. `check` validates
-paths, executable availability and make's selected compiler without modifying
-the installation or rebuilding. `compile` also runs CmdStanR's toolchain check,
-compiles a minimal software smoke model and invokes its help command to check
-executable loading; it does not sample. Temporary smoke artifacts are removed.
-Fitting sessions perform read-only runtime checks, never shared compiler setup.
+Run each command only after the preceding one succeeds. `check` validates
+paths, executables and make's selected compiler without modifying anything.
+`compile` also runs CmdStanR's toolchain check, compiles a minimal smoke model
+and runs its help command; it does not sample. Fitting sessions perform
+read-only runtime checks only. If compiler/sysroot or dynamic-library checks
+fail, inspect the captured output with site support; do not switch R runtimes
+or import a host linker path. Repeat setup after moving, recreating or
+updating the tool environment, and keep its explicit package list with the logs.
 
-Do not launch H1 fits until setup and compile-only checks succeed in the real
-container. If compiler/sysroot or dynamic-library checks fail, stop and inspect
-the captured output with site support; do not switch R runtimes or import a
-host linker path as an automatic workaround. Local source-delivery mocks cannot
-establish Seadragon compiler/ABI compatibility. Repeat setup/preflight after
-moving, recreating or updating the tool environment, and keep its explicit
-package list with the logs. After this preflight, run the representative
-actual-model pilot in section 3 before sizing production jobs. Keep compiler
-output and model objects in private storage.
+### 0B. H1 backend check and RStan stack rebuild
 
-### 0A. RStan/TBB loading repair and H1 backend preflight
-
-brms 2.23.0 uses CmdStanR for sampling and then converts output into RStan
-classes. Successful chains alone do not show that this conversion succeeded.
-The reported failure also occurred in a fresh `library(rstan)` session.
-The dependency listing showed RcppParallel libtbb.so.2 files and LeafCutter
-C++ runtime paths; it did not establish every build-time cause. [3]
-The pinned RStan build obtains flags from RcppParallel, whose TBB paths can
-be configured externally. The repair builds these packages together under
-controlled settings instead of adding a global Conda linker override. [4, 5]
-
-Stop the old fit first. Put the incremental backend repair patch in the scripts
-directory; it applies after the H1 parallel-preparation repair:
-
-```bash
-git apply --check Placenta_EvoDevo_H1_backend_recovery_fix.patch && git apply Placenta_EvoDevo_H1_backend_recovery_fix.patch
-```
-
-For a checkout that already has the backend repair, apply the offline-source
-follow-up once. It applies after the backend repair above:
-
-```bash
-git apply --check Placenta_EvoDevo_H1_offline_rstan_fix.patch && git apply Placenta_EvoDevo_H1_offline_rstan_fix.patch
-```
-
-Keep the repository's `R/`, `bin/` and `poe_baseline.R` together at the checkout
-root. On Seadragon that checkout is deployed as `$PROJECT/scripts`; `scripts`
-is not an additional directory to create inside the repository.
-
-Check the backend without fitting:
+brms 2.23.0 samples through CmdStanR and then converts output into RStan
+classes, so RStan must load cleanly. [3] Check the backend without fitting:
 
 ```bash
 bin/Rscript_sif bin/repair_rstan_stack.R check
 ```
 
-This initial check is expected to fail while RStan is broken. The new fitting
-preflight performs namespace loading and empty RStan class construction before
-new sampling, outside the per-task error handler. It never installs packages.
-Passing checks do not establish sampler readiness.
+The fitting preflight performs the same namespace loading and empty RStan class
+construction before sampling, outside the per-task error handler, and never
+installs packages. A passing check does not establish sampler readiness.
 
-The library owner may stage a clean, same-version repair on an allocated node.
-Building requires R 4.3.1 and an allocation identity passed through the
-container. It preserves RcppParallel 5.1.11-2 (R displays 5.1.11.2), StanHeaders
-2.32.10 and RStan 2.32.7; brms 2.23.0 and CmdStanR 0.99.0 are not replaced.
-Existing prerequisites must satisfy the package requirements. A missing
-dependency or compiler stops the procedure without an automatic upgrade.
+If the check fails, the library owner rebuilds RcppParallel 5.1.11-2 (R
+displays 5.1.11.2), StanHeaders 2.32.10 and RStan 2.32.7 together under
+controlled settings, rather than adding a global Conda linker override. [4, 5]
+brms 2.23.0 and CmdStanR 0.99.0 are not replaced. Existing prerequisites must
+satisfy the package requirements; a missing dependency or compiler stops the
+procedure without an automatic upgrade.
 
-**Login-node phase: source downloads only.** Interactive nodes have no internet
-access. If currently inside the failed interactive session, leave it with:
-
-```bash
-exit
-```
-
-On the internet-connected login node, restore the paths and fetch the exact
-archives. Use the existing container wrapper; do not recreate an environment:
+**Login node: source downloads.** Interactive nodes have no internet access.
+On an internet-connected login node:
 
 ```bash
-export PROJECT=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo
-export SCRIPTS_DIR="$PROJECT/scripts"
-cd "$SCRIPTS_DIR"
-export RSTAN_SOURCES="$PROJECT/data/private/runtime_checks/rstan_sources_v1"
+export RSTAN_SOURCES="$PROJECT/data/private/runtime_checks/rstan_sources"
 bin/Rscript_sif bin/repair_rstan_stack.R fetch "$RSTAN_SOURCES"
 ```
 
-Fetch downloads from CRAN and validates archive layout and package/version
-metadata. It does not compile, require an allocation, load RStan, or modify the
-shared packages. A failed transfer is not published as a completed archive;
-already validated archives can be reused. The cache retains `sources.tsv`.
-Stop on a fetch error; do not start another allocation until all three sources
-have passed. A network timeout does not establish that the pinned version is
-absent from CRAN.
+`fetch` downloads the three pinned archives from CRAN and validates archive
+layout and package/version metadata. It does not compile, load RStan or modify
+the shared packages. Validated archives are reused; a failed transfer is never
+published as a completed archive. Stop on a fetch error; a network timeout
+does not establish that the pinned version is absent from CRAN.
 
-**Allocated-node phase: build from local sources.** Request another interactive
-allocation using the same successful scheduler command as before; no scheduler
-queue or account is guessed here. Repeat any site module setup needed to make
-the existing container executable available. Within the new allocation, restore
-these variables explicitly:
+**Allocated node: build from the local sources.** In a compute allocation,
+set the roots again and stage into a new, unused work directory:
 
 ```bash
-export PROJECT=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo
-export SCRIPTS_DIR="$PROJECT/scripts"
-cd "$SCRIPTS_DIR"
-export CONFIG="$PROJECT/data/private/promoter_configs_ppBMI_v1/mouse_Babr_CAST.r3000.yaml"
-export POE_CMDSTAN_ENV="$(<config/cmdstan_env.path)"
-unset CMDSTAN
-export RSTAN_SOURCES="$PROJECT/data/private/runtime_checks/rstan_sources_v1"
-export RSTAN_REPAIR="$PROJECT/data/private/runtime_checks/rstan_repair_v2"
-bin/Rscript_sif bin/repair_rstan_stack.R stage "$RSTAN_REPAIR" --sources "$RSTAN_SOURCES"
+export RSTAN_SOURCES="$PROJECT/data/private/runtime_checks/rstan_sources"
+export RSTAN_BUILD="$PROJECT/data/private/runtime_checks/rstan_build_$(date +%Y%m%d)"
+bin/Rscript_sif bin/repair_rstan_stack.R stage "$RSTAN_BUILD" --sources "$RSTAN_SOURCES"
 ```
 
-Keep the failed `rstan_repair_v1` work directory unchanged. Use v2 only if it is
-unused; choose another new name for later attempts. No Conda activation,
-environment installation, CmdStan reconfiguration, configuration generation,
-ppBMI setup or H1 preparation rerun is needed.
+With `--sources`, the helper copies and validates all three local archives
+before the first build and never downloads. Prerequisites are checked in
+dependency order. Compilation uses the container gcc/g++ with one compile
+process, private Makevars and cleared external include/link/TBB overrides.
+Global Makevars, R configuration, permanent library selection and CmdStan
+`make/local` are untouched. Builds use a temporary staging library; fresh-process
+loading, RStan object construction and linkage inspection must pass before
+promotion. The helper reports disk-space estimates and stops when the space is
+unavailable. Logs and staging files are kept; inspect `build_<PACKAGE>.log`
+after a failure, and use a new work directory for another staging attempt.
 
-With `--sources`, the helper copies and validates all three local source
-archives before starting the first build and never falls back to a download.
-Missing, empty, invalid or wrong-version sources stop staging. The original
-`stage WORK` form still downloads and is unsuitable for disconnected nodes.
-Prerequisites are checked in dependency order before each build.
-Compilation uses the container gcc/g++ with one compile process, private
-Makevars and cleared external include/link/TBB
-overrides. Global Makevars, R configuration, permanent library selection and
-CmdStan make/local are untouched. Builds use a temporary staging library;
-fresh-process loading, RStan object construction and linkage inspection must
-pass before promotion. The helper reports disk-space estimates and stops when
-the estimated space is unavailable; memory use and build time are not guaranteed.
-Logs and staging files are retained. If a build fails, inspect its
-`build_<PACKAGE>.log`; do not apply or silently change package versions.
-Use a new work location for another staging attempt so earlier logs survive.
-
-Before apply, coordinate a maintenance window and stop all sessions using the
-affected packages, including other users' sessions. Stop any earlier repair
-process too. The flag below explicitly confirms that coordination; the helper
-cannot inspect every other user's process.
+Before `apply`, coordinate a maintenance window and stop every session using
+the affected packages, including other users' sessions. The flag confirms that
+coordination; the helper cannot inspect other users' processes.
 
 ```bash
-bin/Rscript_sif bin/repair_rstan_stack.R apply "$RSTAN_REPAIR" --maintenance-confirmed
-```
-
-Apply revalidates staging, verifies incoming package copies, preserves original
-directories in a private backup under the shared library, and promotes them
-with same-filesystem directory renames. It validates again from a fresh process
-using the normal library. A promotion/validation error attempts automatic
-rollback. Backups, rejected candidates, logs and `state.rds` are retained.
-
-**If apply stops at `Package copy verification failed` before promotion:**
-the private wrapper umask can restrict copied permissions even when R is told
-to preserve them. A local reproduction changed a 0644 file to 0600 with
-identical contents. The copy-permissions follow-up restores source file and
-directory mode bits explicitly, including the package root, inside the private
-backup parent. Verification still checks contents and permissions; it also
-checks nested and empty directories. The process umask remains private.
-
-Apply this incremental patch to the checkout that already has the offline-source
-update, then transfer the updated checkout as usual:
-
-```bash
-git apply --check Placenta_EvoDevo_RStan_copy_permissions_fix.patch && git apply Placenta_EvoDevo_RStan_copy_permissions_fix.patch
-```
-
-For this pre-promotion copy failure, do not rebuild, change the work directory,
-delete the partial backup, remove locks manually or change shared permissions
-by hand. The staged state and active original packages are retained. Keep the
-same `RSTAN_REPAIR` and, while coordinated maintenance remains in effect, retry:
-
-```bash
-bin/Rscript_sif bin/repair_rstan_stack.R apply "$RSTAN_REPAIR" --maintenance-confirmed
-```
-
-The helper revalidates the saved staging library, prepares a new private
-incoming copy and leaves the earlier partial copy available for inspection.
-This fix does not establish actual shared-library access for other accounts
-or reproduce site-specific ACL behavior; it preserves source permission bits
-and still requires normal-library validation. A different failure must be
-inspected without bypassing verification.
-
-Do not run fits until normal-library validation succeeds:
-
-```bash
+bin/Rscript_sif bin/repair_rstan_stack.R apply "$RSTAN_BUILD" --maintenance-confirmed
 bin/Rscript_sif bin/repair_rstan_stack.R check
 ```
 
-To restore the prior package directories, first stop all affected sessions and
-any repair process, then explicitly request rollback:
+`apply` revalidates staging, verifies the incoming package copies (contents
+and permission bits, including nested and empty directories), keeps the
+original package directories in a private backup under the shared library,
+promotes with same-filesystem directory renames and validates again from a
+fresh process using the normal library. A promotion or validation error
+attempts automatic rollback. Backups, rejected candidates, logs and
+`state.rds` are kept. If `apply` stops at `Package copy verification failed`
+before promotion, keep the same work directory and, within the maintenance
+window, run `apply` again: it prepares a new private incoming copy and leaves
+the earlier copy for inspection. Do not rebuild, delete partial copies, remove
+locks or change shared permissions by hand. Copy verification does not
+establish shared-library access for other accounts or site ACL behavior.
+
+To restore the prior package directories, stop all affected sessions and run:
 
 ```bash
-bin/Rscript_sif bin/repair_rstan_stack.R rollback "$RSTAN_REPAIR" --maintenance-confirmed
+bin/Rscript_sif bin/repair_rstan_stack.R rollback "$RSTAN_BUILD" --maintenance-confirmed
 ```
 
 Rollback also handles an interrupted promotion with a missing active package
-and a matching retained repair lock. It refuses to overwrite subsequent external
-package changes and refuses another transaction's lock. It restores the old
-library state, which was known to be broken; rollback does not make H1 runnable.
-If automatic rollback reports an error, keep all state/backups and inspect it
-before manual changes. Do not delete package locks or directories blindly.
-No actual R 4.3.1 package rebuild was executed as part of local source validation.
+and a matching kept lock. It refuses to overwrite later external package
+changes or another transaction's lock. If automatic rollback reports an error,
+keep all state and backups and inspect them before manual changes.
 
-## 1. Configure independent window runs
+Do not run fits until `check` succeeds.
 
-Primary radius is 3000 bp; sensitivities are 0 and 1000 bp. All use inclusive
-interval intersections clipped to native contigs. `tss_te_label` and its TE IDs
-retain exact-overlap definitions. `promoter_te_label` and `promoter_*` fields
-record the active window. The event −500/+100 annotation stays separate.
+## 1. Configure the promoter-window runs
 
-### 1A. Reuse the recorded upstream paths
+All radii use inclusive interval intersections clipped to native contigs.
+`tss_te_label` and its TE IDs keep exact-overlap definitions;
+`promoter_te_label` and `promoter_*` fields record the active window. The
+event −500/+100 annotation stays separate.
 
-The supplied Seadragon file tree lists these paths relative to `$PROJECT`.
-It records locations, not current readability or scientific validation. [6]
+### 1A. Check the upstream configurations
 
-| Path | Action |
+The Seadragon project file tree lists these paths relative to `$PROJECT`;
+readability and scientific validity are checked below and by later preflights. [6]
+
+| Path | Use |
 |---|---|
-| `data/GUSTO/private/GUSTO.baseline_nb.yaml` | Reuse |
-| `data/mouse_Babr_CAST/private/mouse_Babr_CAST.baseline_nb.yaml` | Reuse |
-| `data/mouse_FVB_CAST_E12/private/mouse_FVB_CAST_E12.baseline_nb.yaml` | Reuse |
-| `data/maize_B73_Ki11/private/maize_B73_Ki11.baseline_nb.yaml` | Reuse |
-| `data/maize_B73_W22/private/maize_B73_W22.baseline_nb.yaml` | Reuse |
-| `data/fish_Pprolifica_AB/private/fish_Pprolifica_AB.baseline_nb.yaml` | Reuse |
-| `data/GUSTO/private/qtl_context_v1/phenotype_map.tsv` | Reuse location; verify mapping coverage |
-| `data/GUSTO/private/qtl_context_v1/qtl_inputs.tsv` | Preserve existing baseline QTL configuration |
+| `data/<COHORT>/private/<COHORT>.baseline_nb.yaml` (six cohorts) | Baseline input configuration |
+| `data/GUSTO/private/qtl_context_v1/phenotype_map.tsv` | Phenotype crosswalk; verify mapping coverage |
+| `data/GUSTO/private/qtl_context_v1/qtl_inputs.tsv` | Baseline QTL manifest |
 
-Check the current files without changing them. Stop and resolve any `MISSING`
-entry before generation:
+Stop and resolve any `MISSING` entry before generation:
 
 ```bash
 (
@@ -354,116 +240,95 @@ entry before generation:
 ```
 
 The external `$GXE` directory is outside the tree's scope. Do not use baseline
-QTL lead tables or `qtl_inputs.tsv` as GxE inputs. The versioned files below are
-new setup outputs, not paths claimed to exist in the snapshot.
+QTL lead tables or `qtl_inputs.tsv` as GxE inputs.
 
-### 1B. Automatically configure the existing external ppBMI results
-
-After installing the ppBMI setup repair, run this single line from any directory.
-Copy only the command text, without Markdown fences:
+### 1B. Configure the external ppBMI results
 
 ```bash
-cd /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts && bash bin/Rscript_sif bin/setup_external_ppbmi.R /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo
+cd "$SCRIPTS_DIR" && bash bin/Rscript_sif bin/setup_external_ppbmi.R "$PROJECT"
 ```
 
-No previous ppBMI analysis in Placenta_EvoDevo is required. The helper reads
-`config/external_ppbmi.yaml`, which already contains the actual producer path
-and GxE root supplied for this deployment. It reads only the small producer
-config, runtime exposure summary, aggregate summary and aggregate headers.
-It stops on missing files, incompatible headers or disagreement with the supplied
+The helper reads `config/external_ppbmi.yaml`, which contains the producer
+path and GxE root for this deployment. It reads only the small producer
+config, runtime exposure summary, aggregate summary and aggregate headers. It
+stops on missing files, incompatible headers or disagreement with the supplied
 metadata; it does not scan aggregate rows, refit anything or submit jobs.
 
-The supplied live records declare `ppBMI`, `transform=none`, inclusive limits
-14–70, `enabled=1`, runtime `binary=False`, 417 nonmissing and zero missing
-observations, mean 24.939616306954434 and SD 5.520665327307657. The inspected
-producer uses a pooled continuous z-score across retained ancestries with
-population SD (`ddof=0`). [7]
+The live records declare `ppBMI`, `transform=none`, inclusive limits 14–70,
+`enabled=1`, runtime `binary=False`, 417 nonmissing and zero missing
+observations, mean 24.939616306954434 and SD 5.520665327307657. The producer
+uses a pooled continuous z-score across retained ancestries with population SD
+(`ddof=0`). [7]
 
-The helper writes four private versioned outputs:
+The helper writes four private outputs:
 
 - `data/GUSTO/private/qtl_context_v1/gxe_tables.ppBMI_v1.tsv`
 - `data/GUSTO/private/qtl_context_v1/ppBMI_exposure.ppBMI_v1.tsv`
 - `data/private/promoter_operator_settings.ppBMI_v1.yaml`
 - `data/GUSTO/private/qtl_context_v1/ppBMI_setup.ppBMI_v1.yaml`
 
-Local `enabled=TRUE` means **include the existing external ppBMI results**;
-it does not assert a completed local ppBMI run. Type, transformation, range and
-scaling are populated automatically. The receipt records the metadata, source
-paths, small-file sizes, headers and outstanding operator declarations.
+Local `enabled=TRUE` means **include the external ppBMI results**; it does not
+indicate a ppBMI analysis run within this project. Type, transformation, range
+and scaling are populated automatically. The receipt records the metadata,
+source paths, small-file sizes, headers and outstanding operator declarations.
 It does not certify aggregate rows, mapping coverage or an immutable copy of
-the original production config.
+the production config.
 
-The helper uses `data/private/promoter_operator_settings.yaml` if present,
-otherwise the supplied template. An existing operator at a different location
-can be supplied as the third helper argument, after the project and source-path
-YAML. H1 declarations, optional exposure settings and QTL/BED overrides are
-preserved; only GUSTO's ppBMI manifests and phenotype-map paths are updated.
-The map is read from the live upstream GUSTO YAML. Unmentioned QTL/BED inputs
-continue to inherit from that YAML.
+The helper starts from `data/private/promoter_operator_settings.yaml` if
+present, otherwise the template; an operator at another location can be
+supplied as the third argument. H1 settings, optional exposure settings and
+QTL/BED overrides are kept; only GUSTO's ppBMI manifests and phenotype-map
+paths are set. The map is read from the GUSTO baseline YAML. Unmentioned
+QTL/BED inputs inherit from that YAML. Identical repeated runs reuse identical
+outputs; any differing output stops the helper before it writes. Edit the
+written operator directly afterwards. Do not run simultaneous setups for one
+project.
 
-Rerunning with identical inputs reuses identical outputs. Any differing output
-stops the helper before it writes any other output. After editing the versioned
-operator, proceed to the generator; do not rerun setup expecting it to overwrite
-your edits. Keep existing outputs if a source changes and review a new version.
-Do not launch simultaneous setup invocations for the same project.
+### 1C. Review the operator settings
 
-### 1C. Reuse unchanged counts without a new annotation audit
+Review `h1_bayes` in `$OPERATOR`. The sampling settings apply to every
+reciprocal cohort and radius: 4 chains, 1000 warmup and 1000 post-warmup
+iterations, `adapt_delta: 0.99`, `max_treedepth: 12`, `seed: 1147`,
+`parallel_chains: 4`. `adapt_delta` must be at least 0.95 and below 1. All
+cohorts and radii of one analysis use the same settings; a different setting
+is a separate analysis in fresh output directories.
 
 `h1_bayes.count_provenance` and `h1_bayes.producing_pipeline` are optional
-descriptive annotations, not H1 model parameters. Missing values, empty values
-and the exact shipped annotation placeholders mean not recorded. There is no
-need to check pipeline versions or supply these labels to integrate ppBMI.
-The generator reads an existing versioned operator with those placeholders
-directly, without modifying it or rerunning setup.
-
-Existing valid annotations are retained. Per-cohort upstream H1 settings are
-inherited, and supplied operator fields are merged without letting an unfilled
-annotation erase a recorded value. Missing annotations remain missing in H1
-settings and outputs; they are not converted to claims of unique assignment or
-duplicate correction. Invalid explicit assignment labels are still rejected.
-No count batch, count value or upstream preparation file is changed.
-
-This removes a metadata gate, not scientific input checks. The required count
+descriptive annotations, not model parameters. Missing values, empty values
+and the shipped placeholders mean not recorded; missing annotations stay
+missing and are never converted to claims of unique assignment or duplicate
+correction. Invalid explicit assignment labels are rejected. Required count
 support, verified biological clusters, dosage, model, priors and diagnostic
-thresholds remain unchanged. Optional `exposure_by_cohort` still requires actual
-H6/H7 inputs; omission preserves upstream `exposure_nb`.
-Verify phenotype-map contents and identifier coverage before the context stage.
-Review independently verified clusters per reciprocal direction. Missing fish
-cluster support yields explicit ineligibility; no support threshold is relaxed.
+thresholds are unaffected. Optional `exposure_by_cohort` requires actual
+H6/H7 inputs; omission keeps the upstream `exposure_nb`. Verify phenotype-map
+contents and identifier coverage before the context stage, and review
+independently verified clusters per reciprocal direction. Missing fish cluster
+support yields explicit ineligibility; no support threshold is relaxed.
 
-### 1D. Generate the independent configurations
-
-With completed ppBMI setup, run this single line. No manual edit of the two
-optional H1 annotations is required:
+### 1D. Generate the configurations
 
 ```bash
-cd /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/scripts && bash bin/Rscript_sif bin/prepare_promoter_configs.R /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/private/promoter_operator_settings.ppBMI_v1.yaml /rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo/data/private/promoter_configs_ppBMI_v1
+bash bin/Rscript_sif bin/prepare_promoter_configs.R "$PROJECT" "$OPERATOR" "$CONFIG_DIR"
 ```
 
-The generator checks the operator mapping, numerical sampling controls, genuinely
-required placeholders and supplied manifest-path syntax before writing configs.
-It reads all six upstream YAMLs and validates merged H1 settings before writing.
-It requires absolute upstream paths and an empty config destination; do not erase
-a nonempty destination to retry.
+The generator checks the operator mapping, numerical sampling controls,
+required placeholders and manifest-path syntax, reads all six upstream YAMLs
+and validates merged H1 settings before writing. It requires absolute upstream
+paths and an empty destination. It writes 18 configurations
+(`<COHORT>.r<RADIUS>.yaml`) and `CONFIGS.tsv`; each sets
+`baseline_nb.output_dir` to `data/<COHORT>/results/promoter_r<RADIUS>_run1`.
 
 Review `CONFIGS.tsv`, all 18 YAMLs, repeat-reference scope, dosage, builds,
-parental assignments and H6/H7 private input paths. Successful generation
+parental assignments, `h1_bayes` and H6/H7 private input paths. Generation
 validates configuration mechanics, not private input provenance, manifest
-contents or biological readiness. Later stage-specific preflights still apply.
-Preparation never changes source count batches.
+contents or biological readiness. Preparation never changes source count
+batches.
 
-Set these shell variables for the later sections, again as a single line:
+### 1E. Optional unfilled operator scaffold
 
-```bash
-export PROJECT=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_EvoDevo; export SCRIPTS_DIR="$PROJECT/scripts"; export GXE=/rsrch9/home/epi/bhattacharya_lab/data/Placenta_QTL/PANTRY/qtl_results/gxe; OPERATOR="$PROJECT/data/private/promoter_operator_settings.ppBMI_v1.yaml"; CONFIG_DIR="$PROJECT/data/private/promoter_configs_ppBMI_v1"; cd "$SCRIPTS_DIR"
-```
-
-### 1E. Optional original operator scaffold
-
-This block is retained for operators who explicitly want a separate unfilled
-scaffold; it is **not required** by the automatic setup above. It never replaces
-an existing original operator file. Creating it does not complete declarations,
-and the versioned ppBMI operator is still the input for section 1D.
+A separate unfilled operator scaffold is not needed for section 1B. The block
+below creates one from the template only when no operator file exists at that
+path; it never replaces an existing file.
 
 <!-- operator-create -->
 ```bash
@@ -485,12 +350,27 @@ CONFIG_DIR="$PROJECT/data/private/promoter_configs_run1"
 )
 ```
 
-If you use this optional block, restore the versioned `OPERATOR` and `CONFIG_DIR`
-variables with the single-line command in section 1D before later stages.
+After using this block, set `OPERATOR` and `CONFIG_DIR` again from the roots
+at the top before later sections.
 
-## 2. Reuse the completed POE layer
+## 2. Repeat resources
 
-For one cohort/radius:
+`te-inputs` reads the repeat track prepared by `regulatory-resources` (and,
+for fish, `fish-repeats`) under each configuration's `regulatory.output_dir`.
+Check the resource receipts per cohort before window preparation:
+
+```bash
+bin/Rscript_sif poe_regulatory.R "$CONFIG_DIR/<COHORT>.r3000.yaml" regulatory-status
+```
+
+Resources are shared by the three radii of a cohort. Preparation and fish
+repeat discovery are described in `docs/REGULATORY_RESOURCES.md`. Missing
+repeats leave TE comparisons unavailable; a partial repeat reference cannot
+certify nonTE.
+
+## 3. Prepare one cohort and radius
+
+Select the cohort and radius (set these again in each new shell):
 
 ```bash
 COHORT=mouse_Babr_CAST
@@ -498,6 +378,12 @@ RADIUS=3000
 CONFIG="$CONFIG_DIR/$COHORT.r$RADIUS.yaml"
 POE_INPUT="$PROJECT/data/$COHORT/private/$COHORT.baseline_nb.yaml"
 export NB_LOG_DIR="$PROJECT/data/$COHORT/logs/promoter_r$RADIUS"
+OUT=$(awk '/^baseline_nb:/{f=1;next} /^[^ #]/{f=0} f && $1=="output_dir:"{gsub(/["'\'']/,"",$2); print $2; exit}' "$CONFIG"); echo "$OUT"
+```
+
+On an allocated compute node:
+
+```bash
 bin/Rscript_sif poe_baseline.R "$CONFIG" prepare-window "$POE_INPUT"
 bin/Rscript_sif poe_baseline.R "$CONFIG" te-inputs
 ```
@@ -506,189 +392,208 @@ bin/Rscript_sif poe_baseline.R "$CONFIG" te-inputs
 prepare/combine receipts, compatible biological/reference/model settings and
 available absolute private batch pointers. It copies allowlisted small POE
 tables, inventories, manifests and preparation metadata; the destination
-receipts describe this reuse operation. It excludes downstream context,
-TE comparisons, indexed jobs, fits and bootstrap chunks. No upstream POE
-refitting is required.
+receipts describe this copy. It excludes context, TE comparisons, indexed
+jobs, fits and bootstrap chunks. No upstream POE refitting is required.
 
 Review `window_preparation.tsv`, `TE_availability.tsv` and
-`transcript_TE_annotation.tsv` before fitting. Missing repeats leave TE
-comparisons unavailable. A partial repeat reference cannot certify nonTE.
+`transcript_TE_annotation.tsv` in `$OUT` before fitting.
 
-## 3. Reciprocal-cohort Bayesian H1
+## 4. Reciprocal-cohort Bayesian H1
 
-### 3A. Batch-wise preparation and restart
+Reciprocal cohorts are mouse_Babr_CAST, mouse_FVB_CAST_E12, maize_B73_Ki11,
+maize_B73_W22 and fish_Pprolifica_AB. The model is specified in
+`docs/H1_BAYES_MODELS.md`.
 
-Stop an old foreground `h1-inputs` with Ctrl+C before applying this repair.
-Wait for the shell prompt; never run two preparations in one output directory.
-Place `Placenta_EvoDevo_H1_parallel_prepare_fix.patch` in the scripts directory.
-This incremental repair applies after the H1 metadata-gate repair, not to an
-unmodified repository checkout. From the scripts directory:
+### 4A. Prepare H1 inputs
 
-```bash
-git apply --check Placenta_EvoDevo_H1_parallel_prepare_fix.patch && git apply Placenta_EvoDevo_H1_parallel_prepare_fix.patch
-```
-
-Do not regenerate configurations or rerun ppBMI setup. On the existing
-four-core, 16-GB interactive allocation, with `CONFIG` still selecting
-`mouse_Babr_CAST.r3000.yaml`, restart in one line:
-
-```bash
-H1_PREP_WORKERS=4 H1_PREP_MEMORY_GB=16 bin/Rscript_sif poe_baseline.R "$CONFIG" h1-inputs
-```
-
-Each required count batch is loaded once. R workers compute unchanged
-per-transcript coverage and retain same-gene consistency checks across batches,
-including informative rows on transcripts excluded by the final count gates.
-The coordinator writes the same three tables and writes completion last.
-An incomplete preparation restarts from the batch indexes; there is no
-per-gene checkpoint. A completed preparation is reused without count loading.
-
-Requested workers are capped by batch count, scheduler CPU controls when
-available and estimated memory. Progress gives requested/effective workers,
-batch start/completion, elapsed seconds and final eligible mixed-class jobs.
-The effective count may therefore be below four. No fitting or compilation
-occurs in `h1-inputs`.
-
-`H1_PREP_WORKERS` defaults to one. Parallel loading needs an explicit total
-`H1_PREP_MEMORY_GB` budget and valid batch `object_bytes`. Missing sizes select
-batch-wise serial execution with a clear message; a missing budget also selects
-serial execution. This does not restore per-gene batch rereading. The estimate
-allows 1 GiB plus four annotation sizes, two feature-index sizes and one
-batch-index size for the coordinator; each worker allows four times the largest
-required batch size plus 256 MiB. GB controls use 1024-based units. This is a
-planning guard, not RSS enforcement; memory or storage measurements may require
-fewer workers. A known one-worker estimate above the budget stops before loading.
-The wrapper forwards controls through the clean container and restricts native
-threads to one per preparation process.
-
-For a new single-host batch allocation, the helper derives controls from
-requested CPUs and memory and refuses preparation arrays or excess controls:
+Submit preparation as one single-host job; the helper derives worker and
+memory controls from the requested CPUs and memory and refuses arrays:
 
 ```bash
 unset NB_ARRAY_END H1_PREP_WORKERS H1_PREP_MEMORY_GB
 NB_CPUS=4 NB_MEMORY_GB=16 bin/submit_baseline_nb.sh "$CONFIG" h1-inputs
 ```
 
-Use either the interactive call or submission, not both. Submission is optional:
-login-node preparation remains possible within the site's two-core/12-GB
-limits; use controls that fit the actual allocation and stay below the guard.
-Do not run actual fitting on a login node. Without explicit controls the
-preparation call remains batch-wise serial:
+Alternatively run it on an existing four-core, 16-GB allocation:
 
 ```bash
-bin/Rscript_sif poe_baseline.R "$CONFIG" h1-inputs
+H1_PREP_WORKERS=4 H1_PREP_MEMORY_GB=16 bin/Rscript_sif poe_baseline.R "$CONFIG" h1-inputs
 ```
+
+Use one route, never both, and never run two preparations in one output
+directory. Each required count batch is loaded once; workers compute
+per-transcript coverage and same-gene consistency checks across batches,
+including informative rows on transcripts excluded by the count gates. The
+coordinator writes three tables and writes completion last. An incomplete
+preparation restarts from the batch indexes; a completed one is reused without
+count loading. Requested workers are capped by batch count, scheduler CPU
+controls and estimated memory, so the effective count may be lower. The
+estimate allows 1 GiB plus four annotation sizes, two feature-index sizes and
+one batch-index size for the coordinator, and four times the largest required
+batch size plus 256 MiB per worker (1024-based units). This is a planning
+guard, not RSS enforcement. Missing batch sizes or a missing budget select
+batch-wise serial execution with a message; a one-worker estimate above the
+budget stops before loading. No fitting or compilation occurs here.
 
 Review `h1_transcript_coverage.tsv`, `h1_gene_coverage.tsv` and
 `h1_bayes_jobs.tsv`. Count-eligible transcripts can include upstream GLMM
-failures. The job index is the `job_index` column.
-
-### 3B. H1 fitting and diagnostics
-
-After a backend repair, confirm section 0A's read-only check succeeds.
-Keep the existing `CONFIG` and preparation outputs.
-
-Run one representative gene on an allocated compute node, measuring elapsed
-time, peak RSS and task storage. The normal job runs five prior profiles and
-all support-preserving leave-one-cluster-out tasks. Its private task objects
-permit restart after a completed task. Include compiler startup in the pilot.
-Use four CPUs for four simultaneous one-thread chains. Reduce
-`parallel_chains` explicitly to match a smaller allocation.
+failures. Job indices run from 1 to the number of jobs, in gene-identifier
+order. Count jobs and gene sizes:
 
 ```bash
-bin/Rscript_sif poe_baseline.R "$CONFIG" h1-fit 1
+N=$(( $(wc -l < "$OUT/h1_bayes_jobs.tsv") - 1 )); echo "jobs: $N"
+awk -F'\t' 'NR==1{for(i=1;i<=NF;i++)c[$i]=i;next}{gsub(/"/,""); n++; t=$c["n_count_eligible"]; s+=t; if(t>m)m=t}END{printf "jobs=%d mean_tx=%.1f max_tx=%d\n",n,(n?s/n:0),m}' "$OUT/h1_bayes_jobs.tsv"
 ```
 
-An interrupted gene without a completion receipt resumes with that normal
-command. Compatible saved tasks are reused; missing tasks run with the same
-settings/seeds. Saved table compatibility compares typed columns and row order,
-not process-local data.table metadata. If a completed gene has recorded
-`fit_failure` tasks, normal fitting now stops with an explicit retry instruction:
-
-```bash
-bin/Rscript_sif poe_baseline.R "$CONFIG" h1-retry-failed 1
-```
-
-Use the retry action only after backend validation. It preserves the prior
-gene outputs/receipt in the private `h1_recovery` folder, reuses compatible saved
-tasks and reruns missing/failed tasks. A completed `diagnostic_failure` task is
-reused, not automatically refitted; one divergence still fails zero-divergence
-readiness even when a percentage display rounds to 0.0%. Sampling output that
-failed before a task object was saved is not guaranteed recoverable.
-Task progress and errors are printed. A completion receipt means tasks were
-recorded, not that every task passed diagnostics.
-
-Inspect all diagnostics before setting production resources:
-
-```bash
-export NB_CPUS=4
-export NB_MEMORY_GB=16
-export NB_WALL=24:00
-export NB_MAX_CONCURRENT=2
-# Set after inspecting the actual job inventory and measured pilot.
-export NB_ARRAY_END=NUMBER_OF_H1_JOBS
-bin/submit_baseline_nb.sh "$CONFIG" h1-fit ARRAY_INDEX
-unset NB_ARRAY_END
-# Run after every scheduled gene job has produced its coverage outputs.
-bin/Rscript_sif poe_baseline.R "$CONFIG" te-combine
-```
-
-The displayed memory/time are starting allocations requiring pilot review.
-If there are zero eligible genes, skip the fit array and run `te-combine`
+If there are zero jobs, skip the fit array and run `te-combine` (section 4D)
 to write complete unavailable coverage.
 
-Ready means Rhat <1.01, bulk/tail ESS ≥400, no divergence/tree-depth hits,
-and per-chain E-BFMI ≥0.3 for model parameters and derived contrasts.
+### 4B. Pilot and fit array
+
+Every gene job fits five prior profiles on the full data and the primary
+profile once per support-preserving cluster omission. Private task objects
+allow an interrupted gene to continue from its last completed task with the
+same settings and seeds. Each fit uses four simultaneous one-thread chains on
+four CPUs; set `parallel_chains` explicitly to match a smaller allocation.
+
+Submit a pilot of the first genes, then inspect diagnostics (section 4C) and
+the LSF logs before the full array. As a reference, mouse_Babr_CAST genes
+with up to 10 eligible transcripts used at most 3 GB and about 11 minutes per
+gene at `adapt_delta` 0.95; 0.99 samples more slowly. These are starting
+allocations, not guarantees for other cohorts.
+
+```bash
+NB_CPUS=4 NB_MEMORY_GB=8 NB_WALL=4:00 NB_MAX_CONCURRENT=4 NB_ARRAY_END=$(( N < 20 ? N : 20 )) \
+  bin/submit_baseline_nb.sh "$CONFIG" h1-fit ARRAY_INDEX
+grep -L "Successfully completed" "$NB_LOG_DIR"/h1-fit.*.out
+grep -h "Max Memory" "$NB_LOG_DIR"/h1-fit.*.out | sort | uniq -c
+grep -h "Run time" "$NB_LOG_DIR"/h1-fit.*.out | awk '{print $4}' | sort -n | tail -1
+```
+
+`NB_LOG_DIR` must be set; `ARRAY_INDEX` is passed literally and becomes the
+LSF array index. The helper always submits indices `1..NB_ARRAY_END`; genes
+already completed exit after printing that they are complete. Size memory and
+wall time from the measured pilot, then submit the full array:
+
+```bash
+NB_CPUS=4 NB_MEMORY_GB=8 NB_WALL=4:00 NB_MAX_CONCURRENT=16 NB_ARRAY_END=$N \
+  bin/submit_baseline_nb.sh "$CONFIG" h1-fit ARRAY_INDEX
+bjobs -w | grep nb_h1-fit
+```
+
+If a completed gene has recorded `fit_failure` tasks, normal fitting stops for
+that gene with an explicit retry instruction. After a passing backend check
+(section 0B), run on an allocated node:
+
+```bash
+bin/Rscript_sif poe_baseline.R "$CONFIG" h1-retry-failed JOB_INDEX
+```
+
+The retry moves the gene's tables and receipt to the private `h1_recovery`
+folder, reuses compatible saved tasks and reruns missing or failed tasks. A
+completed `diagnostic_failure` task is reused, not refitted. Sampling output
+that failed before a task object was saved is not guaranteed recoverable.
+
+### 4C. Completeness and diagnostics
+
+Gene receipts missing (empty output means all present):
+
+```bash
+for j in $(seq 1 "$N"); do printf -v f '%s/receipts/h1_%06d.rds' "$OUT" "$j"; [[ -f $f ]] || echo "$j"; done | paste -sd, -
+```
+
+Task status by profile (cluster omissions pooled as `LOCO`). Text fields in
+the result tables are quoted, so the commands strip quotes first:
+
+```bash
+awk -F'\t' 'FNR==1{delete c; for(i=1;i<=NF;i++)c[$i]=i;next}{gsub(/"/,""); o=$c["omitted_cluster"]; k=(o==""||o=="NA")?$c["profile"]:"LOCO"; n[k" "$c["status"]]++}END{for(k in n)print n[k],k}' "$OUT"/h1_bayes/gene_*_diagnostics.tsv | sort -k2,2 -k1,1rn
+```
+
+Primary full-data fit per gene:
+
+```bash
+awk -F'\t' 'FNR==1{delete c; for(i=1;i<=NF;i++)c[$i]=i;next}{gsub(/"/,"")} $c["profile"]=="primary" && ($c["omitted_cluster"]==""||$c["omitted_cluster"]=="NA"){g=FILENAME; sub(/.*gene_0*/,"",g); sub(/_diag.*/,"",g); printf "%s\t%s\tdiv=%s\ttd=%s\trhat=%s\tess=%s/%s\tebfmi=%s\n",g,$c["status"],$c["divergences"],$c["treedepth_hits"],$c["max_rhat"],$c["min_bulk_ess"],$c["min_tail_ess"],$c["min_ebfmi"]}' "$OUT"/h1_bayes/gene_*_diagnostics.tsv | sort -n
+```
+
+Genes with `fit_failure` tasks:
+
+```bash
+grep -l fit_failure "$OUT"/h1_bayes/gene_*_diagnostics.tsv | sed 's/.*gene_0*//; s/_diag.*//' | paste -sd, -
+```
+
+Ready means Rhat <1.01, bulk/tail ESS ≥400, no divergences or tree-depth hits,
+and per-chain E-BFMI ≥0.3 for model parameters and derived contrasts. One
+divergence fails readiness even when a percentage display rounds to 0.0%.
 `fit_failure`, `diagnostic_failure` and `unavailable_LOCO_support` remain
-visible. Diagnose the task and configure longer runs explicitly in a fresh
-output directory; thresholds are fixed. See `H1_BAYES_MODELS.md` for priors,
-estimands, cancellation diagnostics and interpretation limits.
+visible; thresholds are fixed. Different sampler settings form a separate
+analysis in a fresh output directory.
 
-## 4. GUSTO descriptive H1
+### 4D. Combine
 
-Use the GUSTO destination configuration for the active radius.
+Only after every gene receipt exists:
+
+```bash
+bin/Rscript_sif poe_baseline.R "$CONFIG" te-combine
+awk -F'\t' 'NR==1{for(i=1;i<=NF;i++)c[$i]=i;next}{gsub(/"/,""); n[$c["fit_status"]]++}END{for(k in n)print n[k],k}' "$OUT/h1_coverage.tsv" | sort -rn
+column -t -s$'\t' "$OUT/h1_cohort_descriptive.tsv" | sed 's/"//g'
+```
+
+`h1_coverage.tsv` gives each gene's primary fit status (`ready`,
+`diagnostic_failure`, `fit_failure`, `missing_job` or `ineligible`).
+`h1_cohort_descriptive.tsv` reports equal-gene averages of full-data posterior
+means and medians per profile with the number of ready genes; the averages
+include genes that failed diagnostics and carry no combined uncertainty. See
+`docs/H1_BAYES_MODELS.md` for priors, estimands, cancellation diagnostics and
+interpretation limits.
+
+## 5. GUSTO descriptive H1
+
+Use the GUSTO configuration for the active radius:
 
 ```bash
 COHORT=GUSTO
 CONFIG="$CONFIG_DIR/$COHORT.r$RADIUS.yaml"
 export NB_LOG_DIR="$PROJECT/data/$COHORT/logs/promoter_r$RADIUS"
+OUT=$(awk '/^baseline_nb:/{f=1;next} /^[^ #]/{f=0} f && $1=="output_dir:"{gsub(/["'\'']/,"",$2); print $2; exit}' "$CONFIG"); echo "$OUT"
+bin/Rscript_sif poe_baseline.R "$CONFIG" prepare-window "$PROJECT/data/$COHORT/private/$COHORT.baseline_nb.yaml"
+bin/Rscript_sif poe_baseline.R "$CONFIG" te-inputs
 bin/Rscript_sif poe_baseline.R "$CONFIG" te-pilot 5
-# Inspect TE_pilot_resources.tsv; size the array from within_gene_jobs.tsv.
-export NB_CPUS=1
-export NB_ARRAY_END=NUMBER_OF_GUSTO_MIXED_GENES
-bin/submit_baseline_nb.sh "$CONFIG" te-fit ARRAY_INDEX
-unset NB_ARRAY_END
+N=$(( $(wc -l < "$OUT/within_gene_jobs.tsv") - 1 )); echo "mixed genes: $N"
+```
+
+Size the array from `TE_pilot_resources.tsv` (projected seconds per gene),
+then:
+
+```bash
+NB_CPUS=1 NB_ARRAY_END=$N bin/submit_baseline_nb.sh "$CONFIG" te-fit ARRAY_INDEX
 bin/Rscript_sif poe_baseline.R "$CONFIG" te-combine
 ```
 
-Reuse supplied transcript POE for class contrasts. Bootstrap diagnostics
-are recomputed from private counts for this radius. Their field names include
-`bootstrap_centered_tail_prob`; ≥90% valid refits are required for diagnostic
-uncertainty. H1 discovery thresholds are not assigned.
+If there are no mixed genes, skip `te-pilot` and `te-fit` and still run
+`te-combine`. A gene stopped at the wall-time limit continues from its last
+finished bootstrap chunk when resubmitted alone (`te-fit INDEX`).
 
-The primary magnitude field is `magnitude_sq_corrected` (class mean of
+The class contrasts use the supplied transcript POE. Bootstrap diagnostics
+refit counts from the private batches for this radius; fields named
+`*_bootstrap_centered_tail_prob` and intervals require ≥90% valid refits. The
+primary magnitude field is `magnitude_sq_corrected` (class mean of
 `b^2 - SE^2`), which removes the noise inflation of raw `|b|` when TE and
 nonTE transcripts differ in precision; raw `magnitude` is secondary. Review
-`TE_mean_se` and `nonTE_mean_se` in the class rows. Gene jobs and bootstrap
-chunks completed before this `within_gene_stats_v2` change are not reused:
-`te-fit` recomputes them, and `te-combine` requires the new gene receipts.
-Earlier gene tables are overwritten in place; earlier private chunks are kept.
+`TE_mean_se` and `nonTE_mean_se` in the class rows. No H1 discovery threshold
+is assigned.
 
-## 5. GUSTO baseline and ppBMI H5
+## 6. GUSTO baseline and ppBMI H5
 
-Use the versioned private GxE and ppBMI manifests generated in section 1B; do not
-replace them with generic templates. No prior local ppBMI analysis is needed.
-Participant-level exposure matrices, genotype files and phenotype BEDs are
-unnecessary for summary-result integration.
+Use the private GxE and ppBMI manifests written in section 1B. Participant-level
+exposure matrices, genotype files and phenotype BEDs are not needed for
+summary-result integration.
 
-The supplied aggregate summary has 18 merged ancestry/modality groups labelled
-exactly `ppBMI` and 396 chromosome-labelled entries. The inspected aggregator's
-glob/parser can include both merged and chromosome-labelled files. [8]
-The adapter keeps **only `exposure == "ppBMI"`**. Do not strip `.chr` suffixes or
-combine shard rows with merged rows. Header checks and this summary do not
-certify every aggregate row; retain the context stage's strict validation.
-
-The adapter reads only these authoritative aggregates:
+The aggregate summary has 18 merged ancestry/modality groups labelled exactly
+`ppBMI` and 396 chromosome-labelled entries; the producer's aggregator glob can
+include both. [8] The adapter keeps **only `exposure == "ppBMI"`**. Do not
+strip `.chr` suffixes or combine shard rows with merged rows. Header checks and
+this summary do not certify every aggregate row; the context stage keeps strict
+validation. The adapter reads only these aggregates:
 
 ```bash
 test -s "$GXE/aggregate/gxe_tier1_results.tsv.gz"
@@ -698,35 +603,44 @@ bin/Rscript_sif poe_baseline.R "$CONFIG" context
 ```
 
 Remove an unavailable optional tier from the private manifest and document
-the missing source; never point it to a significant-only table or variant shard.
-Tier 1 preserves all tested features, b_gi/b_gi_se and nominal versus
+the missing source; never point it to a significant-only table or variant
+shard. Tier 1 keeps all tested features, b_gi/b_gi_se and nominal versus
 feature-calibrated statistics. Primary source support is qval ≤0.05 within
-ancestry × modality × exposure. Main b_g/b_e effects remain distinct.
-Tier1 ACAT synthesis retains ancestry-only and discordant-lead features;
-an IVW variant effect requires concordant leads. Tier 2 q_meta is an
-exploratory source flag because the producer applies BH after selecting
-the minimum cis meta-p without within-cis calibration.
+ancestry × modality × exposure. Main b_g/b_e effects remain distinct. Tier 1
+ACAT synthesis keeps ancestry-only and discordant-lead features; an IVW
+variant effect requires concordant leads. Tier 2 q_meta is an exploratory
+source flag because the producer applies BH after selecting the minimum cis
+meta-p without within-cis calibration.
 
-Review `gxe_ppBMI_context.tsv.gz`, `gxe_ppBMI_links.tsv.gz`,
-mapping/resource coverage and exposure provenance. Baseline and GxE outputs,
-ancestries, tiers, modalities, exact-transcript/event/gene contexts and
-exact/proximal same-insertion evidence remain separate. Same-insertion
-requires a variant inside that insertion. Untested and unavailable evidence
-stays missing. GUSTO cohort overlap with the atlas requires independent
-sample-provenance review; H5 provides contextual association evidence.
+Review `gxe_ppBMI_context.tsv.gz`, `gxe_ppBMI_links.tsv.gz`, mapping/resource
+coverage and exposure provenance. Baseline and GxE outputs, ancestries, tiers,
+modalities, exact-transcript/event/gene contexts and exact/proximal
+same-insertion evidence remain separate. Same-insertion requires a variant
+inside that insertion. Untested and unavailable evidence stays missing. GUSTO
+cohort overlap with the atlas requires independent sample-provenance review;
+H5 provides contextual association evidence. See `docs/H5_ppBMI_CONTEXT.md`.
 
-## 6. Between-gene and H6/H7 stages
+## 7. Between-gene comparison and H6/H7
+
+For each cohort and radius, after its H1 combine:
 
 ```bash
 bin/Rscript_sif poe_baseline.R "$CONFIG" between-genes
+# Every cohort; GUSTO already ran it in section 6. Nonhuman cohorts record
+# context as not applicable, which report-ready requires.
+bin/Rscript_sif poe_baseline.R "$CONFIG" context
 bin/Rscript_sif poe_baseline.R "$CONFIG" report-ready
 bin/Rscript_sif poe_baseline.R "$CONFIG" status
 ```
 
-H6/H7 `baseline_dir` must point to this radius-specific POE/annotation layer.
-Keep native family RNA quantification immutable where its catalogue is
-unchanged. Recompute feature-family targets, target exclusions, predictor
-scaling, jobs, fits and multiplicity corrections in fresh H6/H7 output folders.
+The between-gene method is described in `docs/REGULATORY_RESOURCES.md`.
+`status` lists each baseline stage as `complete_verified` or
+`missing_or_stale`.
+
+H6/H7 `baseline_dir` points to this radius-specific POE/annotation layer.
+Native family RNA quantification is reused where its catalogue is unchanged.
+Feature-family targets, target exclusions, predictor scaling, jobs, fits and
+multiplicity corrections are computed in fresh H6/H7 output folders.
 
 ```bash
 bin/Rscript_sif poe_exposure.R "$CONFIG" preflight
@@ -737,28 +651,29 @@ bin/Rscript_sif poe_exposure.R "$CONFIG" pilot 9
 Review `target_family_links.tsv` for insertion IDs, distances, radius and
 exact/proximal-only flags. Same-family insertions produce one transcript-family
 target; different families produce separate targets. RNA predictors are
-family-wide. The target gene span ±1 kb exclusion remains fixed; an intronic
+family-wide. The target gene span ±1 kb exclusion is fixed; an intronic
 insertion can identify the family while its own reads are excluded.
 
-Use the measured H6/H7 array commands in `rerun_exposure_nb.md` for `fit`,
+Use the measured H6/H7 array commands in `EXPOSURE_NB_WORKFLOW.md` for `fit`,
 GUSTO `mediation`, `combine`, selected bootstrap diagnostics and `enrichment`.
-H7 is maternal PFAS → target-excluded family RNA → signed POE. ppBMI stays
-in H5 context. H5 follow-up retains gene-cluster uncertainty and separate
+H7 is maternal PFAS → target-excluded family RNA → signed POE. ppBMI stays in
+H5 context. H5 follow-up keeps gene-cluster uncertainty and separate
 support/multiplicity families. No H1/H5/H6 significance gate selects H7 jobs.
+See `docs/H6_H7_MODELS.md`.
 
-## 7. Completion and export
+## 8. Completion and export
 
 Verify all planned rows, failures, missing resources and sensitivity
-unavailability before interpreting estimates. Repeat across all three radii
-without selecting a radius using significance. Export only approved aggregate
-tables and review all free text for human-data privacy.
+unavailability before interpreting estimates. Run all three radii without
+selecting a radius by significance. Export only approved aggregate tables and
+review all free text for human-data privacy.
 
 ```bash
 bin/Rscript_sif poe_exposure.R "$CONFIG" export
 ```
 
-Use `bin/export_results.R --baseline-nb` for POE/H1/H5 aggregates and
-`--exposure-nb` for completed H6/H7 aggregate snapshots, following their
+Use `bin/export_results.R --baseline-nb` for POE/H1/between-gene/H5 aggregates
+and `--exposure-nb` for completed H6/H7 aggregate snapshots, following their
 documented required files. Raw counts, posterior model objects, batch manifests
 with private pointers, participant identifiers and exposure values remain private.
 
@@ -769,6 +684,6 @@ with private pointers, participant identifiers and exposure values remain privat
 3. https://raw.githubusercontent.com/cran/brms/2.23.0/R/backends.R. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/cran/brms/2.23.0/R/backends.R
 4. https://raw.githubusercontent.com/cran/rstan/2.32.7/src/Makevars. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/cran/rstan/2.32.7/src/Makevars
 5. https://raw.githubusercontent.com/cran/RcppParallel/5.1.11-2/R/tbb.R. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/cran/RcppParallel/5.1.11-2/R/tbb.R
-6. seadragon_Placenta_EvoDevo_filetree.txt. File provided by the user: seadragon_Placenta_EvoDevo_filetree.txt.
+6. seadragon_Placenta_EvoDevo_filetree.txt. Seadragon project file tree.
 7. https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/50_build_gxe_inputs.py. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/50_build_gxe_inputs.py
 8. https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/57_aggregate_gxe.py. [cited 2026 Nov 16]. Available from: https://raw.githubusercontent.com/sbresnahan/Placenta_xQTL_atlas/main/07_gxe_mapping/57_aggregate_gxe.py

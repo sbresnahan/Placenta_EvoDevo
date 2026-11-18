@@ -55,12 +55,12 @@ under `receipts/locks/`; clear an abandoned lock after its owning process/job
 has ended. Input or setting changes require rerunning affected stages and
 their dependents.
 
-When **only public-cross model callability and eligibility rules change**,
-already completed quantification and assignment outputs remain valid. Back
-up `model_gene.tsv`, `model_promoter.tsv`, `model_pairs.tsv` and the
-model receipt, update `models.min_depth` and `models.min_callable_units`
-in the private YAML, and rerun `models --submit` only. See
-[the models-only rerun section](Placenta_EvoDevo_step_by_step.md#6-refit-already-quantified-maize-and-mouse-cohorts-november-2026-update).
+When **only public-cross model callability and eligibility settings change**,
+completed quantification and assignment outputs remain valid. Move
+`model_gene.tsv`, `model_promoter.tsv`, `model_pairs.tsv` and the model
+receipt aside, update `models.min_depth` and `models.min_callable_units` in
+the private YAML, and submit `models --submit` only. See
+[promoter-model settings](Placenta_EvoDevo_step_by_step.md#6-promoter-model-settings-for-public-crosses).
 The public model also leaves SE/p/q-values missing for numerically degenerate
 residual variance (e.g., exactly tied allele ratios among three observations).
 Retain three callable units for exploratory reports and perform an archived

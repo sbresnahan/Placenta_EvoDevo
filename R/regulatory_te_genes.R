@@ -1,13 +1,13 @@
-# Hypothesis #1, between-gene complement (te-genes): do genes with at least one
-# TE-derived TSS show a different gene-level parent-of-origin effect (POE) than
-# comparable genes whose TSSs are all non-TE?
+# Between-gene complement to H1 (baseline between-genes stage): do genes with at
+# least one TE-overlapping promoter window show a different gene-level
+# parent-of-origin effect (POE) than comparable genes whose windows are TE-free?
 #
-# Exposure  : gene has >=1 multi-exon transcript TSS inside a TE ("TE"), or no
-#             TSS inside a TE or unknown repeat ("nonTE"); others are excluded.
-# Outcome   : gene POE estimate b and its SE. Magnitude uses b^2 - SE^2, which is
-#             unbiased for the true squared effect (noise inflates |b|); signed
-#             uses b. Public crosses: primary model_gene (log2, dosage-adjusted);
-#             GUSTO: additional_v1 gene_POE (ln, adjusted for cis and covariates).
+# Exposure  : gene has >=1 multi-exon transcript TSS window intersecting a TE
+#             ("TE"), or no window intersecting a TE or unknown repeat ("nonTE");
+#             others are excluded.
+# Outcome   : baseline all-SNP gene POE b (ln paternal/maternal, dosage-adjusted)
+#             and its SE. Magnitude uses b^2 - SE^2, which is unbiased for the true
+#             squared effect (noise inflates |b|); signed uses b.
 # Confounders: depth, informative loci, units, SE, number of TSS events and
 #             transcripts, gene length, local TE density, promoter GC.
 # Design    : propensity-score subclassification (ATT weights) on common support,
@@ -174,7 +174,8 @@ reg_te_genes_balance <- function(d, covs, w) {
   }))
 }
 
-reg_te_genes_inputs <- function(cfg, z, root, s, baseline = NULL) {
+reg_te_genes_inputs <- function(cfg, z, root, s, baseline) {
+  if (is.null(baseline$s)) stop("Between-gene inputs require the baseline settings")
   contigs <- fread(file = cfg$paths$genome_fai, header = FALSE, select = 1:2,
     col.names = c("chrom", "length"))
   contigs[, chrom := as.character(chrom)]
@@ -203,46 +204,21 @@ reg_te_genes_inputs <- function(cfg, z, root, s, baseline = NULL) {
     is_te = is_te %in% TRUE, is_unknown = is_unknown %in% TRUE)]
   te_u <- reg_union(r[r$is_te])
 
-  if (!is.null(baseline)) {
-    bs <- baseline$s
-    nb_require(bs, "combine")
-    poe <- nb_estimable(reg_read(nb_path(bs, "gene_POE.tsv")))
-    poe[, `:=`(gene_id = feature_id, estimate = beta_adjusted, n_units = n_samples)]
-    scale <- "ln_paternal_maternal_dosage_adjusted_all_SNP_NB"
-    source_table <- "baseline_nb_v1/gene_POE.tsv"
-  } else if (cfg$profile == "human_trio") {
-    if (!stage_valid(additional_receipt(cfg), additional_paths(cfg)))
-      stop("te-genes for human cohorts needs additional_v1/gene_POE.tsv: run the additional stage first")
-    poe <- reg_read(additional_paths(cfg)[["genes"]])
-    require_columns(poe, c("gene_id", "estimate", "se", "status", "n_families"), "Gene POE")
-    poe[, n_units := n_families]
-    scale <- "ln_maternal_paternal_adjusted_for_cis_and_covariates"
-    source_table <- "additional_v1/gene_POE.tsv"
-  } else {
-    poe <- reg_read(cfg$paths$model_gene)
-    require_columns(poe, c("entity_id", "estimate", "se", "status", "n_units"), "Gene POE")
-    setnames(poe, "entity_id", "gene_id")
-    scale <- "log2_maternal_paternal_dosage_adjusted"
-    source_table <- "model_gene.tsv"
-  }
-  poe_flags <- if (!is.null(baseline)) poe[, .(gene_id, not_strictly_POE, independence_verified)] else NULL
-  poe <- poe[(if (is.null(baseline)) poe$status == "eligible_conditional_inference" else
-      poe$status %in% c("eligible_NB", "exploratory_NB")) & is.finite(poe$estimate) &
-    is.finite(poe$se) & poe$se > 0, .(gene_id, estimate, se, n_units = as.numeric(n_units))]
+  bs <- baseline$s
+  nb_require(bs, "combine")
+  poe <- nb_estimable(reg_read(nb_path(bs, "gene_POE.tsv")))
+  poe[, `:=`(gene_id = feature_id, estimate = beta_adjusted, n_units = n_samples)]
+  scale <- "ln_paternal_maternal_dosage_adjusted_all_SNP_NB"
+  source_table <- "gene_POE.tsv"
+  poe_flags <- poe[, .(gene_id, not_strictly_POE, independence_verified)]
+  poe <- poe[is.finite(poe$estimate) & is.finite(poe$se) & poe$se > 0,
+    .(gene_id, estimate, se, n_units = as.numeric(n_units))]
   assert_unique(poe, "gene_id", "Gene POE")
-  if (!is.null(poe_flags)) poe <- merge(poe, poe_flags, by = "gene_id", all.x = TRUE)
+  poe <- merge(poe, poe_flags, by = "gene_id", all.x = TRUE)
 
-  if (is.null(baseline)) {
-    counts <- completed_counts(cfg, root, load_manifests(cfg))$gene
-    require_columns(counts, c("gene_id", "locus_id", "maternal_count", "paternal_count"), "Gene counts")
-    counts[, depth := maternal_count + paternal_count]
-    dep <- counts[is.finite(depth), .(total_depth = sum(depth),
-      n_informative_loci = uniqueN(locus_id[depth >= z$min_depth])), by = gene_id]
-  } else {
-    dep <- reg_read(nb_path(baseline$s, "gene_inventory.tsv.gz"))[, .(
-      total_depth = sum(total_counts), n_informative_loci = sum(n_samples_observed > 0)),
-      by = .(gene_id = feature_id)]
-  }
+  dep <- reg_read(nb_path(bs, "gene_inventory.tsv.gz"))[, .(
+    total_depth = sum(total_counts), n_informative_loci = sum(n_samples_observed > 0)),
+    by = .(gene_id = feature_id)]
 
   len <- contigs$length[match(genes$chrom, contigs$chrom)]
   win <- data.table(chrom = genes$chrom, start = pmax(1, genes$start - s$flank_bp),
@@ -263,16 +239,6 @@ reg_te_genes_inputs <- function(cfg, z, root, s, baseline = NULL) {
     te_u = te_u, contigs = contigs, scale = scale, source_table = source_table)
 }
 
-reg_te_genes_worker <- function(cfg, z, root) {
-  if (!reg_valid(z, "te-tss")) stop("Complete te-tss first (repeat track and TE labels)")
-  s <- reg_te_genes_settings(z)
-  outputs <- file.path(z$output_dir, TE_GENES_FILES)
-  if (!reg_begin(z, "te-genes", outputs)) return(invisible(TRUE))
-  set.seed(z$seed)
-  inp <- reg_te_genes_inputs(cfg, z, root, s)
-  reg_te_genes_run(cfg, z, inp, s, outputs)
-  reg_finish(z, "te-genes", outputs)
-}
 reg_te_genes_run <- function(cfg, z, inp, s, outputs) {
   set.seed(z$seed)
   covs <- TE_GENES_COVARIATES
@@ -355,9 +321,9 @@ reg_te_genes_run <- function(cfg, z, inp, s, outputs) {
         "magnitude_is_difference_in_unbiased_squared_POE"))]
   }
 
-  provenance <- data.table(setting = c("version", "seed", "bootstrap", "min_depth",
+  provenance <- data.table(setting = c("seed", "bootstrap",
       names(s), "covariates", "repeat_source", "gene_POE_source"),
-    value = c(z$version, z$seed, z$bootstrap, z$min_depth, unlist(lapply(s, as.character)),
+    value = c(z$seed, z$bootstrap, unlist(lapply(s, as.character)),
       paste(covs, collapse = ";"),
       if (identical(cfg$species, "fish")) "fish_de_novo_RepeatMasker" else "resource_manifest repeats",
       inp$source_table))

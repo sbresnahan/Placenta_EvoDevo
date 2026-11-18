@@ -1,24 +1,23 @@
 #!/usr/bin/env Rscript
-# Results archive for downstream reporting: per-cohort primary results, QC,
-# additional_v1 analyses, hypothesis #1 (TE-TSS POE: within-gene te-tss and
-# between-gene te-genes) and hypothesis #5
-# (human regulatory context), plus the method docs needed to interpret them.
+# Results archives for downstream reporting. Three modes:
 #
-# Usage (from the scripts directory, inside the R container):
+# Promoter-model archive: per-cohort primary promoter models, QC and manifests,
+# plus the method docs needed to interpret them.
 #   bin/Rscript_sif bin/export_results.R --out /path/results.tar.gz [--force] CONFIG [CONFIG ...]
-#
 # Without --force every applicable part must be complete for every cohort.
-# With --force, parts that are not complete yet (e.g. fish te-tss while repeat
-# discovery runs) are skipped and recorded as unavailable in the archive.
-# Human (GUSTO) tables in the original mode are aggregate-only: tables carrying
-# participant/family identifiers are withheld; no human manifest is exported.
+# With --force, incomplete parts are skipped and recorded as unavailable.
+# Human (GUSTO) tables are aggregate-only: tables carrying participant/family
+# identifiers are withheld; no human manifest is exported.
+#
+# Baseline archive (POE layer, H1, between-gene and H5 aggregates):
+#   bin/Rscript_sif bin/export_results.R --baseline-nb --out FILE.tar.gz CONFIG [CONFIG ...]
 #
 # Independent H6/H7 archive (no initial report or private model inputs needed):
 #   bin/Rscript_sif poe_exposure.R CONFIG export
 #   bin/Rscript_sif bin/export_results.R --exposure-nb --out FILE.tar.gz CONFIG [CONFIG ...]
 # Packages existing aggregate_export snapshots only; it never fits models.
 # This mode retains family_id as a native TE family and rejects participant IDs.
-# See docs/rerun_exposure_nb.md for input and aggregate export contracts.
+# See docs/EXPOSURE_NB_WORKFLOW.md for input and aggregate export contracts.
 f <- gsub("~+~", " ", sub("^--file=", "", grep("^--file=", commandArgs(), value = TRUE)[1]), fixed = TRUE)
 root <- normalizePath(file.path(dirname(f), ".."), mustWork = TRUE)
 source(file.path(root, "R/library_paths.R"))
@@ -60,22 +59,13 @@ if (exposure_mode) {
   quit(status = 0)
 }
 
-for (m in c("config", "common", "workflow", "additional", "regulatory_common", "regulatory_fish"))
+for (m in c("config", "common", "workflow", "regulatory_common", "regulatory_fish"))
   source(file.path(root, "R", paste0(m, ".R")))
 
 # Columns that identify individuals; tables containing them are not exported for humans.
 ID_COLUMNS <- c("sample_id", "family_id", "child_id", "mother_id", "father_id",
   "run_id", "infant_id", "unit_id", "cluster_id", "library_name", "sample_accession")
-TE_TSS <- c("transcript_TE_annotation.tsv", "event_TE_annotation.tsv",
-  "TE_annotation_coverage.tsv", "te_tss_event_pairs.tsv", "te_tss_gene_summary.tsv",
-  "te_tss_cohort_summary.tsv", "te_tss_provenance.tsv")
-TE_GENES <- c("te_genes_result.tsv", "te_genes_balance.tsv", "te_genes_gene_table.tsv",
-  "te_genes_placebo.tsv", "te_genes_provenance.tsv")
-HUMAN_CONTEXT <- c("human_regulatory_context.tsv", "human_qtl_links.tsv.gz",
-  "human_peak_overlaps.tsv.gz", "human_mapping_coverage.tsv",
-  "human_resource_coverage.tsv", "human_context_provenance.tsv")
-DOCS <- c(README.md = "README.md", REGULATORY_MODULES.md = "docs/REGULATORY_MODULES.md",
-  SCHEMA.md = "config/SCHEMA.md",
+DOCS <- c(README.md = "README.md", SCHEMA.md = "config/SCHEMA.md",
   evidence_review.md = "evidence/review.md", dataset_evidence.csv = "evidence/dataset_evidence.csv",
   ATTRIBUTION.md = "ATTRIBUTION.md")
 
@@ -86,8 +76,7 @@ read_or_null <- function(path) {
 }
 # Analysis settings without paths or private locations (values or keys that point at files).
 SETTINGS_SECTIONS <- c("reference", "parents", "dosage", "markers", "ornaments", "pilot",
-  "fragments", "models", "additional_analysis", "phase_origin", "gusto_precomputed",
-  "regulatory", "fish_stage_policy")
+  "fragments", "models", "phase_origin", "gusto_precomputed", "fish_stage_policy")
 # Whole-word key segments only, so e.g. min_per_direction is kept but output_dir is not.
 PATHLIKE_KEY <- "(^|[._])(paths?|files?|dir|vcf|matrix|map|tables|beds|chain|source|image|executable|resources|aliases|fastq|sif|rmsk)($|[._])"
 flatten_settings <- function(x, prefix) {
@@ -142,23 +131,7 @@ header_of <- function(path) {
 cohort_parts <- function(cfg) {
   p <- cfg$paths
   human <- cfg$profile == "human_trio"
-  z <- reg_settings(cfg)
   models <- unlist(p[c("model_gene", "model_promoter", "model_pairs")])
-  te <- file.path(z$output_dir, TE_TSS)
-  hc <- file.path(z$output_dir, HUMAN_CONTEXT)
-  h1_extra <- file.path(z$output_dir, "resource_manifest.tsv")
-  if (identical(cfg$species, "fish")) h1_extra <- c(h1_extra, reg_fish_paths(z)$provenance)
-  h5_extra <- character()
-  hcfg <- z$human_context
-  if (!is.null(hcfg$qtl_tables)) {
-    d <- dirname(reg_path(hcfg$qtl_tables, cfg))
-    h5_extra <- c(h5_extra, qtl_input_summary.tsv = file.path(d, "summary.tsv"),
-      qtl_phenotype_map.tsv = file.path(d, "phenotype_map.tsv"))
-  }
-  if (!is.null(hcfg$beds)) {
-    d <- dirname(reg_path(hcfg$beds, cfg))
-    h5_extra <- c(h5_extra, peak_input_summary.tsv = file.path(d, "summary.tsv"))
-  }
   list(
     primary = list(applies = TRUE, ok = stage_valid(p$model_receipt, models),
       files = named(models), extra = character(), why = "primary models receipt incomplete"),
@@ -168,20 +141,7 @@ cohort_parts <- function(cfg) {
     manifests = list(applies = TRUE, withheld = human,
       ok = present(unlist(p[c("sources", "libraries", "units", "marker_sources")])),
       files = named(unlist(p[c("sources", "libraries", "units", "marker_sources")])),
-      extra = character(), why = "cohort manifests missing"),
-    additional_v1 = list(applies = TRUE,
-      ok = stage_valid(additional_receipt(cfg), additional_paths(cfg)),
-      files = named(additional_paths(cfg)), extra = character(),
-      why = "additional_v1 receipt incomplete"),
-    h1_te_tss = list(applies = TRUE, ok = reg_valid(z, "te-tss"), files = named(te),
-      extra = named(h1_extra), why = if (identical(cfg$species, "fish"))
-        "te-tss incomplete (fish needs fish-repeats discovery and masking first)" else
-        "te-tss incomplete"),
-    h1b_te_genes = list(applies = TRUE, ok = reg_valid(z, "te-genes"),
-      files = named(file.path(z$output_dir, TE_GENES)), extra = character(),
-      why = "te-genes not run or incomplete (needs te-tss; GUSTO also needs additional_v1)"),
-    h5_human_context = list(applies = human, ok = human && reg_valid(z, "human-context"),
-      files = named(hc), extra = h5_extra, why = "human-context incomplete"))
+      extra = character(), why = "cohort manifests missing"))
 }
 
 cohort_summary <- function(cfg) {
@@ -193,8 +153,7 @@ cohort_summary <- function(cfg) {
     marker_proxy_reason = cfg$markers$proxy_reason, fish_stage_policy = cfg$fish_stage_policy,
     models_min_depth = cfg$models$min_depth, models_min_callable_units = cfg$models$min_callable_units,
     models_min_families = cfg$models$min_families, models_bootstrap = cfg$models$bootstrap,
-    models_seed = cfg$models$seed, regulatory_bootstrap = cfg$regulatory$bootstrap,
-    regulatory_min_depth = cfg$regulatory$min_depth)
+    models_seed = cfg$models$seed)
   kv$models_min_orientation <- cfg$models$min_orientation
   covs <- unlist(cfg$models$covariates)
   kv$models_covariates <- if (length(covs)) paste(covs, collapse = ";") else "none"
@@ -358,7 +317,8 @@ build_archive <- function() {
   # Descriptive code inventory only; operators manage source versions.
 code <- c(list.files(file.path(root, "R"), pattern = "\\.R$", full.names = TRUE),
   list.files(file.path(root, "bin"), full.names = TRUE, recursive = TRUE),
-  file.path(root, c("poe.R", "run_pipeline.R", "runtime.R", "poe_regulatory.R")))
+  file.path(root, c("poe.R", "run_pipeline.R", "runtime.R", "poe_regulatory.R",
+    "poe_baseline.R", "poe_exposure.R")))
 code <- sort(code[file.exists(code) & !dir.exists(code) & !grepl("__pycache__", code)])
 scripts <- data.table(path = substring(code, nchar(root) + 2L),
   bytes = file.info(code)$size)
@@ -373,10 +333,7 @@ write_tsv(scripts, file.path(top, "SCRIPTS.tsv"))
       if (force) " with `--force` (incomplete parts skipped)" else ""),
     "", "## What is being tested", "",
     "- **Primary parent-of-origin (POE) models** (`primary/`): dosage-adjusted maternal vs paternal allelic expression per gene (`model_gene.tsv`) and per promoter/TSS event (`model_promoter.tsv`); `model_pairs.tsv` holds the paired event inputs. Public crosses (maize, mouse, fish) use reciprocal-cross intercepts conditional on parental markers; GUSTO (human) uses trio parental-origin assignments, cis orientation and covariates. GUSTO `model_gene.tsv` is a placeholder (`deferred_unimplemented`).",
-    "- **additional_v1** (`additional_v1/`): exploratory reanalysis of the frozen counts: gene-level POE (`gene_POE.tsv`), TSS-vs-first-donor separation (`separated_TSS_donor_POE.tsv`), and TE annotation.",
-    "- **Hypothesis #1** (`h1_te_tss/`): within a gene, conditional on the same first splice donor, do TSSs inside transposable elements show a different POE (signed difference beta_TE - beta_nonTE) or a larger POE magnitude (|beta_TE| - |beta_nonTE|) than non-TE TSSs? Start with `te_tss_cohort_summary.tsv`, then `te_tss_gene_summary.tsv`; `TE_annotation_coverage.tsv` shows how many TSSs could be classified. Magnitude inference is exploratory. See `docs/REGULATORY_MODULES.md`, \"#1\".",
-  "- **Hypothesis #1, between genes** (`h1b_te_genes/`): do genes with at least one TE-derived TSS show a different gene-level POE than comparable genes whose TSSs are all non-TE? Start with `te_genes_result.tsv` (magnitude = difference in POE^2 - SE^2, which removes noise inflation; signed = difference in POE), then `te_genes_balance.tsv` (standardized mean differences before/after propensity weighting; |SMD| > 0.1 means residual imbalance). Confounders adjusted: depth, informative loci, units, SE, number of TSS events and transcripts, gene length, local TE density, promoter GC. p-values: genomic block bootstrap, within-stratum permutation, and a placebo that shifts the TE track (`te_genes_placebo.tsv`). Observational and complementary to the within-gene pairs, which cancel these confounders by design. See `docs/REGULATORY_MODULES.md`, \"#1b\".",
-    "- **Hypothesis #5** (`h5_human_context/`, GUSTO only): placental cis-QTL and chromatin context for POE TSS events. `human_regulatory_context.tsv` contains event-level evidence; mapping and resource coverage tables document assessability. Gene-level mappings provide gene context. Transcript-phenotype validation requires an exact mapping. Causal identification requires additional evidence. See `docs/REGULATORY_MODULES.md`, \"#5\".",
+    "- H1 (TE promoter windows), the between-gene comparison and H5 (human context) are exported separately with `--baseline-nb`.",
     "", "## Interpretation rules", "",
     "- Analyse each cohort/species separately. Cohorts differ in tissue, developmental stage, ploidy and design; do not pool across species or treat several analyses of the same allocations as independent replication.",
     "- Maize endosperm is triploid: expected maternal:paternal dosage is 2:1 and is subtracted before POE testing (see `cohort.tsv`).",
@@ -387,8 +344,8 @@ write_tsv(scripts, file.path(top, "SCRIPTS.tsv"))
     "- `cohorts/<cohort_id>/cohort.tsv`: design summary (species, tissue, stage, units, libraries, runs, families, dosage, markers, model thresholds, covariate names)",
 "- `cohorts/<cohort_id>/settings.tsv`: all analysis settings from the cohort configuration, without file paths",
 "- `cohorts/<cohort_id>/qc/*_summary.tsv`: per-metric n, median and IQR (by pilot mode/strand); for human cohorts cells with fewer than 5 samples show n only",
-    "- `cohorts/<cohort_id>/{primary,qc,manifests,additional_v1,h1_te_tss,h1b_te_genes,h5_human_context}/`",
-    "- `docs/`: method documentation (hypothesis definitions in `REGULATORY_MODULES.md`, settings in `SCHEMA.md`, dataset provenance in `evidence_*`)",
+    "- `cohorts/<cohort_id>/{primary,qc,manifests}/`",
+    "- `docs/`: method documentation (settings in `SCHEMA.md`, dataset provenance in `evidence_*`)",
     "- `MANIFEST.tsv`: exported filenames, source paths and sizes; `AVAILABILITY.tsv`: the table above; `SCRIPTS.tsv`: code filenames and sizes only. These inventories do not establish content integrity."),
     file.path(top, "README.md"))
 

@@ -1,6 +1,5 @@
 # Additive H6/H7 input contracts. Never writes into baseline_nb_v1.
 EX_VERSION <- "exposure_nb_v1"
-EX_BASE_COMMIT <- "4c59ac724d81251ef423ae621d52f196d8355150"
 EX_PFAS <- paste0(c("PFBA", "PFOA", "PFNA", "PFDA", "PFUnDA", "PFBS", "PFHxS", "PFOS"), "_mat")
 ex_need <- function(x, cols, label = "table") {
   miss <- setdiff(cols, names(x))
@@ -160,7 +159,7 @@ ex_validate_quant <- function(counts, qc, loci, crosswalk, cfg, s) {
 }
 ex_run_lock <- function(s, cfg, inputs) {
   identity <- list(version = EX_VERSION, identity_schema = "readable_jobs_v2",
-    commit = EX_BASE_COMMIT, settings = s,
+    settings = s,
     dosage = cfg$dosage, files = lapply(inputs, function(p) {
       i <- file.info(p); list(path = p, size = i$size, mtime = as.numeric(i$mtime))
     }))

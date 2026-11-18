@@ -216,9 +216,7 @@ exports:
   min_cell: ~
 provenance_hints: []
 
-# Optional regulatory analysis. Does not change primary pipeline stages.
+# Repeat and regulatory resources for the baseline TE annotation and context stages.
 regulatory:
   bootstrap: 2000
   seed: 1147
-  min_depth: 10
-  max_pairs_per_gene: 10

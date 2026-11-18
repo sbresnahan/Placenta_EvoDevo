@@ -70,9 +70,6 @@ read_config_v2 <- function(path) {
   }
   if(!is.null(c$markers$liftover_chain))
     c$markers$liftover_chain<-resolve_value(c$markers$liftover_chain,dirname(path),unlist(c$environment_allowlist))
-  if(!is.null(c$additional_analysis$te_rmsk))
-    c$additional_analysis$te_rmsk<-resolve_value(c$additional_analysis$te_rmsk,
-      dirname(path),unlist(c$environment_allowlist))
   if(c$profile=="human_trio"&&isTRUE(c$phase_origin$enabled)) {
     q<-c$phase_origin
     for(k in c("min_informative","window_bp","min_window_votes","min_covered_windows"))

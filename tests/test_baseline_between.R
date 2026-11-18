@@ -27,8 +27,8 @@ repeats <- d[te == TRUE, .(chrom, start, end = start + 1, is_te = TRUE, is_unkno
 inp <- list(genes = d[, !c("pair", "te")], tss = tss, repeats = repeats,
   te_u = reg_union(repeats), contigs = data.table(chrom = "chr1", length = 1e7),
   scale = "SOFTWARE_FIXTURE_NOT_POE", source_table = "software_fixture", dropped_incomplete = 0L)
-z <- list(output_dir = home, seed = 1147L, bootstrap = 20L, version = "software_fixture",
-  min_depth = 10, te_tss_window_bp = 3000L, te_genes = list(permutations = 20, placebo_shifts = 5))
+z <- list(output_dir = home, seed = 1147L, bootstrap = 20L,
+  te_tss_window_bp = 3000L, te_genes = list(permutations = 20, placebo_shifts = 5))
 s <- reg_te_genes_settings(z)
 out <- file.path(home, TE_GENES_FILES)
 reg_te_genes_run(list(cohort_id = "software_fixture", species = "mouse"), z, inp, s, out)

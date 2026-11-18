@@ -19,9 +19,9 @@ main <- function() {
   hs <- h1_settings(list())
   numeric_keys <- c("chains", "warmup", "iterations", "adapt_delta", "max_treedepth", "seed", "parallel_chains")
   expected <- list(chains = 4L, warmup = 1000L, iterations = 1000L,
-    adapt_delta = .95, max_treedepth = 12L, seed = 1147L, parallel_chains = 4L,
+    adapt_delta = .99, max_treedepth = 12L, seed = 1147L, parallel_chains = 4L,
     count_provenance = NA_character_, producing_pipeline = NA_character_)
-  check("absent H1 blocks initialize with unchanged sampling defaults and missing annotations",
+  check("absent H1 blocks initialize with default sampling settings and missing annotations",
     identical(hs, expected))
   variants <- list(
     list(count_provenance = NULL, producing_pipeline = NULL),
@@ -35,7 +35,7 @@ main <- function() {
   valid <- list(chains = 6L, parallel_chains = 2L, warmup = 1200L, iterations = 1500L,
     adapt_delta = .97, max_treedepth = 13L, seed = 2718L,
     count_provenance = "upstream_duplicate_corrected", producing_pipeline = "already recorded count producer")
-  # Recreate the prior settings list for valid annotations to verify task identity.
+  # Build the expected settings list for valid annotations to verify task identity.
   prior_settings <- expected
   for (key in names(valid)) prior_settings[[key]] <- valid[[key]]
   check("valid existing settings retain exact saved-task identity",
@@ -108,7 +108,7 @@ main <- function() {
   configs <- lapply(inventory$destination_config, yaml::read_yaml)
   reciprocal <- configs[inventory$cohort_id != "GUSTO"]
   initialized <- lapply(reciprocal, h1_settings)
-  check("reported old-placeholder case generates all eighteen configs directly",
+  check("placeholder operator generates all eighteen configs directly",
     nrow(inventory) == 18L && setequal(inventory$cohort_id, cohorts) &&
       setequal(inventory$radius, c(0L, 1000L, 3000L)))
   check("all fifteen reciprocal configs initialize H1 with missing metadata and no compiler",

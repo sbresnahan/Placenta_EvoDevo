@@ -39,7 +39,7 @@ nb_context <- function(cfg, s, root) {
   z <- reg_settings(cfg)
   qspec <- reg_context_manifest(cfg, z, "qtl_tables")
   beds <- reg_context_manifest(cfg, z, "beds")
-  # Same gate as the regulatory human-context worker: peaks cannot stand in for cis-QTL.
+  # Peaks cannot stand in for cis-QTL evidence.
   required <- reg_default(z$human_context$require_qtl, TRUE)
   if (isTRUE(required) && (is.null(qspec) || !nrow(qspec)))
     stop("context blocked: regulatory.human_context.require_qtl is TRUE but no qtl_tables ",
@@ -350,7 +350,7 @@ nb_export <- function(configs, out, root, partial = character()) {
   nb_write(rbindlist(availability, fill = TRUE), file.path(top, "AVAILABILITY.tsv"))
   nb_cross_summary(configs, file.path(top, "cross_cohort_summary.tsv"), root, partial)
   dir.create(file.path(top, "docs"))
-  for (f in c("docs/rerun_baseline_poe.md", "docs/BASELINE_NB_SCHEMA.md")) {
+  for (f in c("docs/BASELINE_NB_WORKFLOW.md", "docs/BASELINE_NB_SCHEMA.md")) {
     if (!file.exists(file.path(root, f))) stop("Missing rerun documentation: ", f)
     file.copy(file.path(root, f), file.path(top, "docs", basename(f)))
   }

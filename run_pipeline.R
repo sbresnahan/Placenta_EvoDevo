@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
-# R counterpart to xQTL's driver; prepares checked-in-worker graph for HOST bsub.
+# Prepares the LSF worker graph for host submission.
 f<-gsub("~+~"," ",sub("^--file=","",grep("^--file=",commandArgs(),value=TRUE)[1]),fixed=TRUE)
 root<-normalizePath(dirname(f),mustWork=TRUE)
 source(file.path(root,"R/library_paths.R"))
 a<-commandArgs(trailingOnly=TRUE)
-if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models|additional [--submit] [--resources-only] [--after JOB] [--resume] [--sample ID]")
-if(a[2] %in% c("regulatory-resources","fish-repeats","te-tss","te-genes","human-context","regulatory-status")) {
+if(length(a)<2L)stop("Usage: run_pipeline.R CONFIG retrieve|reference|pilot|scale|models [--submit] [--resources-only] [--after JOB] [--resume] [--sample ID]")
+if(a[2] %in% c("regulatory-resources","fish-repeats","regulatory-status")) {
   source(file.path(root,"R/regulatory_cli.R"))
   reg_main(a,root)
   quit(status=0L)
@@ -13,7 +13,7 @@ if(a[2] %in% c("regulatory-resources","fish-repeats","te-tss","te-genes","human-
 source(file.path(root,"R/config.R"));c<-read_config_v2(a[1])
 if(dir.exists(c$tools$r_library)).libPaths(c$tools$r_library,include.site=FALSE)
 for(k in c("common","workflow","parental","phase_origin","gusto","models","exports","acquisition","public","reference",
-           "pipeline","stages","additional","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
+           "pipeline","stages","scheduler","seadragon","lsf"))source(file.path(root,"R",paste0(k,".R")))
 flags<-a[-c(1,2)]
 if(anyDuplicated(flags[startsWith(flags,"--")]))stop("Duplicate flag")
 take<-function(k) {

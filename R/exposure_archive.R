@@ -116,7 +116,7 @@ ex_archive <- function(configs, out, root) {
       interpretation = "presence_is_not_success_absence_is_not_a_null_result")
   }
   dir.create(file.path(top, "docs"))
-  for (f in c("docs/rerun_exposure_nb.md", "docs/H6_H7_MODELS.md", "docs/exposure_output_schema.md")) {
+  for (f in c("docs/EXPOSURE_NB_WORKFLOW.md", "docs/H6_H7_MODELS.md", "docs/exposure_output_schema.md")) {
     src <- file.path(root, f)
     if (!file.exists(src) || !file.copy(src, file.path(top, "docs", basename(f))))
       stop("Missing/copy-failed archive documentation: ", f)
@@ -135,7 +135,7 @@ ex_archive <- function(configs, out, root) {
     "Inventories contain filenames and sizes only and do not establish content integrity or freshness.",
     "Review source text and cohort release rules; privacy screening is not anonymization approval.",
     "No private counts, model objects, sample crosswalks, PFAS values or raw bootstrap draws.",
-    "See docs/rerun_exposure_nb.md for inputs, execution and aggregate export instructions."),
+    "See docs/EXPOSURE_NB_WORKFLOW.md for inputs, execution and aggregate export instructions."),
     file.path(top, "README.md"))
   files <- sort(list.files(top, recursive = TRUE, full.names = FALSE))
   data.table::fwrite(data.table::data.table(archive_path = files,

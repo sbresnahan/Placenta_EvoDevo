@@ -27,8 +27,6 @@ COHORT_SPECIES = {
 COMMON = {
     "bootstrap": "2000",
     "seed": "1147",
-    "min_depth": "10",
-    "max_pairs_per_gene": "10",
 }
 FISH = {
     "runtime": "container",
@@ -179,7 +177,7 @@ def update_yaml(data, cohort, cpus):
     if config_scalar(lines, "cohort_id") != cohort or config_scalar(lines, "species") != COHORT_SPECIES[cohort]:
         raise UnsafeConfig("cohort_id/species mismatch; refusing update")
     if section(lines, "regulatory", 0, require_map=True) is None:
-        lines += ["\n", "# Optional regulatory analysis. Does not change primary pipeline stages.\n", "regulatory:\n"]
+        lines += ["\n", "# Repeat and regulatory resources for the baseline TE annotation and context stages.\n", "regulatory:\n"]
     add_keys(lines, "regulatory", 0, COMMON)
     if cohort == "fish_Pprolifica_AB":
         add_child_block(lines, "regulatory", "fish", {**FISH, "cpus": str(cpus)})

@@ -8,7 +8,7 @@ This procedure stages six reciprocal F1 placentas for reference construction,
 pilot, and quantification. Five within-line controls are retained in the
 versioned audit, not analyzed as reciprocal F1s.
 
-**Do not run the existing pooled public-cross POE models on these samples.**
+**Do not run the pooled public-cross promoter models on these samples.**
 The six F1s contain one A-mother stage40, two A-mother stage45, and three
 B-mother stage40 placentas. The orientation-only model is not adjusted
 for stage. The `fish_stage_policy: quantification_only` option allows

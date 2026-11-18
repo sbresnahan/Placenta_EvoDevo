@@ -197,12 +197,6 @@ lsf:
       wall_time: '03:00'
       reservation_value: 8.0
       queue: short
-    additional:
-      memory_value: 16.0
-      cpus: 2
-      wall_time: '12:00'
-      reservation_value: 16.0
-      queue: medium
     retrieve:
       memory_value: 4.0
       reservation_value: 4.0
@@ -225,11 +219,9 @@ provenance_hints:
   linkage: private_J_fastq_to_B_infant_to_VCF_sample
   reuse: phased transcriptomic genotypes and parental origin reused; RNA re-quantified
 
-# Optional regulatory analysis. Does not change primary pipeline stages.
+# Repeat and regulatory resources for the baseline TE annotation and context stages.
 regulatory:
   bootstrap: 2000
   seed: 1147
-  min_depth: 10
-  max_pairs_per_gene: 10
   human_context:
     require_qtl: true
